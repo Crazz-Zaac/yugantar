@@ -1,0 +1,23 @@
+version: '3.8'
+name: yugantar
+services:
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: db
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@localhost.com  
+      PGADMIN_DEFAULT_PASSWORD: password@dmin
+    ports:
+      - "8080:80"  
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - yugantar-network
+    restart: unless-stopped  
+
+volumes:
+  pgadmin_data:
+
+networks:
+  yugantar-network:
+    driver: bridge
