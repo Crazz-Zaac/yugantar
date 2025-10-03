@@ -1,8 +1,12 @@
 from sqlmodel import Relationship, Field
 from datetime import datetime, timezone
 from typing import Optional, List
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from models import User, Deposit
 
-from app.models.base import BaseModel
+from models import BaseModel
 
 # Table to Loan issued to users
 class Loan(BaseModel):

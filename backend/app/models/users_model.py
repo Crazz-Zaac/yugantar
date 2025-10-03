@@ -2,8 +2,14 @@ from sqlmodel import Relationship, Field
 from datetime import datetime, timezone
 from typing import Optional, List
 from sqlalchemy import String
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from models import Deposit, Transaction, Loan, Payment, Saving, Fine, Receipt
 
-from app.models import BaseModel
+
+
+from models import BaseModel
 
 
 # Table to store user information

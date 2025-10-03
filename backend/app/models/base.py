@@ -14,23 +14,24 @@ class BaseModel(SQLModel):
 
     # __abstract__ = True
     # these are common columns for all tables
-    id: int | None = Field(default=None, primary_key=True)
-    created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+    id: Optional[int] = Field(default=None, primary_key=True)
+    created_at: Optional[datetime] = Field(
+        default_factory=lambda: datetime.now(timezone.utc), 
+        nullable=False
+    )
     updated_at: Optional[datetime] = Field(
         default_factory=lambda: datetime.now(timezone.utc),
-        sa_column_kwargs={"onupdate": datetime.now(timezone.utc)},
+        sa_column_kwargs={"onupdate": lambda: datetime.now(timezone.utc)},
     )
     
     
     # this method is to convert model instance to dictionary and vice versa
-    @classmethod
+    
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert model instance to dictionary.
         """
-        return {
-            column.name: getattr(self, column.name) for column in self.__table__.columns
-        }
+        return self.model_dump()
 
     # this method is to create model instance from dictionary
     @classmethod
@@ -40,7 +41,7 @@ class BaseModel(SQLModel):
         """
         return cls(**data)
     
-    @classmethod
+    @property
     def to_json(self) -> Dict[str, Any]:
         """
         Convert model instance to JSON serializable dictionary.

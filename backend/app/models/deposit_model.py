@@ -1,9 +1,12 @@
 from sqlmodel import Relationship, Field, SQLModel
 from datetime import datetime, timezone
 from typing import Optional, List
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from models import User, Loan, Receipt, Fine
 
-
-from app.models import BaseModel
+from models import BaseModel
 
 
 
