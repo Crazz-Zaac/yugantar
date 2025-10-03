@@ -1,6 +1,7 @@
 from sqlalchemy import Integer, DateTime
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlmodel import SQLModel
 
 from datetime import datetime, timezone
 from typing import Dict, Any

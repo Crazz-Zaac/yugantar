@@ -1,9 +1,22 @@
-version: '3.8'
 name: yugantar
 services:
+  db:
+    image: postgres:latest
+    container_name: yugantar-db
+    environment:
+      POSTGRES_USER: yugantar_admin
+      POSTGRES_PASSWORD: password1!
+      POSTGRES_DB: yugantar_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - yugantar-network
+    restart: unless-stopped
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: db
+    container_name: pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@localhost.com  
       PGADMIN_DEFAULT_PASSWORD: password@dmin
@@ -16,6 +29,7 @@ services:
     restart: unless-stopped  
 
 volumes:
+  db_data:
   pgadmin_data:
 
 networks:
