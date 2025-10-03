@@ -1,43 +1,29 @@
-from sqlalchemy import Integer, DateTime
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlmodel import SQLModel
+from sqlmodel import SQLModel, Field
 
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 
-class BaseModel(DeclarativeBase):
+class BaseModel(SQLModel):
     """
-    Base model class for all SQLAlchemy models with:
+    Base model class for all SQLModel models with:
     - Default `id` column and timestamps
     - Automatic table naming (converting CamelCase to snake_case)
     - Type hinting for columns
-    - Type hinting for relationships
     """
 
     # __abstract__ = True
     # these are common columns for all tables
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now(timezone.utc)
+    id: int | None = Field(default=None, primary_key=True)
+    created_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc), nullable=False)
+    updated_at: Optional[datetime] = Field(
+        default_factory=lambda: datetime.now(timezone.utc),
+        sa_column_kwargs={"onupdate": datetime.now(timezone.utc)},
     )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.now(timezone.utc),
-        onupdate=datetime.now(timezone.utc),
-    )
-
-    # this is to automatically generate table names
-    @property
-    def __tablename__(self) -> str:
-        """
-        Convert class name to snake_case for table name.
-        """
-        return self.__class__.__name__.lower()
-
-
+    
+    
     # this method is to convert model instance to dictionary and vice versa
+    @classmethod
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert model instance to dictionary.
@@ -52,6 +38,23 @@ class BaseModel(DeclarativeBase):
         """
         Create model instance from dictionary.
         """
-        return cls(
-            **{k: v for k, v in data.items() if k in cls.__table__.columns.keys()}
-        )
+        return cls(**data)
+    
+    @classmethod
+    def to_json(self) -> Dict[str, Any]:
+        """
+        Convert model instance to JSON serializable dictionary.
+        """
+        def serialize(value):
+            if isinstance(value, datetime):
+                return value.isoformat()
+            return value
+
+        return {key: serialize(value) for key, value in self.to_dict().items()}
+    
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]) -> "BaseModel":
+        """
+        Create model instance from JSON serializable dictionary.
+        """
+        return cls.from_dict(data)

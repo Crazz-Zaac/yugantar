@@ -1,21 +1,19 @@
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy import Integer, String, Float, DateTime
-from sqlalchemy import ForeignKey
-from sqlalchemy.orm import relationship
+from sqlmodel import Relationship, Field, SQLModel
 from datetime import datetime, timezone
+from typing import Optional
 
 from app.models import BaseModel
 
 # Table to store fines imposed on users
 class Fine(BaseModel):
-    __tablename__ = "fine"
 
-    fine_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
-    amount: Mapped[float] = mapped_column(Float)
-    date: Mapped[datetime] = mapped_column(DateTime)
-    notes: Mapped[str] = mapped_column(String(255), nullable=True)
+    fine_id: Optional[int] = Field(default=None, primary_key=True, index=True)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    amount: float = Field()
+    date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    notes: Optional[str] = Field(max_length=255, nullable=True)
 
-    user = relationship("User", back_populates="fines")
-    deposit = relationship("Deposit", back_populates="fines")
+    # Relationships
+    user: "User" = Relationship(back_populates="fines")
+    deposit: Optional["Deposit"] = Relationship(back_populates="fine")ines")
     

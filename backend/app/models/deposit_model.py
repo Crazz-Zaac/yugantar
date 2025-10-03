@@ -1,30 +1,26 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime
-from sqlalchemy.orm import relationship
-from sqlalchemy import ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlmodel import Relationship, Field, SQLModel
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, List
+
 
 from app.models import BaseModel
 
 
 
 class Deposit(BaseModel):
-    __tablename__ = "deposit"
-
-    deposit_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
-    deposited_amount: Mapped[float] = mapped_column(Float)
-    amount_to_be_deposited: Mapped[float] = mapped_column(Float)
-    date: Mapped[datetime] = mapped_column(DateTime)
-    receipt_screenshot: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    receipt_id: Mapped[int] = mapped_column(Integer, ForeignKey("receipt.id"))
-    notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-
-    user = relationship("User", back_populates="deposits")
-    # loan = relationship("Loan", back_populates="takes_loan")
-    receipt = relationship("Receipt", back_populates="deposits", uselist=False)
-    fine = relationship("Fine", back_populates="deposits", uselist=False)
+    user_id: int = Field(foreign_key="user.id", index=True)
+    deposited_amount: float = Field()
+    amount_to_be_deposited: float = Field()
+    date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    loan_id: Optional[int] = Field(foreign_key="loan.id", nullable=True)
+    receipt_screenshot: Optional[str] = Field(max_length=255, nullable=True)
+    receipt_id: Optional[int] = Field(foreign_key="receipt.id", nullable=True)
+    notes: Optional[str] = Field(max_length=255, nullable=True)
     
-
+    # Relationships
+    user: "User" = Relationship(back_populates="deposits")
+    loan: Optional["Loan"] = Relationship(back_populates="deposits")
+    deposits: List["Deposit"] = Relationship(back_populates="loan")
+    receipt: Optional["Receipt"] = Relationship(back_populates="deposits")
+    fine: Optional["Fine"] = Relationship(back_populates="deposit")
 
