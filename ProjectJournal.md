@@ -8,3 +8,18 @@
 - [ ] Connect Postgres DB
 - [ ] Migrate DB
 - [ ] Define api and routes
+
+## Important commands
+1. To create secrets for docker to read
+    ```bash
+    mkdir -p secrets # in root folder
+    echo "password" > secrets/db_password.txt
+    echo "password" > secrets/pgadmin_password.txt"
+    ```
+
+2. Alembic migrations
+    ```bash
+    alembic revision --autogenerate -m 'initial tables'
+    alembic upgrade head
+    ```
+**Note**: For all the models with `table=True` for fields with `List[str]` use `JSON` and `Columns` from `sqlalchemy. [Link](https://stackoverflow.com/questions/79296853/sqlmodel-valueerror-class-list-has-no-matching-sqlalchemy-type)
