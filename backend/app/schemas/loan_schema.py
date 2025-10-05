@@ -2,7 +2,8 @@ from sqlmodel import SQLModel, Field
 from typing import Optional
 from enum import Enum
 from datetime import datetime, timezone
-import uuid
+from sqlalchemy import Column, String
+from sqlalchemy.dialects.postgresql import ARRAY
 from pydantic import field_validator
 
 # ----------------------------
@@ -24,7 +25,10 @@ class LoanBase(SQLModel):
     interest_rate: float = Field(..., gt=0)
     start_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     end_date: datetime
-    status: LoanStatus = Field(default=LoanStatus.PENDING)
+    loan_status: str = Field(
+        sa_column=Column(ARRAY(String)),
+        default_factory=lambda: [LoanStatus.PENDING.value],
+    )
     approved_by: Optional[str] = None
     total_paid: float = Field(default=0.0, ge=0)
     remaining_amount: float = Field(default=0.0, ge=0)
@@ -62,7 +66,7 @@ class LoanBase(SQLModel):
 
     @property
     def is_active(self) -> bool:
-        return self.status == LoanStatus.ACTIVE
+        return self.loan_status == LoanStatus.ACTIVE
 
     @property
     def is_paid_off(self) -> bool:
@@ -70,16 +74,19 @@ class LoanBase(SQLModel):
 
     @property
     def is_overdue(self) -> bool:
-        return (self.status == LoanStatus.ACTIVE and 
-                datetime.now(timezone.utc) > self.end_date and 
-                self.remaining_amount > 0)
+        return (
+            self.loan_status == LoanStatus.ACTIVE
+            and datetime.now(timezone.utc) > self.end_date
+            and self.remaining_amount > 0
+        )
+
 
 class LoanUpdate(SQLModel):
     amount: Optional[float] = Field(default=None, gt=0)
     interest_rate: Optional[float] = Field(default=None, gt=0)
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
-    status: Optional[LoanStatus] = None
+    loan_status: Optional[str] = None
     approved_by: Optional[str] = None
     total_paid: Optional[float] = Field(default=None, ge=0)
     remaining_amount: Optional[float] = Field(default=None, ge=0)
@@ -94,7 +101,7 @@ class LoanResponse(LoanBase):
 
     class Config:
         from_attributes = True
-        
+
 
 class LoanDB(LoanBase, table=False):
     id: Optional[int] = Field(default=None, primary_key=True)

@@ -1,6 +1,6 @@
 from sqlmodel import SQLModel
 from .base import BaseModel
-from .users_model import User
+from .user_model import User
 from .deposit_model import Deposit
 from .loan_model import Loan
 from .receipt_model import Receipt

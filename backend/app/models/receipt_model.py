@@ -1,15 +1,15 @@
 from sqlmodel import Relationship, Field
 from datetime import datetime, timezone
 from typing import Optional, List
-from __future__ import annotations
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from models import User, Deposit
 
-from models import BaseModel
+from .base import BaseModel
 
 # Table to store receipts for each deposits from user
-class Receipt(BaseModel):
+class Receipt(BaseModel, table=True):
 
     user_id: int = Field(foreign_key="user.id", index=True)
     receipt_screenshot: Optional[str] = Field(max_length=255, nullable=True)

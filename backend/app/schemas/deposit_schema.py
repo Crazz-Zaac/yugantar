@@ -3,9 +3,9 @@ from typing import Optional
 from enum import Enum
 from datetime import datetime, timezone
 from pydantic import field_validator
-
+from sqlalchemy import Column, String
+from sqlalchemy.dialects.postgresql import ARRAY
 import uuid
-
 
 
 # ----------------------------
@@ -23,12 +23,17 @@ class DepositBase(SQLModel):
     receipt_screenshot: Optional[str] = Field(
         default=None, description="path to the screenshot"
     )
-    receipt_id: int = Field(default_factory=lambda: int(uuid.uuid4().int) & (1<<31)-1)
+    receipt_id: int = Field(
+        default_factory=lambda: int(uuid.uuid4().int) & (1 << 31) - 1
+    )
     deposited_amount: float = Field(..., gt=0)
     amount_to_be_deposited: float = Field(..., gt=0)
     deposited_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     due_deposit_date: datetime
-    status: DepositStatus = Field(default=DepositStatus.LATE)
+    deposit_status: str = Field(
+        sa_column=Column(ARRAY(String)),
+        default_factory=lambda: [DepositStatus.LATE.value],
+    )
     fine_amount: float = Field(default=0.0, ge=0)
     is_paid: bool = Field(default=False)
     verified_by: Optional[str] = None
@@ -46,7 +51,9 @@ class DepositBase(SQLModel):
     def validate_amount(cls, value, info):
         amount_to_be_deposited = info.data.get("amount_to_be_deposited")
         if amount_to_be_deposited is not None and value < amount_to_be_deposited:
-            raise ValueError(f"Deposited amount must be at least {amount_to_be_deposited}.")
+            raise ValueError(
+                f"Deposited amount must be at least {amount_to_be_deposited}."
+            )
         return value
 
     @field_validator("receipt_screenshot")
@@ -72,14 +79,16 @@ class DepositBase(SQLModel):
     def is_on_time(self) -> bool:
         return self.deposited_date == self.due_deposit_date
 
+
 class DepositCreate(DepositBase):
     amount: float = Field(..., gt=0)
-    status: DepositStatus = Field(default=DepositStatus.LATE)
+    deposit_status: str = Field(default=DepositStatus.LATE)
+
 
 class DepositUpdate(SQLModel):
     deposited_amount: Optional[float] = Field(default=None, gt=0)
     deposited_date: Optional[datetime] = None
-    status: Optional[DepositStatus] = None
+    deposit_status: Optional[str] = None
     notes: Optional[str] = Field(default=None, max_length=255)
     receipt_screenshot: Optional[str] = None
     fine_amount: Optional[float] = Field(default=None, ge=0)
@@ -94,7 +103,7 @@ class DepositResponse(DepositBase):
 
     class Config:
         from_attributes = True
-        
+
 
 class DepositDB(DepositBase, table=False):
     id: Optional[int] = Field(default=None, primary_key=True)

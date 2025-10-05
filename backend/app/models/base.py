@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 
-class BaseModel(SQLModel):
+class BaseModel(SQLModel, table=False):
     """
     Base model class for all SQLModel models with:
     - Default `id` column and timestamps

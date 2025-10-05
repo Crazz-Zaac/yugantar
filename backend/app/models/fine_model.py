@@ -1,15 +1,15 @@
-from sqlmodel import Relationship, Field, SQLModel
+from sqlmodel import Relationship, Field
 from datetime import datetime, timezone
 from typing import Optional
-from __future__ import annotations
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from models import User, Deposit
 
-from models import BaseModel
+from .base import BaseModel
 
 # Table to store fines imposed on users
-class Fine(BaseModel):
+class Fine(BaseModel, table=True):
 
     fine_id: Optional[int] = Field(default=None, primary_key=True, index=True)
     user_id: int = Field(foreign_key="user.id", index=True)

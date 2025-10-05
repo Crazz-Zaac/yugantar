@@ -1,16 +1,16 @@
-from sqlmodel import Relationship, Field, SQLModel
+from sqlmodel import Relationship, Field
 from datetime import datetime, timezone
 from typing import Optional, List
-from __future__ import annotations
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from models import User, Loan, Receipt, Fine
 
-from models import BaseModel
+from .base import BaseModel
 
 
 
-class Deposit(BaseModel):
+class Deposit(BaseModel, table=True):
     user_id: int = Field(foreign_key="user.id", index=True)
     deposited_amount: float = Field()
     amount_to_be_deposited: float = Field()

@@ -1,15 +1,15 @@
 from sqlmodel import Relationship, Field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional, List
-from __future__ import annotations
+
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from models import User, Deposit
 
-from models import BaseModel
+from .base import BaseModel
 
 # Table to Loan issued to users
-class Loan(BaseModel):
+class Loan(BaseModel, table=True):
 
     
     user_id: int = Field(foreign_key="user.id", index=True)

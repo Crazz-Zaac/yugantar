@@ -2,14 +2,14 @@ from sqlmodel import SQLModel, Field
 from typing import List, Optional
 from enum import Enum
 from datetime import datetime, timezone
-import uuid
 from pydantic import field_validator
+from sqlalchemy import Column, String
+from sqlalchemy.dialects.postgresql import ARRAY
 
-
-class Role(str, Enum):
+class AccessRole(str, Enum):
     SUPERUSER = "superuser"
     ADMIN = "admin"
-    MEMBER = "member"
+    USER = "user"
 
 
 class CooperativeRole(str, Enum):
@@ -32,8 +32,15 @@ class UserBase(SQLModel):
     phone: str = Field(..., max_length=15)
     address: str = Field(..., max_length=255)
     disabled: bool = Field(default=False)
-    access_roles: List[Role] = Field(default=[Role.MEMBER])
-    cooperative_roles: List[CooperativeRole] = Field(default=[CooperativeRole.MEMBER])
+    access_roles: List[str] = Field(
+        sa_column=Column(ARRAY(String)),
+        default_factory=lambda: [AccessRole.USER.value]
+    )
+    cooperative_roles: List[str] = Field(
+        sa_column=Column(ARRAY(String)),
+        default_factory=lambda: [CooperativeRole.MEMBER.value]
+    )
+
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @field_validator("email")
@@ -60,7 +67,7 @@ class UserBase(SQLModel):
 
     @property
     def is_admin(self) -> bool:
-        return Role.ADMIN in self.access_roles or Role.SUPERUSER in self.access_roles
+        return AccessRole.ADMIN in self.access_roles or AccessRole.SUPERUSER in self.access_roles
 
 
 class UserCreate(UserBase):
@@ -90,8 +97,8 @@ class UserUpdate(SQLModel):
     email: Optional[str] = Field(default=None, max_length=100)
     phone: Optional[str] = Field(default=None, max_length=15)
     address: Optional[str] = Field(default=None, max_length=255)
-    access_roles: Optional[List[Role]] = None
-    cooperative_roles: Optional[List[CooperativeRole]] = None
+    access_roles: Optional[List[str]] = None
+    cooperative_roles: Optional[List[str]] = None
     disabled: Optional[bool] = None
     password: Optional[str] = Field(default=None, min_length=8, max_length=100)
 
@@ -125,8 +132,8 @@ class UserPublic(SQLModel):
     last_name: str
     email: str
     phone: str
-    access_roles: List[Role]
-    cooperative_roles: List[CooperativeRole]
+    access_roles: List[str]
+    cooperative_roles: List[str]
     joined_at: datetime
     disabled: bool
 
