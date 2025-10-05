@@ -5,8 +5,8 @@
 - [x] Create DB schema
 - [x] Define model definitions
 - [x] Setup initial PgAdmin Docker container
-- [ ] Connect Postgres DB
-- [ ] Migrate DB
+- [x] Connect Postgres DB
+- [x] Migrate DB
 - [ ] Define api and routes
 
 ## Important commands
