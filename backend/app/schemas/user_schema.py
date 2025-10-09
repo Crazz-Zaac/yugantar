@@ -117,7 +117,7 @@ class UserResponse(UserBase):
         from_attributes = True
 
 
-class UserDB(UserBase, table=False):
+class UserDB(UserBase):
     id: Optional[int] = Field(default=None, primary_key=True)
     password_hash: str  # Store hashed password, not plain text
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
