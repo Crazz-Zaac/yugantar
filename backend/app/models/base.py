@@ -1,5 +1,6 @@
+import uuid
 from sqlmodel import SQLModel, Field
-
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
@@ -13,20 +14,23 @@ class BaseModel(SQLModel, table=False):
     """
 
     # __abstract__ = True
-    # these are common columns for all tables
-    id: Optional[int] = Field(default=None, primary_key=True)
+    # unique identifier for each record
+    id: uuid.UUID = Field(
+        default_factory=uuid.uuid4,
+        primary_key=True,
+        index=True,
+    )
+
     created_at: Optional[datetime] = Field(
-        default_factory=lambda: datetime.now(timezone.utc), 
-        nullable=False
+        default_factory=lambda: datetime.now(timezone.utc), nullable=False
     )
     updated_at: Optional[datetime] = Field(
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column_kwargs={"onupdate": lambda: datetime.now(timezone.utc)},
     )
-    
-    
+
     # this method is to convert model instance to dictionary and vice versa
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """
         Convert model instance to dictionary.
@@ -40,19 +44,20 @@ class BaseModel(SQLModel, table=False):
         Create model instance from dictionary.
         """
         return cls(**data)
-    
+
     @property
     def to_json(self) -> Dict[str, Any]:
         """
         Convert model instance to JSON serializable dictionary.
         """
+
         def serialize(value):
             if isinstance(value, datetime):
                 return value.isoformat()
             return value
 
         return {key: serialize(value) for key, value in self.to_dict().items()}
-    
+
     @classmethod
     def from_json(cls, data: Dict[str, Any]) -> "BaseModel":
         """

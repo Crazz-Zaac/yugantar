@@ -1,6 +1,7 @@
 from sqlmodel import Relationship, Field
 from datetime import datetime
 from typing import Optional, List
+import uuid
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -11,8 +12,7 @@ from .base import BaseModel
 # Table to Loan issued to users
 class Loan(BaseModel, table=True):
 
-    
-    user_id: int = Field(foreign_key="user.id", index=True)
+    user_id: Optional[uuid.UUID] = Field(default=None, foreign_key="user.id", index=True)
     amount: float = Field()
     interest_rate: float = Field()
     start_date: datetime = Field()
