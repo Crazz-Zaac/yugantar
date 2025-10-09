@@ -33,20 +33,39 @@ services:
     networks:
       - yugantar-network
     restart: unless-stopped
-  # app:
-  #   build: .
-  #   container_name: yugantar-app
-  #   command: uvicorn app.main:app --host
-  #   depends_on:
-  #     - db
+  backend:
+    image: backend:v1
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.backend
+    container_name: yugantar-backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://yugantar_admin:password1!@db:5432/yugantar_db
+      # DATABASE_URL: postgresql+asyncpg:// 
+      #   yugantar_admin:$(cat ./secrets/db_password.txt)@db:5432/yugantar_db
+      SECRET_KEY: your_secret_key_here
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 30
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    networks:
+      - yugantar-network
+    restart: unless-stopped
+  
+  # frontend:
+  #   image: frontend:v1
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile.frontend
+  #   container_name: yugantar-frontend
   #   environment:
-  #     DB_USER: yugantar_admin
-  #     DB_NAME: yugantar_db
-  #     DB_HOST: db
-  #     DB_PORT: 5432
-  #     DB_PASS_FILE: /run/secrets/db_password
-  #   secrets:
-  #     - db_password
+  #     REACT_APP_API_URL: http://localhost:8000  # Adjust if backend is hosted elsewhere
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
   #   networks:
   #     - yugantar-network
   #   restart: unless-stopped
