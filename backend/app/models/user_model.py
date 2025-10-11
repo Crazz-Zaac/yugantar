@@ -6,7 +6,10 @@ from sqlalchemy import JSON, Column
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from models import Deposit, Loan, Fine, Receipt
+    from .deposit_model import Deposit
+    from .loan_model import Loan
+    from .fine_model import Fine
+    from .receipt_model import Receipt
 
 
 from .base import BaseModel
@@ -14,11 +17,13 @@ from .base import BaseModel
 
 # Table to store user information
 class User(BaseModel, table=True):
+    __table_args__ = {"extend_existing": True}
+    
     full_name: str = Field(max_length=100)
     middle_name: Optional[str] = Field(max_length=100, nullable=True)
     last_name: str = Field(max_length=100)
     email: str = Field(max_length=100, unique=True, index=True)
-    password: str = Field(max_length=255)
+    hashed_password: str = Field(max_length=255)
     phone: str = Field(max_length=15)
     address: str = Field(max_length=255)
     roles: List[str] = Field(default=None, sa_column=Column(JSON))

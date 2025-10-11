@@ -5,12 +5,18 @@ import uuid
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from models import User, Loan, Receipt, Fine
+    from .user_model import User
+    from .loan_model import Loan
+    from .receipt_model import Receipt
+    from .fine_model import Fine
 
 from .base import BaseModel
 
 
 class Deposit(BaseModel, table=True):
+
+    __table_args__ = {"extend_existing": True}
+
     deposited_amount: float = Field()
     amount_to_be_deposited: float = Field()
     date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
