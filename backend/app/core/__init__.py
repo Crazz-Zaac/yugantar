@@ -1,7 +1,7 @@
-from .settings import DatabaseSettings
+from .config import Settings
 
 ALL_SETTINGS = {
-    "Settings": DatabaseSettings,
+    "Settings": Settings,
 }
 
 __all__ = ["ALL_SETTINGS"]

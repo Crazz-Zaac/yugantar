@@ -1,15 +1,10 @@
-# from fastapi import FastAPI, Depends, HTTPException
-# from sqlmodel import Session, select
-# from contextlib import asynccontextmanager
-
-# from db import create_db_and_tables, init_db
-# from models import User, Deposit, Receipt, Loan, Fine
-
 from fastapi import FastAPI
+from app.api.v1.endpoints import user
+from app.core.db import init_db, get_session
+from app.core.config import settings
 
-app = FastAPI()
+app = FastAPI(title=settings.PROJECT_NAME, version="1.0.0")
+app.include_router(user.router, prefix="/api/v1")
 
-@app.get("/ping")
-async def ping():
-    return {"message": "pong"}
+# app.dependency_overrides[get_session] = get_session
 

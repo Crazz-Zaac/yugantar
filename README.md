@@ -1,8 +1,8 @@
 # yugantar
 
+## Docker
 
-## Docker 
-- `docker build -t backend:latest -f Dockerfile.backend .`
+- `docker build -f docker/Dockerfile.backend -t backend:latest .`
 - `docker run backend:latest`
 
 More closely

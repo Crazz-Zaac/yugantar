@@ -40,7 +40,7 @@ services:
       dockerfile: docker/Dockerfile.backend
     container_name: yugantar-backend
     environment:
-      DATABASE_URL: postgresql+asyncpg://yugantar_admin:password1!@db:5432/yugantar_db
+      DATABASE_URL: postgresql+psycopg2://yugantar_admin:password1!@db:5432/yugantar_db
       # DATABASE_URL: postgresql+asyncpg:// 
       #   yugantar_admin:$(cat ./secrets/db_password.txt)@db:5432/yugantar_db
       SECRET_KEY: your_secret_key_here

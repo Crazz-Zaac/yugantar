@@ -40,7 +40,6 @@ class UserBase(SQLModel):
         sa_column=Column(ARRAY(String)),
         default_factory=lambda: [CooperativeRole.MEMBER.value]
     )
-
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @field_validator("email")
@@ -67,20 +66,15 @@ class UserBase(SQLModel):
 
     @property
     def is_admin(self) -> bool:
-        return AccessRole.ADMIN in self.access_roles or AccessRole.SUPERUSER in self.access_roles
+        return AccessRole.ADMIN in self.access_roles
+    
+    @property
+    def is_superuser(self) -> bool:
+        return AccessRole.SUPERUSER in self.access_roles
 
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8, max_length=100)
-    password_repeat: str = Field(..., min_length=8, max_length=100)
-
-    @field_validator("password_repeat")
-    def validate_passwords_match(cls, value, info):
-        password = info.data.get("password")
-        if password and value != password:
-            raise ValueError("Passwords do not match")
-        return value
-
     @field_validator("password")
     def validate_password_strength(cls, value):
         # Basic password strength validation
@@ -100,7 +94,6 @@ class UserUpdate(SQLModel):
     access_roles: Optional[List[str]] = None
     cooperative_roles: Optional[List[str]] = None
     disabled: Optional[bool] = None
-    password: Optional[str] = Field(default=None, min_length=8, max_length=100)
 
     @field_validator("email")
     def validate_email(cls, value):
@@ -134,7 +127,6 @@ class UserPublic(SQLModel):
     phone: str
     access_roles: List[str]
     cooperative_roles: List[str]
-    joined_at: datetime
     disabled: bool
 
     class Config:
