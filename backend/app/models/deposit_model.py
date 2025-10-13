@@ -1,7 +1,8 @@
 from sqlmodel import Relationship, Field
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import Optional
 import uuid
+from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -11,6 +12,11 @@ if TYPE_CHECKING:
     from .fine_model import Fine
 
 from .base import BaseModel
+
+class DepositStatus(str, Enum):
+    EARLY = "early"
+    ON_TIME = "on_time"
+    LATE = "late"
 
 
 class Deposit(BaseModel, table=True):
@@ -22,6 +28,7 @@ class Deposit(BaseModel, table=True):
     date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     user_id: Optional[uuid.UUID] = Field(foreign_key="user.id", index=True)
     loan_id: Optional[uuid.UUID] = Field(foreign_key="loan.id", nullable=True)
+    deposit_status: DepositStatus = Field(default=DepositStatus.LATE)
     receipt_id: Optional[uuid.UUID] = Field(foreign_key="receipt.id", nullable=True)
     receipt_screenshot: Optional[str] = Field(max_length=255, nullable=True)
     notes: Optional[str] = Field(max_length=255, nullable=True)
