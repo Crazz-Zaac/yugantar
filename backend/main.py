@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 from app.api.v1.endpoints import user
-from app.core.db import init_db, get_session
 from app.core.config import settings
 
 app = FastAPI(title=settings.PROJECT_NAME, version="1.0.0")

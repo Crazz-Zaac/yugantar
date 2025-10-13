@@ -54,6 +54,8 @@
   2. Properly adjusting the _foreign key_ relationship between the models for the `id` column
 - Changed the port number of `backend` container to `8001` since portainer is hosted in `8000`
 
+---
+
 ## 2025-10-11
 
 - Defined the password hashing logics:
@@ -72,3 +74,16 @@
 - Defined an endpoints for user login `app/api/v1/endpoints/user.py`
 
 ---
+
+## 2025-10-13
+
+- Solved the issue of API not updating the change to route:
+
+  - Initially I had tested with a `/ping` route which even after creating a new endpoint `/api/v1/endpoints/user` it kept showing
+  - Had to completely delete the `yugantar-backend` and rebuild it
+
+- There was a mis-match in the data model. I was re-defining the `id` field which is `uuid` in the base model, as `int`
+
+- The fields that take enum data such as `access roles`, `cooperative roles` and `deposit status` are now strictly defined in the respetive fields creating consistency between schema and the model
+
+-

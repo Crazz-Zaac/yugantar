@@ -18,18 +18,19 @@ RUN apt-get update && apt-get install -y \
 RUN curl -sSL https://install.python-poetry.org | python3 -
 ENV PATH="/root/.local/bin:$PATH"
 
-# Set working directory
+# this will be the working directory inside the container
 WORKDIR /app
 
-# Copy all backend code and dependency files
-COPY backend /app
+# Copies the backend directory contents into the container at /app
+COPY backend/ /app/
 COPY pyproject.toml poetry.lock* /app/
 
-# Install dependencies including local package
-RUN poetry install
+# Install the dependencies and packages in the container with no-root option
+RUN poetry install --no-root
 
 # Expose FastAPI port
 EXPOSE 8000
 
-# Run FastAPI
+# Run FastAPI 
+# This will use the main.py file in the backend directory
 CMD ["poetry", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
