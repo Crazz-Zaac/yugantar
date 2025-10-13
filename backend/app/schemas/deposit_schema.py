@@ -5,18 +5,13 @@ from datetime import datetime, timezone
 from pydantic import field_validator
 from sqlalchemy import Column, String
 from sqlalchemy.dialects.postgresql import ARRAY
+from app.models.deposit_model import DepositStatus
 import uuid
 
 
 # ----------------------------
 # Deposit Schemas
 # ----------------------------
-
-
-class DepositStatus(str, Enum):
-    EARLY = "early"
-    ON_TIME = "on_time"
-    LATE = "late"
 
 
 class DepositBase(SQLModel):
@@ -96,17 +91,15 @@ class DepositUpdate(SQLModel):
 
 
 class DepositResponse(DepositBase):
-    id: int
+    id: uuid.UUID
+    user_id: uuid.UUID
+    receipt_id: int
+    amount: float
+    amount_to_be_deposited: float
+    deposit_status: DepositStatus
+
     created_at: datetime
     updated_at: datetime
-    user_id: int
 
     class Config:
         from_attributes = True
-
-
-class DepositDB(DepositBase, table=False):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    user_id: int = Field(foreign_key="user.id")
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

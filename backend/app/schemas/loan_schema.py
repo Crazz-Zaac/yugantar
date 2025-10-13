@@ -6,6 +6,8 @@ from sqlalchemy import Column, String
 from sqlalchemy.dialects.postgresql import ARRAY
 from pydantic import field_validator
 
+import uuid
+
 # ----------------------------
 # Loan Schemas
 # ----------------------------
@@ -20,7 +22,6 @@ class LoanStatus(str, Enum):
 
 
 class LoanBase(SQLModel):
-    user_id: int
     amount: float = Field(..., gt=0)
     interest_rate: float = Field(..., gt=0)
     start_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -79,6 +80,9 @@ class LoanBase(SQLModel):
             and datetime.now(timezone.utc) > self.end_date
             and self.remaining_amount > 0
         )
+        
+class LoanCreate(LoanBase):
+    user_id: uuid.UUID
 
 
 class LoanUpdate(SQLModel):
@@ -95,15 +99,11 @@ class LoanUpdate(SQLModel):
 
 
 class LoanResponse(LoanBase):
-    id: int
+    id: uuid.UUID
+    user_id: uuid.UUID
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
-
-
-class LoanDB(LoanBase, table=False):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+        
