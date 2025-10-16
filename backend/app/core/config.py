@@ -72,16 +72,28 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = "yugantar_db"
+    
+    @computed_field     # type: ignore[prop-decorator]
+    @property
+    def is_running_in_docker(self) -> bool:
+        """Check if running inside Docker container"""
+        import os
+        return os.path.exists('/.dockerenv')
+
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> PostgresDsn:
+        host = self.POSTGRES_SERVER
+        # If running locally, override Docker host with localhost
+        if not self.is_running_in_docker and host == "db":
+            host = "localhost"
         # building the DNS manually to ensure correct driver is used
         return PostgresDsn.build(
             scheme="postgresql+psycopg",
             username=self.POSTGRES_USER,
             password=self.POSTGRES_PASSWORD,
-            host=self.POSTGRES_SERVER,
+            host=host,
             port=self.POSTGRES_PORT,
             path=self.POSTGRES_DB,
         )
@@ -155,8 +167,11 @@ class Settings(BaseSettings):
             password=self.REDIS_PASSWORD,
             path=f"/{self.REDIS_DB or ''}",
         )
+    
 
 settings = Settings()
 print("Loaded DB:", settings.POSTGRES_SERVER, settings.POSTGRES_USER, settings.POSTGRES_DB)
+print("Running in Docker?", settings.is_running_in_docker)
+
 
 
