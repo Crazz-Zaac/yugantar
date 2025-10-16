@@ -13,7 +13,7 @@ from pathlib import Path
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from app.models import *
+from backend.app.models import *
 from backend.app.core.db import engine 
 from backend.app.core.config import settings
 
