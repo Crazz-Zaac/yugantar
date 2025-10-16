@@ -19,12 +19,10 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class UserBase(SQLModel):
-    first_name: str = Field(..., min_length=1, max_length=100)
+    first_name: str = Field(..., min_length=3, max_length=100)
     middle_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
-    email: str = Field(
-        ..., max_length=100
-    )  # Using str instead of EmailStr for SQLModel compatibility
+    email: Optional[EmailStr] = Field(default=None, max_length=100)
     phone: str = Field(..., max_length=15)
     address: str = Field(..., max_length=255)
     disabled: bool = Field(default=False)
@@ -116,6 +114,17 @@ class UserUpdate(SQLModel):
         if not any(char.isalpha() for char in value):
             raise ValueError("Password must contain at least one letter")
         return value
+
+
+class UserLogin(SQLModel):
+    email: EmailStr = Field(..., max_length=100)
+    password: str = Field(..., min_length=8, max_length=72)
+
+    @field_validator("email")
+    def validate_email(cls, value):
+        if "@" not in value:
+            raise ValueError("Invalid email format")
+        return value.lower()
 
 
 # Schema for internal use with hashed password
