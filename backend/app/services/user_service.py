@@ -34,6 +34,11 @@ class UserService:
         session.commit()
         session.refresh(db_user)
         return db_user
+    
+    def get_all_users(self, session: Session) -> List[User]:
+        statement = select(User)
+        all_users = list(session.exec(statement).all())
+        return all_users
 
     def get_user_by_email(self, session: Session, email: str) -> Optional[User]:
         statement = select(User).where(User.email == email)
