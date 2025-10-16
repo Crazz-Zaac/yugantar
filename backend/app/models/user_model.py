@@ -4,6 +4,7 @@ from typing import Optional, List
 from sqlalchemy import JSON, Column
 from enum import Enum
 from typing import TYPE_CHECKING
+from pydantic import EmailStr
 
 if TYPE_CHECKING:
     from .deposit_model import Deposit
@@ -35,7 +36,7 @@ class User(BaseModel, table=True):
     first_name: str = Field(max_length=100)
     middle_name: Optional[str] = Field(max_length=100, nullable=True)
     last_name: str = Field(max_length=100)
-    email: str = Field(max_length=100, unique=True, index=True)
+    email: Optional[EmailStr] = Field(index=True, unique=True, nullable=True)
     hashed_password: str = Field(max_length=255)
     phone: str = Field(max_length=15)
     address: str = Field(max_length=255)
