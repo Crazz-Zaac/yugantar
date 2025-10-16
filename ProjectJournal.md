@@ -1,6 +1,6 @@
 # Project Journal
 
-# TODO:
+## TODO:
 
 - [x] Create virtual environment and install packages
 - [x] Create DB schema
@@ -8,10 +8,11 @@
 - [x] Setup initial PgAdmin Docker container
 - [x] Connect Postgres DB
 - [x] Migrate DB
-- [ ] User API
-- [ ] CRUD on User table
-- [ ] User authentication using JWT tokens
-- [ ] Define api and routes
+- [x] Define api and routes
+- [x] User registration
+- [ ] User Login
+- [ ] Update and Delete operations on User table
+- [ ] Forgot Password
 
 ---
 
@@ -107,3 +108,6 @@
 
 - Solved the issues with field name inconsistency. In the DB I had the column `Full_name` while in the user schemas I had `First_name` which was problematic.
 - Another issue was, I had defined the `backend` to depend on `db` while I in `.env` file I was setting `POSTGRES_SERVER` to `localhost` due to which the connection was being refused.
+- Now with `localhost` changed to `db`, I was unable to locally make migrations because the db was now in the docker container. That's why a `is_running_in_docker()` method is now added to the `core/config.py` that would dynamically set the `host`. And this solved the issue.
+- The `email` field is now set to pydantic's `EmailStr` type which previously I had set to `str`
+- Docker containers now take credentials directly from the `../backend/.env` file
