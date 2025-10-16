@@ -1,21 +1,16 @@
-from pydantic import BaseModel, Field, EmailStr, field_validator
-from typing import List, Optional, Dict
+from sqlmodel import SQLModel, Field
+from typing import List, Optional
 from enum import Enum
 from datetime import datetime, timezone
+from pydantic import field_validator, EmailStr
+from sqlalchemy import Column, String
+from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy import event
+from passlib.context import CryptContext
 import uuid
+from app.models.user_model import AccessRole, CooperativeRole
 
-
-class Role(str, Enum):
-    SUPERUSER = "superuser"
-    ADMIN = "admin"
-    MEMBER = "member"
-
-
-class CooperativeRole(str, Enum):
-    SECRETARY = "secretary"
-    TREASURER = "treasurer"
-    PRESIDENT = "president"
-    MEMBER = "member"
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # ----------------------------
@@ -23,58 +18,141 @@ class CooperativeRole(str, Enum):
 # ----------------------------
 
 
-class UserBase(BaseModel):
-    user_id: int = Field(default_factory=lambda: int(uuid.uuid4()))
+class UserBase(SQLModel):
     first_name: str = Field(..., min_length=3, max_length=100)
-    middle_name: Optional[str] = Field(None, min_length=3, max_length=100)
-    last_name: str = Field(..., min_length=3, max_length=100)
-    email: EmailStr
-    phone: str = Field(max_length=15)
-    address: str = Field(max_length=255)
-    disabled: bool = Field(default=False)
-    access_roles: List[Role] = Field(default=[Role.MEMBER])
-    cooperative_roles: List[CooperativeRole] = Field(default=[CooperativeRole.MEMBER])
-    joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-
-class UserCreate(UserBase):
-    user_id: int = Field(default_factory=lambda: int(uuid.uuid4()))
-    full_name: str = Field(..., min_length=3, max_length=100)
-    middle_name: Optional[str] = Field(None, min_length=3, max_length=100)
-    last_name: str = Field(..., min_length=3, max_length=100)
-    email: EmailStr
+    middle_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+    email: Optional[EmailStr] = Field(default=None, max_length=100)
     phone: str = Field(..., max_length=15)
     address: str = Field(..., max_length=255)
-    password: str = Field(..., min_length=8, max_length=100)
-    password_repeat: str = Field(..., min_length=8, max_length=100)
-    access_roles: List[Role] = Field(default=[Role.MEMBER])
-    cooperative_roles: List[CooperativeRole] = Field(default=[CooperativeRole.MEMBER])
+    disabled: bool = Field(default=False)
+    access_roles: List[AccessRole] = Field(
+        sa_column=Column(ARRAY(String)), default_factory=lambda: [AccessRole.USER.value]
+    )
+    cooperative_roles: List[CooperativeRole] = Field(
+        sa_column=Column(ARRAY(String)),
+        default_factory=lambda: [CooperativeRole.MEMBER.value],
+    )
+    joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @field_validator("email")
+    def validate_email(cls, value):
+        if "@" not in value:
+            raise ValueError("Invalid email format")
+        return value.lower()
+
+    @field_validator("phone")
+    def validate_phone(cls, value):
+        if not value.replace("+", "").replace(" ", "").isdigit():
+            raise ValueError("Phone number should contain only digits, spaces, and '+'")
+        return value
+
+    @property
+    def full_name(self) -> str:
+        if self.middle_name:
+            return f"{self.first_name} {self.middle_name} {self.last_name}"
+        return f"{self.first_name} {self.last_name}"
+
+    @property
+    def is_active(self) -> bool:
+        return not self.disabled
+
+    @property
+    def is_admin(self) -> bool:
+        return AccessRole.ADMIN in self.access_roles
+
+    @property
+    def is_superuser(self) -> bool:
+        return AccessRole.SUPERUSER in self.access_roles
 
 
-class UserUpdate(BaseModel):
-    full_name: Optional[str] = Field(None, min_length=3, max_length=100)
-    last_name: Optional[str] = Field(None, min_length=3, max_length=100)
-    email: Optional[EmailStr] = None
-    phone: Optional[str] = Field(None, max_length=15)
-    address: Optional[str] = Field(None, max_length=255)
-    access_roles: Optional[List[Role]] = None
-    cooperative_roles: Optional[List[CooperativeRole]] = None
+# Schema for creating a new user
+class UserCreate(UserBase):
+    password: str = Field(
+        ..., min_length=8, max_length=72
+    )  # Limit to 72 bytes for bcrypt
+
+    @field_validator("password")
+    def validate_password_strength(cls, value):
+        # Ensure password doesn't exceed bcrypt's 72-byte limit
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password cannot exceed 72 bytes")
+
+        # Basic password strength validation
+        if not any(char.isdigit() for char in value):
+            raise ValueError("Password must contain at least one digit")
+        if not any(char.isalpha() for char in value):
+            raise ValueError("Password must contain at least one letter")
+        return value
+
+
+# Schema for updating user information
+class UserUpdate(SQLModel):
+    first_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    middle_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    last_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    email: EmailStr | None = Field(default=None, max_length=100)
+    phone: Optional[str] = Field(default=None, max_length=15)
+    address: Optional[str] = Field(default=None, max_length=255)
+    access_roles: Optional[List[str]] = None
+    cooperative_roles: Optional[List[str]] = None
     disabled: Optional[bool] = None
-    password: Optional[str] = Field(None, min_length=8, max_length=100)
-    password_repeat: Optional[str] = Field(None, min_length=8, max_length=100)
+    password: Optional[str] = Field(default=None, min_length=8, max_length=100)
 
-class UserOut(UserBase):
-    user_id: int
-    full_name: str
-    middle_name: Optional[str]
-    last_name: str
-    email: EmailStr
-    phone: str
-    address: str
-    disabled: bool
-    access_roles: List[Role]
-    cooperative_roles: List[CooperativeRole]
-    joined_at: datetime
+    @field_validator("password")
+    def validate_password_strength(cls, value):
+        if value is None:
+            return value
+
+        # Ensure password doesn't exceed bcrypt's 72-byte limit
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password cannot exceed 72 bytes")
+
+        # Basic password strength validation
+        if not any(char.isdigit() for char in value):
+            raise ValueError("Password must contain at least one digit")
+        if not any(char.isalpha() for char in value):
+            raise ValueError("Password must contain at least one letter")
+        return value
+
+
+class UserLogin(SQLModel):
+    email: EmailStr = Field(..., max_length=100)
+    password: str = Field(..., min_length=8, max_length=72)
+
+    @field_validator("email")
+    def validate_email(cls, value):
+        if "@" not in value:
+            raise ValueError("Invalid email format")
+        return value.lower()
+
+
+# Schema for internal use with hashed password
+class UserDB(UserBase):
+    hashed_password: str = Field(..., alias="hashed_password")
+
+    def set_password(self, password: str):
+        self.hashed_password = pwd_context.hash(password)
+
+    def verify_password(self, password: str) -> bool:
+        return pwd_context.verify(password, self.hashed_password)
+
+
+# Schema for returning user information (response model)
+class UserResponse(UserBase):
+    id: uuid.UUID
+    created_at: datetime
+    updated_at: datetime
+
+    # @event.listens_for(UserDB, "before_update", propagate=True)
+    # def update_timestamp(mapper, connection, target):
+    #     target.updated_at = datetime.now(timezone.utc)
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+
+# Schema for public user information (limited fields)
+class UserPublic(UserResponse):
+    class Config:
+        from_attributes = True

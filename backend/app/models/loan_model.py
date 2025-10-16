@@ -1,28 +1,36 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ARRAY
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from datetime import datetime, timezone
-from sqlalchemy import ForeignKey
-from typing import Optional
+from sqlmodel import Relationship, Field
+from datetime import datetime
+from typing import Optional, List
+import uuid
 
-from app.models.base import BaseModel
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .user_model import User
+    from .deposit_model import Deposit
+
+from .base import BaseModel
+
 
 # Table to Loan issued to users
-class Loan(BaseModel):
-    __tablename__ = "loan"
+class Loan(BaseModel, table=True):
 
-    loan_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.user_id"))
-    amount: Mapped[float] = mapped_column(Float)
-    interest_rate: Mapped[float] = mapped_column(Float)
-    start_date: Mapped[datetime] = mapped_column(DateTime)
-    end_date: Mapped[datetime] = mapped_column(DateTime)
-    status: Mapped[str] = mapped_column(String(50))
-    approved_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
-    total_paid: Mapped[float] = mapped_column(Float, default=0)
-    remaining_amount: Mapped[float] = mapped_column(Float, default=0)
-    is_renewed: Mapped[bool] = mapped_column(default=False)
-    notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    __table_args__ = {"extend_existing": True}
 
-    user = relationship("User", back_populates="loans")
-    deposits = relationship("Deposit", back_populates="deposits")
-    
+    user_id: Optional[uuid.UUID] = Field(
+        default=None, foreign_key="user.id", index=True
+    )
+    amount: float = Field()
+    interest_rate: float = Field()
+    start_date: datetime = Field()
+    end_date: datetime = Field()
+    status: str = Field(max_length=50)
+    approved_by: Optional[str] = Field(max_length=100, nullable=True)
+    total_paid: float = Field(default=0.0)
+    remaining_amount: float = Field(default=0.0)
+    is_renewed: bool = Field(default=False)
+    notes: Optional[str] = Field(max_length=255, nullable=True)
+
+    # Relationships
+    user: "User" = Relationship(back_populates="loans")
+    deposits: List["Deposit"] = Relationship(back_populates="loan")

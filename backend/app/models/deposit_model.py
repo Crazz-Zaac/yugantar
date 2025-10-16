@@ -1,30 +1,42 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime
-from sqlalchemy.orm import relationship
-from sqlalchemy import ForeignKey
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlmodel import Relationship, Field
 from datetime import datetime, timezone
 from typing import Optional
+import uuid
+from enum import Enum
+from typing import TYPE_CHECKING
 
-from app.models import BaseModel
+if TYPE_CHECKING:
+    from .user_model import User
+    from .loan_model import Loan
+    from .receipt_model import Receipt
+    from .fine_model import Fine
 
+from .base import BaseModel
 
-
-class Deposit(BaseModel):
-    __tablename__ = "deposit"
-
-    deposit_id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"))
-    deposited_amount: Mapped[float] = mapped_column(Float)
-    amount_to_be_deposited: Mapped[float] = mapped_column(Float)
-    date: Mapped[datetime] = mapped_column(DateTime)
-    receipt_screenshot: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    receipt_id: Mapped[int] = mapped_column(Integer, ForeignKey("receipt.id"))
-    notes: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-
-    user = relationship("User", back_populates="deposits")
-    # loan = relationship("Loan", back_populates="takes_loan")
-    receipt = relationship("Receipt", back_populates="deposits", uselist=False)
-    fine = relationship("Fine", back_populates="deposits", uselist=False)
-    
+class DepositStatus(str, Enum):
+    EARLY = "early"
+    ON_TIME = "on_time"
+    LATE = "late"
 
 
+class Deposit(BaseModel, table=True):
+
+    __table_args__ = {"extend_existing": True}
+
+    deposited_amount: float = Field()
+    amount_to_be_deposited: float = Field()
+    date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    user_id: Optional[uuid.UUID] = Field(foreign_key="user.id", index=True)
+    loan_id: Optional[uuid.UUID] = Field(foreign_key="loan.id", nullable=True)
+    deposit_status: DepositStatus = Field(default=DepositStatus.LATE)
+    receipt_id: Optional[uuid.UUID] = Field(foreign_key="receipt.id", nullable=True)
+    receipt_screenshot: Optional[str] = Field(max_length=255, nullable=True)
+    notes: Optional[str] = Field(max_length=255, nullable=True)
+
+    # Relationships
+    loan: Optional["Loan"] = Relationship(back_populates="deposits")
+    user: "User" = Relationship(back_populates="deposits")
+    receipt: Optional["Receipt"] = Relationship(back_populates="deposits")
+    fine: Optional["Fine"] = Relationship(
+        back_populates="deposit", sa_relationship_kwargs={"uselist": False}
+    )
