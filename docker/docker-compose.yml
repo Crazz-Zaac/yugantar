@@ -3,11 +3,8 @@ services:
   db:
     image: postgres:latest
     container_name: yugantar-db
-    environment:
-      POSTGRES_DB: yugantar_db
-      POSTGRES_USER: yugantar_admin
-      POSTGRES_PASSWORD: password1!
-      # POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    env_file:
+      - ../backend/.env
     ports:
       - "5432:5432"
     # secrets:
@@ -20,12 +17,8 @@ services:
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@localhost.com  
-      PGADMIN_DEFAULT_PASSWORD: password@dmin
-      # PGADMIN_DEFAULT_PASSWORD_FILE: /run/secrets/pgadmin_password
-    # secrets:
-    #   - pgadmin_password
+    env_file:
+      - ../backend/.env
     ports:
       - "8080:80"  
     volumes:
