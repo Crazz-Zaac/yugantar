@@ -32,7 +32,7 @@ class CooperativeRole(str, Enum):
 class User(BaseModel, table=True):
     __table_args__ = {"extend_existing": True}
 
-    full_name: str = Field(max_length=100)
+    first_name: str = Field(max_length=100)
     middle_name: Optional[str] = Field(max_length=100, nullable=True)
     last_name: str = Field(max_length=100)
     email: str = Field(max_length=100, unique=True, index=True)

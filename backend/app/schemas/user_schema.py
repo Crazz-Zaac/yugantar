@@ -70,10 +70,16 @@ class UserBase(SQLModel):
 
 # Schema for creating a new user
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=8, max_length=100)
+    password: str = Field(
+        ..., min_length=8, max_length=72
+    )  # Limit to 72 bytes for bcrypt
 
     @field_validator("password")
     def validate_password_strength(cls, value):
+        # Ensure password doesn't exceed bcrypt's 72-byte limit
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password cannot exceed 72 bytes")
+
         # Basic password strength validation
         if not any(char.isdigit() for char in value):
             raise ValueError("Password must contain at least one digit")
@@ -93,19 +99,34 @@ class UserUpdate(SQLModel):
     access_roles: Optional[List[str]] = None
     cooperative_roles: Optional[List[str]] = None
     disabled: Optional[bool] = None
+    password: Optional[str] = Field(default=None, min_length=8, max_length=100)
+
+    @field_validator("password")
+    def validate_password_strength(cls, value):
+        if value is None:
+            return value
+
+        # Ensure password doesn't exceed bcrypt's 72-byte limit
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password cannot exceed 72 bytes")
+
+        # Basic password strength validation
+        if not any(char.isdigit() for char in value):
+            raise ValueError("Password must contain at least one digit")
+        if not any(char.isalpha() for char in value):
+            raise ValueError("Password must contain at least one letter")
+        return value
 
 
 # Schema for internal use with hashed password
 class UserDB(UserBase):
-    password_hash: str = Field(
-        alias="password_hash"
-    )
-    # Methods to set and verify password
+    hashed_password: str = Field(..., alias="hashed_password")
+
     def set_password(self, password: str):
-        self._password_hash = pwd_context.hash(password)
+        self.hashed_password = pwd_context.hash(password)
 
     def verify_password(self, password: str) -> bool:
-        return pwd_context.verify(password, self._password_hash)
+        return pwd_context.verify(password, self.hashed_password)
 
 
 # Schema for returning user information (response model)
@@ -114,9 +135,9 @@ class UserResponse(UserBase):
     created_at: datetime
     updated_at: datetime
 
-    @event.listens_for(UserDB, "before_update", propagate=True)
-    def update_timestamp(mapper, connection, target):
-        target.updated_at = datetime.now(timezone.utc)
+    # @event.listens_for(UserDB, "before_update", propagate=True)
+    # def update_timestamp(mapper, connection, target):
+    #     target.updated_at = datetime.now(timezone.utc)
 
     class Config:
         from_attributes = True

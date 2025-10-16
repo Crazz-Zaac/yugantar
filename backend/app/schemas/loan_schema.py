@@ -107,3 +107,5 @@ class LoanResponse(LoanBase):
     class Config:
         from_attributes = True
         
+
+
