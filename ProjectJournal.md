@@ -17,6 +17,8 @@
 
 # Important commands
 
+## Alembic
+
 1. To create secrets for docker to read
 
    ```bash
@@ -41,6 +43,19 @@
     # then apply the migration
     alembic upgrade head
 ```
+
+## Docker
+
+- `docker build -f docker/Dockerfile.backend -t backend:latest .`
+- `docker run backend:latest`
+
+- When you need to rebuild (dependencies changed, Dockerfile changed) -> `docker compose up -d --build`
+
+- More closely:
+- `docker compose up --watch`
+- `docke rcompose down` or `docker compose down -v` (to remove volumes)
+- `docker compose run backend /bin/bash --remove-orphans` (name of service)
+- OR: `docker compose run backend python --remove-orphans`
 
 ---
 
@@ -86,4 +101,9 @@
 
 - The fields that take enum data such as `access roles`, `cooperative roles` and `deposit status` are now strictly defined in the respetive fields creating consistency between schema and the model
 
--
+---
+
+## 2025-10-16
+
+- Solved the issues with field name inconsistency. In the DB I had the column `Full_name` while in the user schemas I had `First_name` which was problematic.
+- Another issue was, I had defined the `backend` to depend on `db` while I in `.env` file I was setting `POSTGRES_SERVER` to `localhost` due to which the connection was being refused.
