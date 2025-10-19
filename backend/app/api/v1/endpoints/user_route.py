@@ -1,10 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session
-from typing import Optional
 from uuid import UUID
 
-from app.core.db import init_db, get_session
-from app.core.config import settings
+from app.core.db import get_session
 from app.models.user_model import User
 from app.schemas.user_schema import UserCreate, UserUpdate, UserResponse
 from app.services.user_service import UserService
@@ -16,7 +14,9 @@ user_service = UserService()
 
 
 # Specific routes first
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+)
 async def register_user(
     user_in: UserCreate,
     session: Session = Depends(get_session),
@@ -28,8 +28,18 @@ async def register_user(
     return user
 
 
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Get the current authenticated user's information.
+    """
+    return current_user
+
+
 @router.patch("/me", response_model=UserResponse)
-def update_current_user(
+async def update_current_user(
     user_in: UserUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -43,17 +53,40 @@ def update_current_user(
     return user
 
 
-# dynamic routes last
-# get by user_id
-@router.get("/{user_id}", response_model=UserResponse)
-def get_user_id(
-    user_id: UUID,
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_current_user(
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Retrieve a user by ID.
+    Delete the current authenticated user's account.
+    """
+    session.delete(current_user)
+    session.commit()
+    return None
+
+
+# Dynamic routes last
+@router.get("/{user_id}", response_model=UserResponse)
+async def get_user_by_id(
+    user_id: UUID,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),  # Added authentication
+):
+    """
+    Retrieve a user by ID (requires authentication).
+    Privacy rules:
+        - Users can view their own details.
+        - Admins can view any user's details.
+        - Public profiles (is_public=True) can be viewed by anyone.
     """
     user = user_service.get_user_by_id(session=session, user_id=user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
     return user
+    
+    

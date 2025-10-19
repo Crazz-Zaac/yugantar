@@ -8,14 +8,14 @@ import jwt
 from app.core.db import get_session
 from app.core.config import settings
 from app.models.user_model import User
-from app.core.security import create_access_token
 
-outauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+# tokenUrl should match the actual login endpoint
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login/token")  # or "api/v1/login/token" depending on your setup
 
 async def get_current_user(
-    token: str = Depends(outauth2_scheme),
+    token: str = Depends(oauth2_scheme),
     session: Session = Depends(get_session),
-)-> User:
+) -> User:
     """Decode the JWT token and retrieve the current user."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

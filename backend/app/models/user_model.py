@@ -17,9 +17,9 @@ from .base import BaseModel
 
 
 class AccessRole(str, Enum):
-    SUPERUSER = "superuser"
-    ADMIN = "admin"
-    USER = "user"
+    ADMIN = "admin"   # allow full access
+    MODERATOR = "moderator"     # allow limited management access
+    USER = "user"   # regular user with standard access
 
 
 class CooperativeRole(str, Enum):

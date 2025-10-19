@@ -10,7 +10,7 @@ from typing import Any
 from .config import settings
 
 
-def create_access_token(subject: str | Any, expires_delta: timedelta) -> str:
+async def create_access_token(subject: str | Any, expires_delta: timedelta) -> str:
     """
     Create a JWT access token.
     """
@@ -25,6 +25,57 @@ def create_access_token(subject: str | Any, expires_delta: timedelta) -> str:
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
     )
     return encoded_jwt
+
+
+# this is needed to create refresh tokens separately
+# as they may have different expiry durations
+async def create_refresh_token(subject: str | Any, expires_delta: timedelta) -> str:
+    """
+    Create a JWT refresh token.
+    """
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(
+            days=30  # Default refresh token expiry of 30 days
+        )
+    to_encode = {"exp": expire, "sub": str(subject)}
+    encoded_jwt = jwt.encode(
+        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+    )
+    return encoded_jwt
+
+
+def decode_access_token(token: str) -> dict[str, Any]:
+    """
+    Decode a JWT access token.
+    """
+    try:  # decode the token
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        return payload
+    except jwt.PyJWTError:
+        raise ValueError("Invalid token")
+
+
+def token_expired(token: str) -> bool:
+    """
+    Check if a JWT token has expired.
+    """
+    try:  # decode the token to get expiration time
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        exp = payload.get("exp")
+        if exp is None:
+            return True
+        expire = datetime.fromtimestamp(exp, tz=timezone.utc)
+        return expire < datetime.now(timezone.utc)
+    except jwt.ExpiredSignatureError:
+        return True
+    except jwt.PyJWTError:
+        return True
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
