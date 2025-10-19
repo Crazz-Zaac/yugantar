@@ -10,9 +10,11 @@
 - [x] Migrate DB
 - [x] Define api and routes
 - [x] User registration
-- [ ] User Login
-- [ ] Update and Delete operations on User table
+- [x] User Login
+- [x] Update and Delete operations on User table
 - [ ] Forgot Password
+- [ ] Add table to record internal expenditure
+- [ ]
 
 ---
 
@@ -162,3 +164,5 @@ python -c "import secrets; print(secrets.token_hex(32))"
   - `get_all_users` returns the list of all the users
   - `admin_update_user` to allow the admin to update user's `access_roles`, `cooperative_roles` and enable or disable the user
   - `admin_delete_user` to allow the admin to delete the user
+
+---
