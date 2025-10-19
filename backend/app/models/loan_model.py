@@ -2,7 +2,7 @@ from sqlmodel import Relationship, Field
 from datetime import datetime
 from typing import Optional, List
 import uuid
-
+from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -10,6 +10,15 @@ if TYPE_CHECKING:
     from .deposit_model import Deposit
 
 from .base import BaseModel
+
+
+
+class LoanStatus(str, Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    ACTIVE = "active"
+    PAID = "paid"
 
 
 # Table to Loan issued to users

@@ -8,18 +8,11 @@ from pydantic import field_validator
 
 import uuid
 
+from app.models.loan_model import LoanStatus
+
 # ----------------------------
 # Loan Schemas
 # ----------------------------
-
-
-class LoanStatus(str, Enum):
-    PENDING = "pending"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    ACTIVE = "active"
-    PAID = "paid"
-
 
 class LoanBase(SQLModel):
     amount: float = Field(..., gt=0)

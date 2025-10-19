@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pydantic import field_validator, EmailStr
 from sqlalchemy import Column, String
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy import event
+
 from passlib.context import CryptContext
 import uuid
 from app.models.user_model import AccessRole, CooperativeRole
