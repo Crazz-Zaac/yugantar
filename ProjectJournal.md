@@ -18,6 +18,12 @@
 
 # Important commands
 
+## Generating secret key:
+
+```python
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
 ## Alembic
 
 1. To create secrets for docker to read
@@ -111,3 +117,48 @@
 - Now with `localhost` changed to `db`, I was unable to locally make migrations because the db was now in the docker container. That's why a `is_running_in_docker()` method is now added to the `core/config.py` that would dynamically set the `host`. And this solved the issue.
 - The `email` field is now set to pydantic's `EmailStr` type which previously I had set to `str`
 - Docker containers now take credentials directly from the `../backend/.env` file
+
+---
+
+## 2025-10-17
+
+- Created `dependencies/admin.py` that returns the current admin or moderator
+
+- Created `endpoints/admin.py` to:
+
+  - list all users
+  - if user is admin, then get user's ID
+  - As an admin update and delete user's data
+  - Disable user as an admin
+
+- Created `api/dependencies/auth.py` for authentication to:
+
+  - `get_current_user`
+    - Use `JWT` to decode using token and secret key
+    - Extract the user ID from the payload
+    - Retrieve the user from the database and return
+  - `get_current_active_user`
+    - get current user
+    - check if the user is active and not disabled
+
+- Created `api/endpoints/user_login.py` to:
+
+  - `login_for_access_token`:
+    - authenticates the user by email and password
+    - calculate the token expiry in minutes
+    - create the access token using the `user_id` and `access_token_expire` using the `create_access_token` method
+    - get the refresh token expiry in minutes with 7 days
+    - calculate the refresh token using `create_access_token` and pass it to `TokenResponse` method
+  - `refresh_access_token` to issue new access token:
+  - Verify refresh token
+  - Retrieve user from the database
+  - Create a new access token and return the updated token
+
+- Updated `endpoints/user_route.py` to:
+
+  - allow currently logged in user to get own details, update and delete account
+
+- Updated `app/services/user_service.py` for admin related functionality:
+  - `get_all_users` returns the list of all the users
+  - `admin_update_user` to allow the admin to update user's `access_roles`, `cooperative_roles` and enable or disable the user
+  - `admin_delete_user` to allow the admin to delete the user
