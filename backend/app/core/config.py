@@ -9,6 +9,7 @@ from pydantic import (
     AnyUrl,
     BeforeValidator,
     EmailStr,
+    SecretStr,
     HttpUrl,
     PostgresDsn,
     RedisDsn,
@@ -101,14 +102,15 @@ class Settings(BaseSettings):
     # ---------------------------
     # Email Settings for Email Notifications
     # ---------------------------
+    SMTP_SERVER: str = ""
     SMTP_TLS: bool = True
     SMTP_SSL: bool = False
     SMTP_PORT: int = 587
-    SMTP_HOST: str | None = None
-    SMTP_USER: str | None = None
-    SMTP_PASSWORD: str | None = None
-    EMAILS_FROM_EMAIL: EmailStr | None = None
-    EMAILS_FROM_NAME: str | None = None
+    # SMTP_HOST: str = ""
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: SecretStr = SecretStr("")
+    EMAILS_FROM_EMAIL: EmailStr = ""
+    EMAILS_FROM_NAME: str = ""
 
     @model_validator(mode="after")
     def _set_default_emails_from(self) -> Self:
@@ -121,7 +123,7 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def emails_enabled(self) -> bool:
-        return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
+        return bool(self.SMTP_SERVER and self.EMAILS_FROM_EMAIL)
 
     EMAIL_TEST_USER: EmailStr | None = "test@example.com"  # type: ignore
     FIRST_SUPERUSER: EmailStr = ""
