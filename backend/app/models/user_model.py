@@ -17,9 +17,9 @@ from .base import BaseModel
 
 
 class AccessRole(str, Enum):
-    ADMIN = "admin"   # allow full access
-    MODERATOR = "moderator"     # allow limited management access
     USER = "user"   # regular user with standard access
+    MODERATOR = "moderator"     # allow limited management access
+    ADMIN = "admin"   # allow full access
 
 
 class CooperativeRole(str, Enum):
@@ -36,7 +36,7 @@ class User(BaseModel, table=True):
     first_name: str = Field(max_length=100)
     middle_name: Optional[str] = Field(max_length=100, nullable=True)
     last_name: str = Field(max_length=100)
-    email: Optional[EmailStr] = Field(index=True, unique=True, nullable=True)
+    email: EmailStr = Field(index=True, unique=True, nullable=True)
     hashed_password: str = Field(max_length=255)
     phone: str = Field(max_length=15)
     address: str = Field(max_length=255)
