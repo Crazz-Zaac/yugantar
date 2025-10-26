@@ -35,6 +35,18 @@ class UserService:
         session.refresh(db_user)
         return db_user
 
+    def change_user_password(
+        self, session: Session, user: User, new_password: str
+    ) -> User:
+        """
+        Change the password for a user.
+        """
+        user.hashed_password = get_password_hash(new_password)
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+        return user
+
     def get_user_by_email(self, session: Session, email: str) -> Optional[User]:
         statement = select(User).where(User.email == email)
         return session.exec(statement).first()
