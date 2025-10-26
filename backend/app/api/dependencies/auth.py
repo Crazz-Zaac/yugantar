@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.models.user_model import User
 
 # tokenUrl should match the actual login endpoint
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login/token")  # or "api/v1/login/token" depending on your setup
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/login/token")  # or "api/v1/login/token" depending on your setup
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),

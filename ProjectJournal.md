@@ -166,3 +166,13 @@ python -c "import secrets; print(secrets.token_hex(32))"
   - `admin_delete_user` to allow the admin to delete the user
 
 ---
+
+## 2025-10-26
+
+- Created an App passwords for google account -> [Link](https://dtptips.com/%F0%9F%94%91-how-to-generate-app-passwords-in-google-account-even-if-the-option-is-hidden/)
+- Tested Admin rights (CRUD operations on user table)
+- Updated `user_schema` for not allowing users to update `access_roles` and `cooperative_roles`. Only admin has that right to change
+- Updated `SMTP` related configurations
+- Renamed `endpoints/user_login.py` to `endpoints/auth.py` as it is only responsible to token creation
+
+---
