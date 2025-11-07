@@ -10,11 +10,10 @@ import uuid
 
 from app.models.loan_model import LoanStatus
 
+
 # ----------------------------
 # Loan Schemas
 # ----------------------------
-
-
 class LoanBase(SQLModel):
     principal_amount: float = Field(
         ..., gt=0, description="Original amount borrowed by the user"
