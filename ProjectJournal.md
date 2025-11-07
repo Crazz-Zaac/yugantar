@@ -13,8 +13,9 @@
 - [x] User Login
 - [x] Update and Delete operations on User table
 - [ ] Forgot Password
-- [ ] Add table to record internal expenditure
-- [ ]
+- [ ] Create loan policy
+- [ ] Create loan schema
+- [ ] Create loan service
 
 ---
 
@@ -174,5 +175,79 @@ python -c "import secrets; print(secrets.token_hex(32))"
 - Updated `user_schema` for not allowing users to update `access_roles` and `cooperative_roles`. Only admin has that right to change
 - Updated `SMTP` related configurations
 - Renamed `endpoints/user_login.py` to `endpoints/auth.py` as it is only responsible to token creation
+
+---
+
+## 2025-11-01
+
+- Team meeting
+
+- Feedbacks:
+
+  - Expense Policy
+    - Meeting expense
+  - Investment Policy
+
+    - invested by
+    - asset
+    - amount
+    - return (monthly / weekly)
+    - REQUEST FOR INVESTMENT
+
+  - Cooperative Roles
+    - gets notified for all the financial activities
+  - Secretary / Treasurer
+    - Moderator
+      - Send EMail
+      - Report generate
+  - President
+    - Approves loan
+  - ADMIN
+
+    - Role assignment
+    - Full IT department
+    - Renew password every 6 months
+
+  - Loan
+    - Request loan -> Treasurer check -> notify President -> President approves loan
+
+---
+
+## 2025-11-02
+
+- Working with loan model
+
+### Policy Management
+
+- Policies are versioned (effective_from/effective_to)
+- Only one active policy at a time
+- Historical policies retained for auditing
+
+### Loan Creation
+
+1. Fetch active policy
+2. Validate loan against policy rules
+3. Snapshot policy values into loan
+4. Store reference to policy (loan_policy_id)
+
+### Loan Modification
+
+- Policy changes don't affect existing loans
+- Renewals may use current policy or keep original
+- All changes are audited
+
+---
+
+## 2025-11-07
+
+- Enums should be explicitly created in alembic migrations (`alembic/env.py`)
+
+  - First define the enum
+  - Create it
+  - Set the type of the respective column to this enum type
+  - Use `postgresql_using`
+
+- Created `deposit_policy` and `loan_policy`
+- Defined the relationship between `deposit_model` and `deposit_policy`, `loan_model` and `loan_policy`
 
 ---
