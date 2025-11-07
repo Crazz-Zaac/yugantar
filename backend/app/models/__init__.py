@@ -1,4 +1,9 @@
 from sqlmodel import SQLModel
+# Import all policy models to ensure they are registered
+from .policy.deposit_policy import DepositPolicy
+from .policy.loan_policy import LoanPolicy
+
+# Import other models
 from .base import BaseModel
 from .user_model import User
 from .deposit_model import Deposit
@@ -17,6 +22,8 @@ ALL_MODELS = {
     "receipt": Receipt,
     "expendituremodel": ExpenditureModel,
 }
+
+
 
 # Utility functions to get models information
 def get_model(model_name: str):
