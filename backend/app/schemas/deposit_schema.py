@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 from pydantic import field_validator
 from sqlalchemy import Column, String
 from sqlalchemy.dialects.postgresql import ARRAY
-from app.models.deposit_model import DepositStatus
 import uuid
+
+from app.models.deposit_model import DepositStatus
+from app.models.policy.deposit_policy import DepositPolicy
 
 
 # ----------------------------
@@ -15,26 +17,29 @@ import uuid
 
 
 class DepositBase(SQLModel):
-    receipt_screenshot: Optional[str] = Field(
-        default=None, description="path to the screenshot"
-    )
-    receipt_id: int = Field(
-        default_factory=lambda: int(uuid.uuid4().int) & (1 << 31) - 1
-    )
     deposited_amount: float = Field(..., gt=0)
     amount_to_be_deposited: float = Field(..., gt=0)
+    deposit_frequency_days: int = Field(..., ge=1)
+    
+    # Clearer date naming    
     deposited_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     due_deposit_date: datetime
-    deposit_status: str = Field(
-        sa_column=Column(ARRAY(String)),
-        default_factory=lambda: [DepositStatus.LATE.value],
-    )
-    fine_amount: float = Field(default=0.0, ge=0)
+    deposit_status: DepositStatus = Field(default=DepositStatus.LATE)
+    
+    late_deposit_fine: Optional[float] = Field(default=0.0, ge=0)
     is_paid: bool = Field(default=False)
+    
     verified_by: Optional[str] = None
+    
+    # receipt details
+    receipt_screenshot: Optional[str] = Field(
+    default=None, description="path to the screenshot"
+    )
+    receipt_id: Optional[uuid.UUID] = None
+    
     notes: Optional[str] = Field(default=None, max_length=255)
 
-    @field_validator("fine_amount")
+    @field_validator("late_deposit_fine")
     def validate_fine_amount(cls, value, info):
         if value > 0 and not info.data.get("due_deposit_date"):
             raise ValueError(
@@ -45,9 +50,9 @@ class DepositBase(SQLModel):
     @field_validator("deposited_amount")
     def validate_amount(cls, value, info):
         amount_to_be_deposited = info.data.get("amount_to_be_deposited")
-        if amount_to_be_deposited is not None and value < amount_to_be_deposited:
+        if value < amount_to_be_deposited:
             raise ValueError(
-                f"Deposited amount must be at least {amount_to_be_deposited}."
+                f"Deposited amount cannot be less than {amount_to_be_deposited}."
             )
         return value
 
@@ -62,41 +67,44 @@ class DepositBase(SQLModel):
             )
         return value
 
-    @property
-    def is_late(self) -> bool:
-        return self.deposited_date > self.due_deposit_date
-
-    @property
-    def is_early(self) -> bool:
-        return self.deposited_date < self.due_deposit_date
-
-    @property
-    def is_on_time(self) -> bool:
-        return self.deposited_date == self.due_deposit_date
-
 
 class DepositCreate(DepositBase):
-    amount: float = Field(..., gt=0)
-    deposit_status: str = Field(default=DepositStatus.LATE)
+    deposit_amount: float = Field(..., gt=0)
+    deposit_status: DepositStatus = Field(default=DepositStatus.LATE)
 
 
 class DepositUpdate(SQLModel):
     deposited_amount: Optional[float] = Field(default=None, gt=0)
     deposited_date: Optional[datetime] = None
-    deposit_status: Optional[str] = None
-    notes: Optional[str] = Field(default=None, max_length=255)
+    deposit_status: Optional[DepositStatus] = None
+
+    verified_by: Optional[str] = None
     receipt_screenshot: Optional[str] = None
     fine_amount: Optional[float] = Field(default=None, ge=0)
     is_paid: Optional[bool] = None
 
+    notes: Optional[str] = Field(default=None, max_length=255)
+
 
 class DepositResponse(DepositBase):
     id: uuid.UUID
+    policy_id: Optional[uuid.UUID]
     user_id: uuid.UUID
-    receipt_id: int
-    amount: float
+
+    loan_id: Optional[uuid.UUID]
+    receipt_id: uuid.UUID
+
+    deposited_amount: float
     amount_to_be_deposited: float
+    deposited_date: datetime
+    due_deposit_date: datetime
     deposit_status: DepositStatus
+
+    receipt_screenshot: Optional[str]
+    verified_by: Optional[str]
+
+    fine_amount: Optional[float]
+    is_paid: bool
 
     created_at: datetime
     updated_at: datetime
