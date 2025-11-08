@@ -31,12 +31,12 @@ def get_session() -> Generator[Session, None, None]:
 def init_db(session: Session):
 
     user = session.exec(
-        select(User).where(User.email == settings.FIRST_SUPERUSER)
+        select(User).where(User.email == settings.ADMIN_EMAIL)
     ).first()
     if not user:
         user_in = UserCreate(
-            email=settings.FIRST_SUPERUSER,
-            password=settings.FIRST_SUPERUSER_PASSWORD,
+            email=settings.ADMIN_EMAIL,
+            password=settings.ADMIN_PASSWORD,
             is_superuser=True,
             is_active=True,
         )
