@@ -6,15 +6,17 @@ ENV PYTHONUNBUFFERED=1
 
 # Install OS dependencies
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates && \
-    apt-get clean && \
+    apt-get install -y --no-install-recommends \
+    ca-certificates \
     build-essential \
     libjpeg-dev \
     libpq-dev \
     libcairo2-dev \
     git \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+    curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 
 # Update CA certificates
 RUN update-ca-certificates
@@ -33,13 +35,19 @@ COPY pyproject.toml poetry.lock* /app/
 # Install the dependencies and packages in the container with no-root option
 RUN poetry install --no-root
 
+# Copy entrypoint script and make it executable
+COPY backend/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Expose FastAPI port
 EXPOSE 8000
 
-# Run FastAPI 
-# This will use the main.py file in the backend directory
+# Set entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
+
 # Use --reload for development
-CMD ["poetry", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# dev only; can override in production
+CMD ["--reload"]  
 
 # for production, consider using:
 #  CMD ["poetry", "run", "uvicorn", "main:app", "--host", ""0.0.0.0", "--port", "8000"]
