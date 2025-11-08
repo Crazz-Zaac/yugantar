@@ -5,7 +5,7 @@ from uuid import UUID
 
 from app.core.db import get_session
 from app.models.user_model import User
-from app.schemas.user_schema import UserResponse, UserAdminUpdate, UserListResponse
+from app.schemas.user_schema import UserResponse, AdminAssignUserRoles, UserListResponse
 from app.services.user_service import UserService
 from app.api.dependencies.admin import get_current_admin
 
@@ -31,7 +31,7 @@ async def list_users(
 async def get_user_as_admin(
     user_id: UUID,
     session: Session = Depends(get_session),
-    # current_admin: User = Depends(get_current_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
     """
     Get user details by ID. Admin access required.
@@ -46,17 +46,22 @@ async def get_user_as_admin(
 
 
 @router.patch("/users/{user_id}", response_model=UserResponse)
-async def update_user_as_admin(
+async def assign_user_roles_as_admin(
     user_id: UUID,
-    user_update: UserAdminUpdate,
+    user_update: AdminAssignUserRoles,
     session: Session = Depends(get_session),
-    # current_admin: User = Depends(get_current_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
     """
     Update user roles and status. Admin access required.
     """
+    if user_id == current_admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin users cannot modify their own roles or status",
+        )
     try:
-        user = user_service.admin_update_user(
+        user = user_service.admin_assign_user_roles(
             session=session, user_id=user_id, user_in=user_update
         )
         return user
