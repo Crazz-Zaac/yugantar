@@ -28,7 +28,7 @@ dependencies = [
     "asyncpg (>=0.30.0,<0.31.0)",
     "psycopg[binary] (>=3.2.10,<4.0.0)",
     "python-multipart (>=0.0.20,<0.0.21)",
-    "fastapi-mail (>=1.5.7,<2.0.0)"
+    "fastapi-mail (>=1.5.7,<2.0.0)",
 ]
 
 [tool.poetry]

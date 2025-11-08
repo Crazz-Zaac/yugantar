@@ -21,6 +21,11 @@
 
 # Important commands
 
+## Poetry
+
+- `poetry add <PACKAGE_NAME>`
+- `poetry lock`
+
 ## Generating secret key:
 
 ```python
@@ -58,6 +63,9 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 - `docker build -f docker/Dockerfile.backend -t backend:latest .`
 - `docker run backend:latest`
+- `docker compose build --no-cache <container-name>`
+- Restarting the container after making changes (e.g. backend container):
+  `docker compose restart backend`
 
 - When you need to rebuild (dependencies changed, Dockerfile changed) -> `docker compose up -d --build`
 
@@ -249,5 +257,13 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 - Created `deposit_policy` and `loan_policy`
 - Defined the relationship between `deposit_model` and `deposit_policy`, `loan_model` and `loan_policy`
+
+---
+
+## 2025-11-08
+
+- Create admin user using the `create_admin_user.py` script by the `entrypoint.sh` shell script
+  - This automatically adds admin credentials in the database
+- Only `Admin` can assign user `AccessRole` and `CooperativeRole`
 
 ---
