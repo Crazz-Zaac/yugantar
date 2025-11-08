@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import ARRAY
 
 from passlib.context import CryptContext
 import uuid
-from app.models.user_model import AccessRole, CooperativeRole
+from app.models.user_model import AccessRole, CooperativeRole, GenderEnum
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -22,17 +22,15 @@ class UserBase(SQLModel):
     first_name: str = Field(..., min_length=3, max_length=100)
     middle_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
+    gender: GenderEnum = Field(default=GenderEnum.OTHER)
+    date_of_birth: Optional[datetime] = Field(default=None)
+
     email: Optional[EmailStr] = Field(default=None, max_length=100)
+
     phone: str = Field(..., max_length=15)
     address: str = Field(..., max_length=255)
     disabled: bool = Field(default=False)
-    access_roles: List[AccessRole] = Field(
-        sa_column=Column(ARRAY(String)), default_factory=lambda: [AccessRole.USER.value]
-    )
-    cooperative_roles: List[CooperativeRole] = Field(
-        sa_column=Column(ARRAY(String)),
-        default_factory=lambda: [CooperativeRole.MEMBER.value],
-    )
+    # user roles and cooperative roles will be assigned by the system/admin after registration
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @field_validator("email")
@@ -57,14 +55,6 @@ class UserBase(SQLModel):
     def is_active(self) -> bool:
         return not self.disabled
 
-    @property
-    def is_admin(self) -> bool:
-        return AccessRole.ADMIN in self.access_roles
-
-    @property
-    def is_moderator(self) -> bool:
-        return AccessRole.MODERATOR in self.access_roles
-
 
 # Schema for creating a new user
 class UserCreate(UserBase):
@@ -83,6 +73,8 @@ class UserCreate(UserBase):
             raise ValueError("Password must contain at least one digit")
         if not any(char.isalpha() for char in value):
             raise ValueError("Password must contain at least one letter")
+        if not any(char.isupper() for char in value):
+            raise ValueError("Password must contain at least one uppercase letter")
         return value
 
 
@@ -110,6 +102,7 @@ class UserUpdate(SQLModel):
             raise ValueError("Password must contain at least one digit")
         if not any(char.isalpha() for char in value):
             raise ValueError("Password must contain at least one letter")
+
         return value
 
 
@@ -134,8 +127,10 @@ class UserPasswordChange(SQLModel):
 # Schema for returning user information (response model)
 class UserResponse(UserBase):
     id: uuid.UUID
+    
     access_roles: List[AccessRole]
     cooperative_roles: List[CooperativeRole]
+    
     created_at: datetime
     updated_at: datetime
 
@@ -150,11 +145,12 @@ class TokenResponse(SQLModel):
 
 
 # Schema for admin updating user roles and status
-class UserAdminUpdate(SQLModel):
+class AdminAssignUserRoles(SQLModel):
     """Admin can update additional fields including roles"""
 
     access_roles: Optional[List[AccessRole]] = None
     cooperative_roles: Optional[List[CooperativeRole]] = None
+    
     disabled: Optional[bool] = None
 
 
@@ -163,13 +159,19 @@ class UserListResponse(SQLModel):
     """Simplified user info for listing (admin view)"""
 
     id: uuid.UUID
-    email: Optional[EmailStr]
-    phone: str
+
     first_name: str
     middle_name: Optional[str]
     last_name: str
+    gender: GenderEnum
+    date_of_birth: Optional[datetime]
+
+    email: Optional[EmailStr]
+    phone: str
+
     access_roles: List[AccessRole]  # Fixed: was AccessRole (not a list)
     cooperative_roles: List[CooperativeRole]  # Fixed: was CooperativeRole (not a list)
+
     disabled: bool
     created_at: datetime
 
@@ -200,9 +202,14 @@ class UserPublic(SQLModel):
 
     id: uuid.UUID
     first_name: str
+    middle_name: Optional[str] = None
     last_name: Optional[str] = None  # Optionally hide last name
-    joined_at: datetime
+    gender: GenderEnum
+
+    access_roles: List[AccessRole]
     cooperative_roles: List[CooperativeRole]
+
+    joined_at: datetime
 
     class Config:
         from_attributes = True
