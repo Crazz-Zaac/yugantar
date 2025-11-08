@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from sqlmodel import Session, select
 from app.core.security import get_password_hash, verify_password
 from app.models.user_model import User
-from app.schemas.user_schema import UserCreate, UserUpdate, UserAdminUpdate
+from app.schemas.user_schema import UserCreate, UserUpdate, AdminAssignUserRoles
 
 
 class UserService:
@@ -75,10 +75,10 @@ class UserService:
         users = list(session.exec(statement).all())
         return users
 
-    def admin_update_user(
-        self, session: Session, user_id: uuid.UUID, user_in: UserAdminUpdate
+    def admin_assign_user_roles(
+        self, session: Session, user_id: uuid.UUID, user_in: AdminAssignUserRoles
     ) -> User:
-        """Admin update of user (can change roles, disable user, etc.)"""
+        """Admin assign user roles and disable user"""
         user = self.get_user_by_id(session, user_id)
         if not user:
             raise HTTPException(
