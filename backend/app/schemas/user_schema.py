@@ -29,6 +29,9 @@ class UserBase(SQLModel):
 
     phone: str = Field(..., max_length=15)
     address: str = Field(..., max_length=255)
+    
+    is_verified: bool = Field(default=False)
+    
     disabled: bool = Field(default=False)
     # user roles and cooperative roles will be assigned by the system/admin after registration
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
