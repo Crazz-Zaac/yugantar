@@ -36,7 +36,7 @@ async def send_registration_notification(
 
     try:
         message = MessageSchema(
-            subject="Welcome to Yugantar - Your Account Details",
+            subject="Account Registration Successful",
             recipients=email_to,
             body=f"Hello {username},\n\n"
             f"Welcome to Yugantar! Your account has been successfully created.\n\n"
@@ -49,6 +49,8 @@ async def send_registration_notification(
         await fm.send_message(message)
     except Exception as e:
         logger.error(f"Failed to send registration email: {e}")
+    
+    print({"message": "Registration email sent successfully"})
 
 
 async def send_password_reset_email(email_to: List[NameEmail], reset_link: str) -> None:
@@ -68,7 +70,7 @@ async def send_password_reset_email(email_to: List[NameEmail], reset_link: str) 
 
     try:
         message = MessageSchema(
-            subject="Yugantar Password Reset Request",
+            subject="Password Reset Request",
             recipients=email_to,
             body=f"Hello,\n\n"
             f"We received a request to reset your password. "
