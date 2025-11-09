@@ -1,7 +1,6 @@
 from fastapi import Depends, HTTPException, status
 
 from app.models.user_model import User, AccessRole
-from app.schemas.user_schema import UserAdminUpdate
 from app.api.dependencies.auth import get_current_user
 
 async def get_current_admin(

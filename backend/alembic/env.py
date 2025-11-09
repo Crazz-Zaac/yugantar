@@ -1,4 +1,5 @@
 from logging.config import fileConfig
+from configparser import ConfigParser
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -13,7 +14,10 @@ from pathlib import Path
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from backend.app.models import *
+# create all policy models
+from backend.app.models.policy import *  
+# import all models to register them with SQLModel metadata
+from backend.app.models import *    
 from backend.app.core.db import engine 
 from backend.app.core.config import settings
 
@@ -28,7 +32,9 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # set the SQLAlchemy URL from settings
-config.set_main_option("sqlalchemy.url", str(settings.SQLALCHEMY_DATABASE_URI))
+# Escape % characters by doubling them
+db_url = str(settings.SQLALCHEMY_DATABASE_URI).replace('%', '%%')
+config.set_main_option("sqlalchemy.url", db_url)
 
 # add your model's MetaData object here
 # for 'autogenerate' support

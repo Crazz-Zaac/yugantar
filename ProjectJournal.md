@@ -10,13 +10,25 @@
 - [x] Migrate DB
 - [x] Define api and routes
 - [x] User registration
-- [ ] User Login
-- [ ] Update and Delete operations on User table
+- [x] User Login
+- [x] Update and Delete operations on User table
 - [ ] Forgot Password
+- [x] Create loan policy
+- [x] Create loan schema
+- [x] Create loan service
+- [x] Registration Successful Email Notifications
+- [ ] Reset/renew account password
+- [ ] Account Login and Logout
+- [ ] Account verification (send link using `itsdangerous` package)
 
 ---
 
 # Important commands
+
+## Poetry
+
+- `poetry add <PACKAGE_NAME>`
+- `poetry lock`
 
 ## Generating secret key:
 
@@ -55,6 +67,9 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 - `docker build -f docker/Dockerfile.backend -t backend:latest .`
 - `docker run backend:latest`
+- `docker compose build --no-cache <container-name>`
+- Restarting the container after making changes (e.g. backend container):
+  `docker compose restart backend`
 
 - When you need to rebuild (dependencies changed, Dockerfile changed) -> `docker compose up -d --build`
 
@@ -162,3 +177,105 @@ python -c "import secrets; print(secrets.token_hex(32))"
   - `get_all_users` returns the list of all the users
   - `admin_update_user` to allow the admin to update user's `access_roles`, `cooperative_roles` and enable or disable the user
   - `admin_delete_user` to allow the admin to delete the user
+
+---
+
+## 2025-10-26
+
+- Created an App passwords for google account -> [Link](https://dtptips.com/%F0%9F%94%91-how-to-generate-app-passwords-in-google-account-even-if-the-option-is-hidden/)
+- Tested Admin rights (CRUD operations on user table)
+- Updated `user_schema` for not allowing users to update `access_roles` and `cooperative_roles`. Only admin has that right to change
+- Updated `SMTP` related configurations
+- Renamed `endpoints/user_login.py` to `endpoints/auth.py` as it is only responsible to token creation
+
+---
+
+## 2025-11-01
+
+- Team meeting
+
+- Feedbacks:
+
+  - Expense Policy
+    - Meeting expense
+  - Investment Policy
+
+    - invested by
+    - asset
+    - amount
+    - return (monthly / weekly)
+    - REQUEST FOR INVESTMENT
+
+  - Cooperative Roles
+    - gets notified for all the financial activities
+  - Secretary / Treasurer
+    - Moderator
+      - Send EMail
+      - Report generate
+  - President
+    - Approves loan
+  - ADMIN
+
+    - Role assignment
+    - Full IT department
+    - Renew password every 6 months
+
+  - Loan
+    - Request loan -> Treasurer check -> notify President -> President approves loan
+
+---
+
+## 2025-11-02
+
+- Working with loan model
+
+### Policy Management
+
+- Policies are versioned (effective_from/effective_to)
+- Only one active policy at a time
+- Historical policies retained for auditing
+
+### Loan Creation
+
+1. Fetch active policy
+2. Validate loan against policy rules
+3. Snapshot policy values into loan
+4. Store reference to policy (loan_policy_id)
+
+### Loan Modification
+
+- Policy changes don't affect existing loans
+- Renewals may use current policy or keep original
+- All changes are audited
+
+---
+
+## 2025-11-07
+
+- Enums should be explicitly created in alembic migrations (`alembic/env.py`)
+
+  - First define the enum
+  - Create it
+  - Set the type of the respective column to this enum type
+  - Use `postgresql_using`
+
+- Created `deposit_policy` and `loan_policy`
+- Defined the relationship between `deposit_model` and `deposit_policy`, `loan_model` and `loan_policy`
+
+---
+
+## 2025-11-08
+
+- Create admin user using the `create_admin_user.py` script by the `entrypoint.sh` shell script
+  - This automatically adds admin credentials in the database
+- Only `Admin` can assign user `AccessRole` and `CooperativeRole`
+
+---
+
+## 2025-11-09
+
+- User email notification upon successful user registration
+- Updated `email_notify.py`
+- Useful resource: [Fast API Beyond CRUD](https://github.com/jod35/fastapi-beyond-CRUD)
+
+---

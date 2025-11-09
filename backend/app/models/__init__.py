@@ -1,10 +1,16 @@
 from sqlmodel import SQLModel
+# Import all policy models to ensure they are registered
+from .policy.deposit_policy import DepositPolicy
+from .policy.loan_policy import LoanPolicy
+
+# Import other models
 from .base import BaseModel
 from .user_model import User
 from .deposit_model import Deposit
 from .loan_model import Loan
 from .receipt_model import Receipt
 from .fine_model import Fine
+from .expense_model import ExpenditureModel
 
 # Dictionary to map model names to their classes
 ALL_MODELS = {
@@ -14,7 +20,10 @@ ALL_MODELS = {
     "loan": Loan,
     "fine": Fine,
     "receipt": Receipt,
+    "expendituremodel": ExpenditureModel,
 }
+
+
 
 # Utility functions to get models information
 def get_model(model_name: str):

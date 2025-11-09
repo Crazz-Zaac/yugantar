@@ -1,4 +1,3 @@
-import secrets
 import warnings
 
 from typing import Annotated, Any, Literal, List
@@ -9,6 +8,7 @@ from pydantic import (
     AnyUrl,
     BeforeValidator,
     EmailStr,
+    SecretStr,
     HttpUrl,
     PostgresDsn,
     RedisDsn,
@@ -38,7 +38,7 @@ class Settings(BaseSettings):
         env_ignore_empty=True,
         extra="ignore",
     )
-    
+
     ALGORITHM: str = ""
 
     # ---------------------------
@@ -63,6 +63,12 @@ class Settings(BaseSettings):
         ]
 
     # ---------------------------
+    # Admin Credentials
+    # ---------------------------
+    ADMIN_EMAIL: EmailStr = ""
+    ADMIN_PASSWORD: str = ""
+
+    # ---------------------------
     # Database Settings
     # ---------------------------
     PROJECT_NAME: str = "Yugantar Wealth Management System"
@@ -72,14 +78,14 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = "yugantar_db"
-    
-    @computed_field     # type: ignore[prop-decorator]
+
+    @computed_field  # type: ignore[prop-decorator]
     @property
     def is_running_in_docker(self) -> bool:
         """Check if running inside Docker container"""
         import os
-        return os.path.exists('/.dockerenv')
 
+        return os.path.exists("/.dockerenv")
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -97,18 +103,19 @@ class Settings(BaseSettings):
             port=self.POSTGRES_PORT,
             path=self.POSTGRES_DB,
         )
-    
+
     # ---------------------------
     # Email Settings for Email Notifications
     # ---------------------------
+    SMTP_SERVER: str = ""
     SMTP_TLS: bool = True
     SMTP_SSL: bool = False
     SMTP_PORT: int = 587
-    SMTP_HOST: str | None = None
-    SMTP_USER: str | None = None
-    SMTP_PASSWORD: str | None = None
-    EMAILS_FROM_EMAIL: EmailStr | None = None
-    EMAILS_FROM_NAME: str | None = None
+    # SMTP_HOST: str = ""
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: SecretStr = SecretStr("")
+    EMAILS_FROM_EMAIL: EmailStr = ""
+    EMAILS_FROM_NAME: str = ""
 
     @model_validator(mode="after")
     def _set_default_emails_from(self) -> Self:
@@ -121,11 +128,9 @@ class Settings(BaseSettings):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def emails_enabled(self) -> bool:
-        return bool(self.SMTP_HOST and self.EMAILS_FROM_EMAIL)
+        return bool(self.SMTP_SERVER and self.EMAILS_FROM_EMAIL)
 
     EMAIL_TEST_USER: EmailStr | None = "test@example.com"  # type: ignore
-    FIRST_SUPERUSER: EmailStr = ""
-    FIRST_SUPERUSER_PASSWORD: str = ""
 
     def _check_default_secret(self, var_name: str, value: str | None) -> None:
         if value == "changethis":
@@ -138,13 +143,12 @@ class Settings(BaseSettings):
             else:
                 raise ValueError(message)
 
-
     @model_validator(mode="after")
     def _enforce_non_default_secrets(self) -> Self:
         self._check_default_secret("SECRET_KEY", self.SECRET_KEY)
         self._check_default_secret("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD)
         self._check_default_secret(
-            "FIRST_SUPERUSER_PASSWORD", self.FIRST_SUPERUSER_PASSWORD
+            "ADMIN_PASSWORD", self.ADMIN_PASSWORD
         )
         return self
 
@@ -167,11 +171,10 @@ class Settings(BaseSettings):
             password=self.REDIS_PASSWORD,
             path=f"/{self.REDIS_DB or ''}",
         )
-    
+
 
 settings = Settings()
-print("Loaded DB:", settings.POSTGRES_SERVER, settings.POSTGRES_USER, settings.POSTGRES_DB)
+print(
+    "Loaded DB:", settings.POSTGRES_SERVER, settings.POSTGRES_USER, settings.POSTGRES_DB
+)
 print("Running in Docker?", settings.is_running_in_docker)
-
-
-

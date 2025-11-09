@@ -1,4 +1,4 @@
-from sqlmodel import Relationship, Field
+from sqlmodel import Relationship, Field, Enum as SqlEnum
 from datetime import datetime, timezone
 from typing import Optional, List
 from sqlalchemy import JSON, Column
@@ -17,9 +17,15 @@ from .base import BaseModel
 
 
 class AccessRole(str, Enum):
-    ADMIN = "admin"   # allow full access
-    MODERATOR = "moderator"     # allow limited management access
-    USER = "user"   # regular user with standard access
+    USER = "user"  # regular user with standard access
+    MODERATOR = "moderator"  # allow limited management access
+    ADMIN = "admin"  # allow full access
+
+
+class GenderEnum(str, Enum):
+    MALE = "male"
+    FEMALE = "female"
+    OTHER = "other"
 
 
 class CooperativeRole(str, Enum):
@@ -36,16 +42,30 @@ class User(BaseModel, table=True):
     first_name: str = Field(max_length=100)
     middle_name: Optional[str] = Field(max_length=100, nullable=True)
     last_name: str = Field(max_length=100)
-    email: Optional[EmailStr] = Field(index=True, unique=True, nullable=True)
+    gender: GenderEnum = Field(
+        sa_column=Column(
+            SqlEnum(GenderEnum, name="genderenum"),
+            nullable=False,
+            default=GenderEnum.OTHER,
+        )
+    )
+    date_of_birth: Optional[datetime] = Field(default=None, nullable=True)
+
+    email: EmailStr = Field(index=True, unique=True, nullable=True)
     hashed_password: str = Field(max_length=255)
+
     phone: str = Field(max_length=15)
     address: str = Field(max_length=255)
+
     cooperative_roles: List[CooperativeRole] = Field(
         sa_column=Column(JSON), default_factory=lambda: [CooperativeRole.MEMBER.value]
     )
     access_roles: List[AccessRole] = Field(
         sa_column=Column(JSON), default_factory=lambda: [AccessRole.USER.value]
     )
+    # Indicates if the user's email is verified
+    is_verified: bool = Field(default=False)
+    
     disabled: bool = Field(default=False)
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
