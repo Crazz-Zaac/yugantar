@@ -3,11 +3,8 @@ services:
   db:
     image: postgres:latest
     container_name: yugantar-db
-    environment:
-      POSTGRES_DB: yugantar_db
-      POSTGRES_USER: yugantar_admin
-      POSTGRES_PASSWORD: password1!
-      # POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    env_file:
+      - ../backend/.env
     ports:
       - "5432:5432"
     # secrets:
@@ -20,12 +17,8 @@ services:
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@localhost.com  
-      PGADMIN_DEFAULT_PASSWORD: password@dmin
-      # PGADMIN_DEFAULT_PASSWORD_FILE: /run/secrets/pgadmin_password
-    # secrets:
-    #   - pgadmin_password
+    env_file:
+      - ../backend/.env
     ports:
       - "8080:80"  
     volumes:
@@ -33,20 +26,34 @@ services:
     networks:
       - yugantar-network
     restart: unless-stopped
-  # app:
-  #   build: .
-  #   container_name: yugantar-app
-  #   command: uvicorn app.main:app --host
-  #   depends_on:
-  #     - db
+  backend:
+    image: backend:v1
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    container_name: yugantar-backend
+    env_file:
+      - ../backend/.env
+    ports:
+      - "8001:8000"
+    depends_on:
+      - db
+    networks:
+      - yugantar-network
+    restart: unless-stopped
+  
+  # frontend:
+  #   image: frontend:v1
+  #   build:
+  #     context: ../frontend
+  #     dockerfile: ../docker/Dockerfile.frontend
+  #   container_name: yugantar-frontend
   #   environment:
-  #     DB_USER: yugantar_admin
-  #     DB_NAME: yugantar_db
-  #     DB_HOST: db
-  #     DB_PORT: 5432
-  #     DB_PASS_FILE: /run/secrets/db_password
-  #   secrets:
-  #     - db_password
+  #     REACT_APP_API_URL: http://localhost:8000  # Adjust if backend is hosted elsewhere
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - backend
   #   networks:
   #     - yugantar-network
   #   restart: unless-stopped

@@ -63,7 +63,7 @@ class ReceiptUpdate(SQLModel):
         return value
 
 class ReceiptResponse(ReceiptBase):
-    id: int
+    id: uuid.UUID
     created_at: datetime
     updated_at: datetime
 

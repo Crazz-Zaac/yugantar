@@ -1,31 +1,71 @@
-from sqlmodel import Relationship, Field
+from sqlmodel import Relationship, Field, Enum as SqlEnum
 from datetime import datetime, timezone
 from typing import Optional, List
 from sqlalchemy import JSON, Column
-
+from enum import Enum
 from typing import TYPE_CHECKING
+from pydantic import EmailStr
 
 if TYPE_CHECKING:
-    from models import Deposit, Loan, Fine, Receipt
+    from .deposit_model import Deposit
+    from .loan_model import Loan
+    from .fine_model import Fine
+    from .receipt_model import Receipt
 
 
 from .base import BaseModel
 
 
+class AccessRole(str, Enum):
+    USER = "user"  # regular user with standard access
+    MODERATOR = "moderator"  # allow limited management access
+    ADMIN = "admin"  # allow full access
+
+
+class GenderEnum(str, Enum):
+    MALE = "male"
+    FEMALE = "female"
+    OTHER = "other"
+
+
+class CooperativeRole(str, Enum):
+    SECRETARY = "secretary"
+    TREASURER = "treasurer"
+    PRESIDENT = "president"
+    MEMBER = "member"
+
+
 # Table to store user information
 class User(BaseModel, table=True):
+    __table_args__ = {"extend_existing": True}
 
-    user_id: Optional[int] = Field(default=None, index=True)
-    full_name: str = Field(max_length=100)
+    first_name: str = Field(max_length=100)
     middle_name: Optional[str] = Field(max_length=100, nullable=True)
     last_name: str = Field(max_length=100)
-    email: str = Field(max_length=100, unique=True, index=True)
-    password: str = Field(max_length=255)
-    password_repeat: str = Field(max_length=255)
+    gender: GenderEnum = Field(
+        sa_column=Column(
+            SqlEnum(GenderEnum, name="genderenum"),
+            nullable=False,
+            default=GenderEnum.OTHER,
+        )
+    )
+    date_of_birth: Optional[datetime] = Field(default=None, nullable=True)
+
+    email: EmailStr = Field(index=True, unique=True, nullable=True)
+    hashed_password: str = Field(max_length=255)
+
     phone: str = Field(max_length=15)
     address: str = Field(max_length=255)
-    roles: List[str] = Field(default=None, sa_column=Column(JSON))
-    cooperative_roles: List[str] = Field(default=None, sa_column=Column(JSON))
+
+    cooperative_roles: List[CooperativeRole] = Field(
+        sa_column=Column(JSON), default_factory=lambda: [CooperativeRole.MEMBER.value]
+    )
+    access_roles: List[AccessRole] = Field(
+        sa_column=Column(JSON), default_factory=lambda: [AccessRole.USER.value]
+    )
+    # Indicates if the user's email is verified
+    is_verified: bool = Field(default=False)
+    
     disabled: bool = Field(default=False)
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

@@ -2,21 +2,15 @@ from sqlmodel import SQLModel, Field
 from typing import List, Optional
 from enum import Enum
 from datetime import datetime, timezone
-from pydantic import field_validator
+from pydantic import field_validator, EmailStr
 from sqlalchemy import Column, String
 from sqlalchemy.dialects.postgresql import ARRAY
 
-class AccessRole(str, Enum):
-    SUPERUSER = "superuser"
-    ADMIN = "admin"
-    USER = "user"
+from passlib.context import CryptContext
+import uuid
+from app.models.user_model import AccessRole, CooperativeRole, GenderEnum
 
-
-class CooperativeRole(str, Enum):
-    SECRETARY = "secretary"
-    TREASURER = "treasurer"
-    PRESIDENT = "president"
-    MEMBER = "member"
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 # ----------------------------
@@ -25,22 +19,21 @@ class CooperativeRole(str, Enum):
 
 
 class UserBase(SQLModel):
-    first_name: str = Field(..., min_length=1, max_length=100)
+    first_name: str = Field(..., min_length=3, max_length=100)
     middle_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
-    email: str = Field(..., max_length=100)  # Using str instead of EmailStr for SQLModel compatibility
+    gender: GenderEnum = Field(default=GenderEnum.OTHER)
+    date_of_birth: Optional[datetime] = Field(default=None)
+
+    email: Optional[EmailStr] = Field(default=None, max_length=100)
+
     phone: str = Field(..., max_length=15)
     address: str = Field(..., max_length=255)
+    
+    is_verified: bool = Field(default=False)
+    
     disabled: bool = Field(default=False)
-    access_roles: List[str] = Field(
-        sa_column=Column(ARRAY(String)),
-        default_factory=lambda: [AccessRole.USER.value]
-    )
-    cooperative_roles: List[str] = Field(
-        sa_column=Column(ARRAY(String)),
-        default_factory=lambda: [CooperativeRole.MEMBER.value]
-    )
-
+    # user roles and cooperative roles will be assigned by the system/admin after registration
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     @field_validator("email")
@@ -65,24 +58,67 @@ class UserBase(SQLModel):
     def is_active(self) -> bool:
         return not self.disabled
 
-    @property
-    def is_admin(self) -> bool:
-        return AccessRole.ADMIN in self.access_roles or AccessRole.SUPERUSER in self.access_roles
 
-
+# Schema for creating a new user
 class UserCreate(UserBase):
-    password: str = Field(..., min_length=8, max_length=100)
-    password_repeat: str = Field(..., min_length=8, max_length=100)
-
-    @field_validator("password_repeat")
-    def validate_passwords_match(cls, value, info):
-        password = info.data.get("password")
-        if password and value != password:
-            raise ValueError("Passwords do not match")
-        return value
+    password: str = Field(
+        ..., min_length=8, max_length=72
+    )  # Limit to 72 bytes for bcrypt
 
     @field_validator("password")
     def validate_password_strength(cls, value):
+        # Ensure password doesn't exceed bcrypt's 72-byte limit
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password cannot exceed 72 bytes")
+
+        # Basic password strength validation
+        if not any(char.isdigit() for char in value):
+            raise ValueError("Password must contain at least one digit")
+        if not any(char.isalpha() for char in value):
+            raise ValueError("Password must contain at least one letter")
+        if not any(char.isupper() for char in value):
+            raise ValueError("Password must contain at least one uppercase letter")
+        return value
+
+
+# Schema for updating user information
+class UserUpdate(SQLModel):
+    first_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    middle_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    last_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    email: EmailStr = Field(default=None, max_length=100)
+    password: Optional[str] = Field(default=None, min_length=8, max_length=100)
+    phone: Optional[str] = Field(default=None, max_length=15)
+    address: Optional[str] = Field(default=None, max_length=255)
+
+    @field_validator("password")
+    def validate_password_strength(cls, value):
+        if value is None:
+            return value
+
+        # Ensure password doesn't exceed bcrypt's 72-byte limit
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password cannot exceed 72 bytes")
+
+        # Basic password strength validation
+        if not any(char.isdigit() for char in value):
+            raise ValueError("Password must contain at least one digit")
+        if not any(char.isalpha() for char in value):
+            raise ValueError("Password must contain at least one letter")
+
+        return value
+
+
+class UserPasswordChange(SQLModel):
+    current_password: str = Field(..., min_length=8, max_length=72)
+    new_password: str = Field(..., min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    def validate_new_password_strength(cls, value):
+        # Ensure password doesn't exceed bcrypt's 72-byte limit
+        if len(value.encode("utf-8")) > 72:
+            raise ValueError("Password cannot exceed 72 bytes")
+
         # Basic password strength validation
         if not any(char.isdigit() for char in value):
             raise ValueError("Password must contain at least one digit")
@@ -90,26 +126,14 @@ class UserCreate(UserBase):
             raise ValueError("Password must contain at least one letter")
         return value
 
-class UserUpdate(SQLModel):
-    first_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    middle_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    last_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    email: Optional[str] = Field(default=None, max_length=100)
-    phone: Optional[str] = Field(default=None, max_length=15)
-    address: Optional[str] = Field(default=None, max_length=255)
-    access_roles: Optional[List[str]] = None
-    cooperative_roles: Optional[List[str]] = None
-    disabled: Optional[bool] = None
-    password: Optional[str] = Field(default=None, min_length=8, max_length=100)
 
-    @field_validator("email")
-    def validate_email(cls, value):
-        if value and "@" not in value:
-            raise ValueError("Invalid email format")
-        return value.lower() if value else value
-
+# Schema for returning user information (response model)
 class UserResponse(UserBase):
-    id: int
+    id: uuid.UUID
+    
+    access_roles: List[AccessRole]
+    cooperative_roles: List[CooperativeRole]
+    
     created_at: datetime
     updated_at: datetime
 
@@ -117,25 +141,85 @@ class UserResponse(UserBase):
         from_attributes = True
 
 
-class UserDB(UserBase, table=False):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    password_hash: str  # Store hashed password, not plain text
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+class TokenResponse(SQLModel):
+    access_token: str = ""
+    refresh_token: str = ""
+    token_type: str = "bearer"
 
 
-# Simplified user response without sensitive data
-class UserPublic(SQLModel):
-    id: int
+# Schema for admin updating user roles and status
+class AdminAssignUserRoles(SQLModel):
+    """Admin can update additional fields including roles"""
+
+    access_roles: Optional[List[AccessRole]] = None
+    cooperative_roles: Optional[List[CooperativeRole]] = None
+    
+    disabled: Optional[bool] = None
+
+
+# Schema for admin to list users
+class UserListResponse(SQLModel):
+    """Simplified user info for listing (admin view)"""
+
+    id: uuid.UUID
+
     first_name: str
     middle_name: Optional[str]
     last_name: str
-    email: str
+    gender: GenderEnum
+    date_of_birth: Optional[datetime]
+
+    email: Optional[EmailStr]
     phone: str
-    access_roles: List[str]
-    cooperative_roles: List[str]
-    joined_at: datetime
+
+    access_roles: List[AccessRole]  # Fixed: was AccessRole (not a list)
+    cooperative_roles: List[CooperativeRole]  # Fixed: was CooperativeRole (not a list)
+
     disabled: bool
+    created_at: datetime
 
     class Config:
         from_attributes = True
+
+    @property
+    def full_name(self) -> str:
+        if self.middle_name:
+            return f"{self.first_name} {self.middle_name} {self.last_name}"
+        return f"{self.first_name} {self.last_name}"
+
+
+# Schema for internal use with hashed password
+class UserDB(UserBase):
+    hashed_password: str = Field(..., alias="hashed_password")
+
+    def set_password(self, password: str):
+        self.hashed_password = pwd_context.hash(password)
+
+    def verify_password(self, password: str) -> bool:
+        return pwd_context.verify(password, self.hashed_password)
+
+
+# Schema for public user information (limited fields)
+class UserPublic(SQLModel):
+    """Public profile - minimal information visible to other users"""
+
+    id: uuid.UUID
+    first_name: str
+    middle_name: Optional[str] = None
+    last_name: Optional[str] = None  # Optionally hide last name
+    gender: GenderEnum
+
+    access_roles: List[AccessRole]
+    cooperative_roles: List[CooperativeRole]
+
+    joined_at: datetime
+
+    class Config:
+        from_attributes = True
+
+    @property
+    def display_name(self) -> str:
+        """Show only first name and last initial for privacy"""
+        if self.last_name:
+            return f"{self.first_name} {self.last_name[0]}."
+        return self.first_name

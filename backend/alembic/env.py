@@ -1,4 +1,5 @@
 from logging.config import fileConfig
+from configparser import ConfigParser
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -13,9 +14,12 @@ from pathlib import Path
 # sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
-from app.models import User, Deposit, Loan, Fine, Receipt
-from app.db import engine as app_engine
-from app.core.settings import DatabaseSettings
+# create all policy models
+from backend.app.models.policy import *  
+# import all models to register them with SQLModel metadata
+from backend.app.models import *    
+from backend.app.core.db import engine 
+from backend.app.core.config import settings
 
 from alembic import context
 # this is the Alembic Config object, which provides
@@ -27,9 +31,10 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-settings = DatabaseSettings()
-# DATABASE_URL = settings.database_url
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# set the SQLAlchemy URL from settings
+# Escape % characters by doubling them
+db_url = str(settings.SQLALCHEMY_DATABASE_URI).replace('%', '%%')
+config.set_main_option("sqlalchemy.url", db_url)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
@@ -74,7 +79,7 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connectable = app_engine
+    connectable = engine
     # connectable = engine_from_config(
     #     config.get_section(config.config_ini_section, {}),
     #     prefix="sqlalchemy.",
