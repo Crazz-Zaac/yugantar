@@ -21,7 +21,6 @@
 - [ ] Account Login and Logout
 - [ ] Account verification (send link using `itsdangerous` package)
 
-
 ---
 
 # Important commands
@@ -270,5 +269,13 @@ python -c "import secrets; print(secrets.token_hex(32))"
 - Create admin user using the `create_admin_user.py` script by the `entrypoint.sh` shell script
   - This automatically adds admin credentials in the database
 - Only `Admin` can assign user `AccessRole` and `CooperativeRole`
+
+---
+
+## 2025-11-09
+
+- User email notification upon successful user registration
+- Updated `email_notify.py`
+- Useful resource: [Fast API Beyond CRUD](https://github.com/jod35/fastapi-beyond-CRUD)
 
 ---
