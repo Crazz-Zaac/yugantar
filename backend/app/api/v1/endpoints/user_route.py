@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi_mail import NameEmail
+from fastapi import BackgroundTasks
 from sqlmodel import Session
 from uuid import UUID
 from loguru import logger
@@ -28,20 +29,38 @@ user_service = UserService()
 )
 async def register_user(
     user_in: UserCreate,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ):
     """
     Create a new user.
     """
-    user = user_service.create_user(session=session, user_in=user_in)
     try:
-        await send_registration_notification(
-            email_to=[NameEmail(name=user.first_name, email=user.email)],
-            username=user.first_name,
+        user = user_service.create_user(
+            session=session, user_in=user_in, background_tasks=background_tasks
         )
     except Exception as e:
         # Log the error but do not fail the registration
         logger.info(f"Failed to send registration email: {e}")
+    return user
+
+
+@router.post("/login", response_model=UserResponse)
+async def login_user(
+    email: str,
+    password: str,
+    session: Session = Depends(get_session),
+):
+    """
+    Authenticate user and return user details.
+    """
+    user = user_service.get_user_by_email(session=session, email=email)
+    if not user or not verify_password(password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return user
 
 
@@ -83,33 +102,6 @@ async def delete_current_user(
     return None
 
 
-# @router.patch("/me/change-password", status_code=status.HTTP_200_OK, tags=["password"])
-# async def change_password(
-#     current_password: str,
-#     new_password: str,
-#     session: Session = Depends(get_session),
-#     user: User = Depends(get_current_active_user),
-# ):
-#     """
-#     Change password for the current user.
-#     """
-#     # Verify current password
-#     if not verify_password(current_password, user.hashed_password):
-#         raise HTTPException(
-#             status_code=status.HTTP_400_BAD_REQUEST,
-#             detail="Current password is incorrect",
-#         )
-
-#     # Update to new password
-#     user_service.update_user(
-#         session=session,
-#         db_user=user,
-#         user_in={"password": new_password},
-#     )
-
-#     return {"msg": "Password updated successfully."}
-
-
 @router.post("/me/reset-password", status_code=status.HTTP_200_OK, tags=["password"])
 async def reset_password(
     email: str,
@@ -142,8 +134,20 @@ async def reset_password(
             detail="An error occurred while processing the request",
         ) from e
 
+@router.get("/logout", status_code=status.HTTP_200_OK)
+async def logout_user(token: dict = Depends()):
+    """
+    Logout user by invalidating the token.
+    Note: Actual token invalidation logic depends on the token management strategy.
+    """
+    
+        
+    return {"msg": "User logged out successfully."}
 
+# -----------------------------
 # Dynamic routes last
+# -----------------------------
+
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user_by_id(
     user_id: UUID,
