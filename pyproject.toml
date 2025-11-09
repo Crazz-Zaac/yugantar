@@ -29,6 +29,7 @@ dependencies = [
     "psycopg[binary] (>=3.2.10,<4.0.0)",
     "python-multipart (>=0.0.20,<0.0.21)",
     "fastapi-mail (>=1.5.7,<2.0.0)",
+    "itsdangerous (>=2.2.0,<3.0.0)",
 ]
 
 [tool.poetry]
