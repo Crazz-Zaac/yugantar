@@ -13,9 +13,14 @@
 - [x] User Login
 - [x] Update and Delete operations on User table
 - [ ] Forgot Password
-- [ ] Create loan policy
-- [ ] Create loan schema
-- [ ] Create loan service
+- [x] Create loan policy
+- [x] Create loan schema
+- [x] Create loan service
+- [x] Registration Successful Email Notifications
+- [ ] Reset/renew account password
+- [ ] Account Login and Logout
+- [ ] Account verification (send link using `itsdangerous` package)
+
 
 ---
 
