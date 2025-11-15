@@ -64,8 +64,8 @@ class User(BaseModel, table=True):
         sa_column=Column(JSON), default_factory=lambda: [AccessRole.USER.value]
     )
     # Indicates if the user's email is verified
-    is_verified: bool = Field(default=False)
-    
+    is_verified: bool = Field(default=False, nullable=False)
+
     disabled: bool = Field(default=False)
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
