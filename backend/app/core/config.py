@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     # Expire duration: 60 minutes * 24 hours * 8 days = 8 days
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     FRONTEND_HOST: str = "http://localhost:3000"
+    BACKEND_HOST: str = "http://localhost:8001" 
     ENVIRONMENT: Literal["local", "production", "staging"] = "local"
 
     BACKEND_CORS_ORIGINS: Annotated[List[AnyUrl] | str, BeforeValidator(parse_cors)] = (

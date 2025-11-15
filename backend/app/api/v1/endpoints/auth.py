@@ -5,16 +5,16 @@ from datetime import timedelta
 
 from app.models.user_model import User
 from app.services.user_service import UserService
-from app.core.security import create_access_token
+from app.core.security import create_access_token, decode_url_safe_token
 from app.schemas.user_schema import TokenResponse
 from app.core.config import settings
 from app.core.db import get_session
 
-router = APIRouter(prefix="/login", tags=["login"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 user_service = UserService()
 
 
-@router.post("/token", response_model=TokenResponse)
+@router.post("/login", response_model=TokenResponse)
 async def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: Session = Depends(get_session),
@@ -103,3 +103,41 @@ async def refresh_access_token(
         refresh_token=token,  # Return the same refresh token
         token_type="bearer",
     )
+
+# route to verify email token only
+@router.get("/verify-email", status_code=status.HTTP_200_OK)
+async def verify_email_token(token: str, session: Session = Depends(get_session)):
+    """
+    Verify email using the provided token.
+    """
+    try:
+        token_data = decode_url_safe_token(token=token, max_age=86400)  # 24 hours expiry
+        user_email = token_data.get("email")
+        if not user_email:
+            raise ValueError("Invalid token data")
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Email verification failed: {str(e)}",
+        )
+
+    user = user_service.get_user_by_email(session=session, email=user_email)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    if user.is_verified:
+       return {"msg": "Email is already verified"}
+
+    user.is_verified = True
+    from datetime import datetime, timezone
+    user.updated_at = datetime.now(timezone.utc)
+    
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+
+    return {"msg": "Email verified successfully."}

@@ -279,3 +279,22 @@ python -c "import secrets; print(secrets.token_hex(32))"
 - Useful resource: [Fast API Beyond CRUD](https://github.com/jod35/fastapi-beyond-CRUD)
 
 ---
+
+## 2025-11-13
+
+- User email registration and verification
+  - How it works?
+  ```bash
+  user registers -----> send welcome email with verification link.
+                        1. Upon registration a safe url token is generated: app/core/security.py -----> create_url_token() method
+                        2. The verification link calls the end point: `api/v1/auth/verify-email/token`  ------> decode_url_token() method
+  ```
+
+## 2025-11-15
+
+- Solved the issues with email verification
+  - For the verification, my endpoint was supposed to hit the backend (localhost:8001) but it was hitting the frontend (localhost:3000)
+  - Earlier I had changed the user route from `/token` to `/login` but hadn't updated the endpoint to `login` in my `dependencies/auth.py` that was responsible for OAuth. Due to which, I was wrongly defining my login endpoint as: "api/v1/login/token" for which I was supposed to define it: "api/v1/auth/login"
+  - I was using `subtype=MessageType.plain` instead of `subtype=MessageType.html` due to which the html tags were not processed.
+  - Another error I was making was by defining the endpoint as `verify-email/token`. That was totally wrong because the token would be coming as a query parameter. This led to wrong endpoint throwing errors.
+  - 

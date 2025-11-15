@@ -25,7 +25,7 @@ class UserBase(SQLModel):
     gender: GenderEnum = Field(default=GenderEnum.OTHER)
     date_of_birth: Optional[datetime] = Field(default=None)
 
-    email: Optional[EmailStr] = Field(default=None, max_length=100)
+    email: EmailStr = Field(default=None, max_length=100)
 
     phone: str = Field(..., max_length=15)
     address: str = Field(..., max_length=255)

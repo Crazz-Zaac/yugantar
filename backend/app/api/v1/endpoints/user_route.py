@@ -3,14 +3,17 @@ from fastapi_mail import NameEmail
 from fastapi import BackgroundTasks
 from sqlmodel import Session
 from uuid import UUID
-from loguru import logger
 
 from app.core.db import get_session
 from app.models.user_model import User
 from app.schemas.user_schema import UserCreate, UserUpdate, UserResponse
 from app.services.user_service import UserService
-from app.api.dependencies.auth import get_current_user, get_current_active_user
-from app.core.security import create_access_token, verify_password
+from app.api.dependencies.auth import get_current_user
+from app.core.security import (
+    create_access_token,
+    verify_password,
+    create_url_safe_token,
+)
 from app.services.email_notify import (
     send_password_reset_email,
     send_registration_notification,
@@ -35,14 +38,31 @@ async def register_user(
     """
     Create a new user.
     """
-    try:
-        user = user_service.create_user(
-            session=session, user_in=user_in, background_tasks=background_tasks
+
+    user_email = user_in.email
+    user_exists = user_service.get_user_by_email(session=session, email=user_email)
+    if user_exists:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A user with this email already exists.",
         )
-    except Exception as e:
-        # Log the error but do not fail the registration
-        logger.info(f"Failed to send registration email: {e}")
-    return user
+    # Create the user
+    new_user = user_service.create_user(session=session, user_in=user_in)
+
+    # Send welcome email and verification link
+    verification_token = create_url_safe_token(data={"email": new_user.email})
+    verification_link = (
+        f"{settings.BACKEND_HOST}/api/v1/auth/verify-email?token={verification_token}"
+    )
+    
+    background_tasks.add_task(
+        send_registration_notification,
+        [NameEmail(name=new_user.first_name, email=new_user.email)],
+        new_user.first_name + " " + new_user.last_name,
+        verification_link,
+    )
+
+    return new_user
 
 
 @router.post("/login", response_model=UserResponse)
@@ -134,19 +154,21 @@ async def reset_password(
             detail="An error occurred while processing the request",
         ) from e
 
+
 @router.get("/logout", status_code=status.HTTP_200_OK)
-async def logout_user(token: dict = Depends()):
+async def logout_user():
     """
     Logout user by invalidating the token.
     Note: Actual token invalidation logic depends on the token management strategy.
     """
-    
-        
+
     return {"msg": "User logged out successfully."}
+
 
 # -----------------------------
 # Dynamic routes last
 # -----------------------------
+
 
 @router.get("/{user_id}", response_model=UserResponse)
 async def get_user_by_id(

@@ -2,13 +2,10 @@ import uuid
 from typing import Any, List, Optional
 from fastapi import HTTPException, status
 from sqlmodel import Session, select
-from fastapi_mail import NameEmail
-from fastapi import BackgroundTasks
 
 from app.core.security import get_password_hash, verify_password
 from app.models.user_model import User
 from app.schemas.user_schema import UserCreate, UserUpdate, AdminAssignUserRoles
-from app.services.email_notify import send_registration_notification
 
 
 class UserService:
@@ -16,9 +13,7 @@ class UserService:
     Service class for user-related operations.
     """
 
-    def create_user(
-        self, session: Session, user_in: UserCreate, background_tasks: BackgroundTasks
-    ) -> User:
+    def create_user(self, session: Session, user_in: UserCreate) -> User:
         # Create user with explicit field mapping
         user_dict = user_in.model_dump(exclude={"password"})
         user_dict["hashed_password"] = get_password_hash(user_in.password)
@@ -28,13 +23,6 @@ class UserService:
         session.add(user)
         session.commit()
         session.refresh(user)
-
-        # Send notification email
-        background_tasks.add_task(
-            send_registration_notification,
-            [NameEmail(name=user.first_name, email=user.email)],
-            username=(user.first_name + " " + user.last_name),
-        )
 
         return user
 

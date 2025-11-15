@@ -16,7 +16,7 @@ ssl._create_default_https_context = ssl._create_unverified_context
 
 
 async def send_registration_notification(
-    email_to: List[NameEmail], username: str
+    email_to: List[NameEmail], username: str, verification_link: str
 ) -> None:
     """
     Send registration notification email to the user.
@@ -33,23 +33,49 @@ async def send_registration_notification(
         USE_CREDENTIALS=True,
         VALIDATE_CERTS=True,
     )
+    
+    html_content = f"""
+    <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+            <h2>Hello {username},</h2>
+            <p>Welcome to Yugantar! Your account has been successfully created.</p>
+            <p>The next thing is to verify your email to activate your account and access all features.</p>
+            <p>Please click the button below to verify your email address:</p>
+            <p style="margin: 30px 0;">
+                <a href="{verification_link}" 
+                   style="background-color: #4CAF50; 
+                          color: white; 
+                          padding: 12px 24px; 
+                          text-decoration: none; 
+                          border-radius: 4px;
+                          display: inline-block;">
+                    Verify Email
+                </a>
+            </p>
+            <p>Or copy and paste this link into your browser:</p>
+            <p style="word-break: break-all; color: #0066cc;">{verification_link}</p>
+            <p><small>This link will expire in 24 hours.</small></p>
+            <br>
+            <p>Best regards,<br>Yugantar Admin</p>
+        </body>
+    </html>
+    """
 
     try:
         message = MessageSchema(
             subject="Account Registration Successful",
             recipients=email_to,
-            body=f"Hello {username},\n\n"
-            f"Welcome to Yugantar! Your account has been successfully created.\n\n"
-            f"Best regards,\n"
-            f"The Yugantar Team",
-            subtype=MessageType.plain,
+            body=html_content,  
+            subtype=MessageType.html,
         )
 
         fm = FastMail(conf)
         await fm.send_message(message)
+        logger.info(f"Registration email sent successfully to {email_to}")
     except Exception as e:
         logger.error(f"Failed to send registration email: {e}")
-    
+        raise
+
     print({"message": "Registration email sent successfully"})
 
 
