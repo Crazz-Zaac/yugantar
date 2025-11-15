@@ -6,8 +6,13 @@ import jwt
 import bcrypt
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from itsdangerous import URLSafeTimedSerializer
 
 from .config import settings
+
+
+# Initialize the URL-safe serializer for token generation
+serializer = URLSafeTimedSerializer(settings.SECRET_KEY, salt="email-configuration")
 
 
 async def create_access_token(subject: str | Any, expires_delta: timedelta) -> str:
@@ -100,3 +105,25 @@ def get_password_hash(password: str) -> str:
 
     # return a utf-8 string
     return hashed.decode("utf-8")
+
+
+def create_url_safe_token(data: dict) -> str:
+    """
+    Create a URL-safe token for email verification or password reset.
+    """
+
+    token = serializer.dumps(data)
+
+    return token
+
+
+# Decode URL-safe token with max age of 24 hours (86400 seconds)
+def decode_url_safe_token(token: str, max_age: int = 86400) -> dict:
+    """
+    Decode a URL-safe token and verify its age.
+    """
+    try:
+        token_data = serializer.loads(token, max_age=max_age)
+        return token_data
+    except Exception as e:
+        raise ValueError(f"[ERROR]: {str(e)}")
