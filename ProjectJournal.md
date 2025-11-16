@@ -20,8 +20,9 @@
 - [x] Account Login and Logout
 - [x] Account verification (send link using `itsdangerous` package)
 - [ ] Log every user's activity
-- [ ] Create Deposit policy
-- [ ] Edit and Delete polity (must have proper access roles and rights)
+- [x] Create Deposit policy
+- [ ] Edit and Delete polity (must be either admin/moderator)
+- [ ] Create Deposit api
 - [ ] Make deposits based on the active policy
 - [ ] Create celery docker service with proper configs
 - [ ] Upload receipts to make deposit
@@ -306,3 +307,29 @@ python -c "import secrets; print(secrets.token_hex(32))"
   - Another error I was making was by defining the endpoint as `verify-email/token`. That was totally wrong because the token would be coming as a query parameter. This led to wrong endpoint throwing errors.
 
 ---
+## 2025-11-16
+
+- Deposit policy workflow
+  ```bash
+  CLIENT
+    │
+    ▼
+  ENDPOINT (deposit_policy_router.py)
+    │  receives JSON (DepositPolicyCreate / Update)
+    ▼
+  SCHEMAS (DepositPolicyCreate, DepositPolicyUpdate)
+    │  validate data
+    ▼
+  SERVICES
+    ├── PolicyService          ← generic framework (logging + versioning)
+    └── DepositPolicyService   ← deposit-specific logic
+    │
+    ▼
+  MODELS
+    ├── DepositPolicy
+    └── PolicyChangeLog
+    │
+    ▼
+  DATABASE
+
+  ```
