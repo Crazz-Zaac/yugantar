@@ -21,14 +21,13 @@ class DepositPolicyCreate(SQLModel):
 # -----------------------------
 class DepositPolicyUpdate(SQLModel):
     deposit_amount_threshold: Optional[float] = None
-    late_deposit_fine: Optional[float] = None       # in percentage
+    late_deposit_fine: Optional[float] = None
     deposit_frequency_days: Optional[int] = None
+    change_reason: str  # required for audit
     effective_from: Optional[datetime] = None
     effective_to: Optional[datetime] = None
-    is_active: bool = True
-    is_occasional: bool = False
-    updated_by: Optional[str] = None
-    updated_at: Optional[datetime] = None
+    is_active: Optional[bool] = None
+    is_occasional: Optional[bool] = None
     
 # -----------------------------
 # Read / Response Schema
@@ -38,6 +37,8 @@ class DepositPolicyResponse(SQLModel):
     deposit_amount_threshold: float
     late_deposit_fine: float    # in percentage
     deposit_frequency_days: int
+    change_reason: str
+    version: int
     effective_from: datetime
     effective_to: Optional[datetime]
     is_active: bool
