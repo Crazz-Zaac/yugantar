@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, List, Optional
+from typing import List, Optional
 from fastapi import HTTPException, status
 from sqlmodel import Session, select
 
