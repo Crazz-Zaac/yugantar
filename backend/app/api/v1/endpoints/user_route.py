@@ -3,6 +3,7 @@ from fastapi_mail import NameEmail
 from fastapi import BackgroundTasks
 from sqlmodel import Session
 from uuid import UUID
+from datetime import timedelta
 
 from app.core.db import get_session
 from app.models.user_model import User
@@ -19,7 +20,6 @@ from app.services.email_notify import (
     send_registration_notification,
 )
 from app.core.config import settings
-from datetime import timedelta
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -54,7 +54,7 @@ async def register_user(
     verification_link = (
         f"{settings.BACKEND_HOST}/api/v1/auth/verify-email?token={verification_token}"
     )
-    
+
     background_tasks.add_task(
         send_registration_notification,
         [NameEmail(name=new_user.first_name, email=new_user.email)],

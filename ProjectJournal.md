@@ -12,14 +12,22 @@
 - [x] User registration
 - [x] User Login
 - [x] Update and Delete operations on User table
-- [ ] Forgot Password
 - [x] Create loan policy
 - [x] Create loan schema
 - [x] Create loan service
 - [x] Registration Successful Email Notifications
-- [ ] Reset/renew account password
-- [ ] Account Login and Logout
-- [ ] Account verification (send link using `itsdangerous` package)
+- [ ] Forgot/Reset/renew account password
+- [x] Account Login and Logout
+- [x] Account verification (send link using `itsdangerous` package)
+- [ ] Log every user's activity
+- [x] Create Deposit policy
+- [ ] Edit and Delete polity (must be either admin/moderator)
+- [ ] Create Deposit api
+- [ ] Make deposits based on the active policy
+- [ ] Create celery docker service with proper configs
+- [ ] Upload receipts to make deposit
+- [ ] Use OCR to read voucher data
+- [ ] Assign Celery OCR task in background
 
 ---
 
@@ -229,20 +237,20 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 - Working with loan model
 
-### Policy Management
+#### Policy Management
 
 - Policies are versioned (effective_from/effective_to)
 - Only one active policy at a time
 - Historical policies retained for auditing
 
-### Loan Creation
+#### Loan Creation
 
 1. Fetch active policy
 2. Validate loan against policy rules
 3. Snapshot policy values into loan
 4. Store reference to policy (loan_policy_id)
 
-### Loan Modification
+#### Loan Modification
 
 - Policy changes don't affect existing loans
 - Renewals may use current policy or keep original
@@ -287,7 +295,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
   ```bash
   user registers -----> send welcome email with verification link.
                         1. Upon registration a safe url token is generated: app/core/security.py -----> create_url_token() method
-                        2. The verification link calls the end point: `api/v1/auth/verify-email/token`  ------> decode_url_token() method
+                        2. The verification link calls the endpoint: `api/v1/auth/verify-email?token`  ------> decode_url_token() method
   ```
 
 ## 2025-11-15
@@ -297,4 +305,31 @@ python -c "import secrets; print(secrets.token_hex(32))"
   - Earlier I had changed the user route from `/token` to `/login` but hadn't updated the endpoint to `login` in my `dependencies/auth.py` that was responsible for OAuth. Due to which, I was wrongly defining my login endpoint as: "api/v1/login/token" for which I was supposed to define it: "api/v1/auth/login"
   - I was using `subtype=MessageType.plain` instead of `subtype=MessageType.html` due to which the html tags were not processed.
   - Another error I was making was by defining the endpoint as `verify-email/token`. That was totally wrong because the token would be coming as a query parameter. This led to wrong endpoint throwing errors.
-  - 
+
+---
+## 2025-11-16
+
+- Deposit policy workflow
+  ```bash
+  CLIENT
+    │
+    ▼
+  ENDPOINT (deposit_policy_router.py)
+    │  receives JSON (DepositPolicyCreate / Update)
+    ▼
+  SCHEMAS (DepositPolicyCreate, DepositPolicyUpdate)
+    │  validate data
+    ▼
+  SERVICES
+    ├── PolicyService          ← generic framework (logging + versioning)
+    └── DepositPolicyService   ← deposit-specific logic
+    │
+    ▼
+  MODELS
+    ├── DepositPolicy
+    └── PolicyChangeLog
+    │
+    ▼
+  DATABASE
+
+  ```
