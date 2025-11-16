@@ -35,28 +35,33 @@ services:
     env_file:
       - ../backend/.env
     ports:
-      - "8001:8000"
+      - "8001:8000"  # 8000 inside the container but mapped to 8001 on host
     depends_on:
       - db
+    volumes:
+      - ../backend:/app
     networks:
       - yugantar-network
     restart: unless-stopped
   
-  # frontend:
-  #   image: frontend:v1
-  #   build:
-  #     context: ../frontend
-  #     dockerfile: ../docker/Dockerfile.frontend
-  #   container_name: yugantar-frontend
-  #   environment:
-  #     REACT_APP_API_URL: http://localhost:8000  # Adjust if backend is hosted elsewhere
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - backend
-  #   networks:
-  #     - yugantar-network
-  #   restart: unless-stopped
+  frontend:
+    image: frontend:v1
+    build:
+      context: ../frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    container_name: yugantar-frontend
+    environment:
+      REACT_APP_API_URL: http://localhost:8000  # This should point to the backend service
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ../frontend:/app
+    networks:
+      - yugantar-network
+    restart: unless-stopped
+
   portainer:
     image: portainer/portainer-ce:latest
     container_name: portainer
