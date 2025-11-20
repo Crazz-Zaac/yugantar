@@ -29,3 +29,5 @@ docker-compose*.yml
 # System files
 .DS_Store
 Thumbs.db
+
+imp_docs/
