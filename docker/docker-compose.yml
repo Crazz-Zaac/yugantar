@@ -30,7 +30,8 @@ services:
     image: backend:v1
     build:
       context: ..
-      dockerfile: docker/Dockerfile.backend
+      # dockerfile: docker/Dockerfile.backend
+      dockerfile: docker/Dockerfile.backend.dev
     container_name: yugantar-backend
     env_file:
       - ../backend/.env
@@ -38,7 +39,7 @@ services:
       - "8001:8000"  # 8000 inside the container but mapped to 8001 on host
     depends_on:
       - db
-    volumes:
+    volumes: 
       - ../backend:/app
     networks:
       - yugantar-network
@@ -47,17 +48,17 @@ services:
   frontend:
     image: frontend:v1
     build:
-      context: ../frontend
-      dockerfile: ../docker/Dockerfile.frontend
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
     container_name: yugantar-frontend
     environment:
-      REACT_APP_API_URL: http://localhost:8000  # This should point to the backend service
+      REACT_APP_API_URL: http://backend:8000  # This should point to the backend service
     ports:
-      - "3000:3000"
+      - "3000:80"
     depends_on:
       - backend
-    volumes:
-      - ../frontend:/app
+    # volumes:
+    #   - ../frontend:/app
     networks:
       - yugantar-network
     restart: unless-stopped
