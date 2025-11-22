@@ -223,3 +223,13 @@ class UserPublic(SQLModel):
         if self.last_name:
             return f"{self.first_name} {self.last_name[0]}."
         return self.first_name
+
+
+class LoginSuccess(SQLModel):
+    token: TokenResponse
+    user: UserResponse
+    
+
+class LoginRequest(SQLModel):
+    email: EmailStr
+    password: str

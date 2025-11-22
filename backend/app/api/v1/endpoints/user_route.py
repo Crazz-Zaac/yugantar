@@ -7,7 +7,14 @@ from datetime import timedelta
 
 from app.core.db import get_session
 from app.models.user_model import User
-from app.schemas.user_schema import UserCreate, UserUpdate, UserResponse
+from app.schemas.user_schema import (
+    UserCreate,
+    UserUpdate,
+    UserResponse,
+    LoginSuccess,
+    TokenResponse,
+    LoginRequest,
+)
 from app.services.user_service import UserService
 from app.api.dependencies.auth import get_current_user
 from app.core.security import (
@@ -65,23 +72,42 @@ async def register_user(
     return new_user
 
 
-@router.post("/login", response_model=UserResponse)
+@router.post("/login", response_model=LoginSuccess)
 async def login_user(
-    email: str,
-    password: str,
+    login_data: LoginRequest,
     session: Session = Depends(get_session),
 ):
     """
     Authenticate user and return user details.
     """
-    user = user_service.get_user_by_email(session=session, email=email)
-    if not user or not verify_password(password, user.hashed_password):
+    user = user_service.get_user_by_email(session=session, email=login_data.email)
+    if not user or not verify_password(login_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return user
+
+    # Generate tokens
+    access_token = await create_access_token(
+        subject=str(user.id), expires_delta=timedelta(minutes=15)
+    )
+    refresh_token = await create_access_token(
+        subject=str(user.id), expires_delta=timedelta(days=7)
+    )
+
+    login_token = TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+    )
+
+    user_response = LoginSuccess(
+        token=login_token,
+        user=UserResponse.model_validate(user),
+    )
+
+    return user_response
 
 
 @router.get("/me", response_model=UserResponse)

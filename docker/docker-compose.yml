@@ -64,21 +64,16 @@ services:
     restart: unless-stopped
 
   portainer:
-    image: portainer/portainer-ce:latest
+    image: portainer/portainer-ce:2.32.0
+    # image: portainer/portainer-ce:latest
     container_name: portainer
-    # command: -H unix:///var/run/docker.sock
-    command: [
-        "--host", "unix:///var/run/docker.sock",
-        "--no-analytics"
-    ]
     restart: always
-    user: "0:0"  # Run as root
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
     ports:
       - "9000:9000"
-      - "8000:8000"
+      - "9443:9443" 
     networks:
       - yugantar-network
     
