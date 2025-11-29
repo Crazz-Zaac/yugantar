@@ -69,7 +69,23 @@ async def register_user(
         verification_link,
     )
 
-    return new_user
+    access_token = await create_access_token(
+        subject=str(new_user.id), expires_delta=timedelta(minutes=15)
+    )
+    refresh_token = await create_access_token(
+        subject=str(new_user.id), expires_delta=timedelta(days=7)
+    )
+    login_token = TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+    )
+
+    user_response = LoginSuccess(
+        token=login_token,
+        user=UserResponse.model_validate(new_user),
+    )
+    return user_response
 
 
 @router.post("/login", response_model=LoginSuccess)
