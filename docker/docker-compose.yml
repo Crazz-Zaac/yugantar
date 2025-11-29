@@ -63,19 +63,19 @@ services:
       - yugantar-network
     restart: unless-stopped
 
-  portainer:
-    image: portainer/portainer-ce:2.32.0
-    # image: portainer/portainer-ce:latest
-    container_name: portainer
-    restart: always
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - portainer_data:/data
-    ports:
-      - "9000:9000"
-      - "9443:9443" 
-    networks:
-      - yugantar-network
+  # portainer:
+  #   image: portainer/portainer-ce:2.32.0
+  #   # image: portainer/portainer-ce:latest
+  #   container_name: portainer
+  #   restart: always
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - portainer_data:/data
+  #   ports:
+  #     - "9000:9000"
+  #     - "9443:9443" 
+  #   networks:
+  #     - yugantar-network
     
   
 # secrets:
@@ -87,7 +87,7 @@ services:
 volumes:
   db_data:
   pgadmin_data:
-  portainer_data:
+  # portainer_data:
 
 networks:
   yugantar-network:
