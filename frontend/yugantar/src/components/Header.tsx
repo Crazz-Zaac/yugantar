@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Bell, LogOut, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import Logo from "@/assets/yugantar_logo.svg";
 
 interface HeaderProps {
   title?: string;
@@ -10,7 +11,7 @@ interface HeaderProps {
 }
 
 export const Header = ({
-  title = "ABC Wealth Management System",
+  title = "Yugantar Wealth Management System",
   showLogout = true,
   onLogout,
 }: HeaderProps) => {
@@ -45,8 +46,12 @@ export const Header = ({
       <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Title */}
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-            W
+          <div className="w-8 h-8 flex items-center justify-center text-primary-foreground font-bold text-sm">
+            <img
+              src={Logo}
+              alt="Yugantar Mutual Fund"
+              className="w-full h-full"
+            />
           </div>
           <h1 className="text-lg font-semibold text-foreground hidden sm:block">
             {title}

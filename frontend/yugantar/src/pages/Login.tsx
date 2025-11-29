@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,10 +14,6 @@ import {
 import {
   Eye,
   EyeOff,
-  Loader2,
-  TrendingUp,
-  Shield,
-  DollarSign,
   ArrowRight,
   Mail,
   Lock,
@@ -34,7 +29,6 @@ export default function Login() {
   const { login, signup } = useAuth();
 
   // form states
-  const [isSignUp, setIsSignUp] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
@@ -51,6 +45,8 @@ export default function Login() {
     middlename: "",
     lastname: "",
     phonenumber: "",
+    address: "",
+    gender: "other" as "male" | "female" | "other", // Add this
     confirmPassword: "",
   });
 
@@ -62,13 +58,36 @@ export default function Login() {
     });
   };
 
+  // Handle tab switch and reset form
+  const handleTabChange = (isLoginTab: boolean) => {
+    setIsLogin(isLoginTab);
+    // Clear form data when switching tabs
+    setFormData({
+      email: "",
+      password: "",
+      firstname: "",
+      middlename: "",
+      lastname: "",
+      phonenumber: "",
+      address: "",
+      gender: "other" as "male" | "female" | "other", // Add this
+      confirmPassword: "",
+    });
+    setPasswordErrors([]);
+  };
+
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    console.log(import.meta.env.VITE_API_BASE);
-
+    
+    console.log('=== DEBUG INFO ===');
+    console.log('isLogin state:', isLogin);
+    console.log('!isLogin:', !isLogin);
+    console.log('API Base:', import.meta.env.VITE_API_BASE);
     try {
-      if (isSignUp) {
+      if (!isLogin) {
+        console.log('Taking SIGNUP path');
         if (!formData.firstname) {
           toast.error("Please enter your name");
           setIsLoading(false);
@@ -80,17 +99,20 @@ export default function Login() {
           formData.firstname,
           formData.middlename,
           formData.lastname,
-          formData.phonenumber
+          formData.phonenumber,
+          formData.address,
+          formData.gender
         );
         toast.success("Account created successfully!");
       } else {
+        console.log('Taking LOGIN path');
         await login(formData.email, formData.password);
         toast.success("Logged in successfully!");
       }
       setLocation("/dashboard");
     } catch (error) {
       toast.error(
-        isSignUp
+        !isLogin
           ? "Sign up failed. Please try again."
           : "Login failed. Please check your credentials."
       );
@@ -239,7 +261,7 @@ export default function Login() {
                       value={formData.middlename}
                       onChange={handleChange}
                       className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground focus:ring-primary"
-                      required={!isLogin}
+                      required={false}
                     />
                   </div>
                   <Label htmlFor="name" className="text-foreground font-medium">
@@ -264,8 +286,8 @@ export default function Login() {
                   <div className="relative">
                     <Phone className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
                     <Input
-                      id="phone"
-                      name="phone"
+                      id="phonenumber"
+                      name="phonenumber"
                       type="tel"
                       placeholder="+977 9812345678"
                       pattern="[+0-9]{10,15}"
@@ -274,6 +296,50 @@ export default function Login() {
                       className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground focus:ring-primary"
                       required={!isLogin}
                     />
+                  </div>
+                </div>
+              )}
+              
+              {/* Gender section */}
+              {!isLogin && (
+                <div className="space-y-2">
+                  <Label className="text-foreground font-medium">
+                    Gender
+                  </Label>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, gender: "male" })}
+                      className={`flex-1 px-4 py-2 rounded-lg border transition-all ${
+                        formData.gender === "male"
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background border-border text-foreground hover:border-primary"
+                      }`}
+                    >
+                      Male
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, gender: "female" })}
+                      className={`flex-1 px-4 py-2 rounded-lg border transition-all ${
+                        formData.gender === "female"
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background border-border text-foreground hover:border-primary"
+                      }`}
+                    >
+                      Female
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, gender: "other" })}
+                      className={`flex-1 px-4 py-2 rounded-lg border transition-all ${
+                        formData.gender === "other"
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background border-border text-foreground hover:border-primary"
+                      }`}
+                    >
+                      Other
+                    </button>
                   </div>
                 </div>
               )}

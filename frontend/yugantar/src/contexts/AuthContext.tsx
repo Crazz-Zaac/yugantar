@@ -18,7 +18,9 @@ interface AuthContextType {
     firstname: string,
     middlename: string,
     lastname: string,
-    phonenumber: string
+    phonenumber: string,
+    address: string,
+    gender: string
   ) => Promise<void>;
   logout: () => void;
 }
@@ -92,33 +94,63 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     firstname: string,
     middlename: string,
     lastname: string,
-    phonenumber: string
+    phonenumber: string,
+    address: string,
+    gender: string
   ) => {
     setIsLoading(true);
     try {
+      const requestBody = {
+        email,
+        password,
+        first_name: firstname,
+        middle_name: middlename || null,
+        last_name: lastname,
+        phone: phonenumber,
+        address: address || "Not provided",
+        gender: gender.toLowerCase(),
+      };
+      
+      console.log('Signup request body:', requestBody);
+
       const response = await fetch(`${API_BASE}/users/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          firstname,
-          middlename,
-          lastname,
-          phonenumber,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (!response.ok) {
         const err = await response.json();
-        throw new Error(err.detail || "Signup failed");
+        console.error('Signup error response:', err);
+        
+        if (err.detail && Array.isArray(err.detail)) {
+          console.error('Validation errors:');
+          err.detail.forEach((error: any, index: number) => {
+            console.error(`Error ${index + 1}:`, error);
+          });
+        }
+        
+        throw new Error(err.detail || JSON.stringify(err) || "Signup failed");
       }
 
       const data = await response.json();
+      console.log('Signup success response:', data);
+      console.log('Full response structure:', JSON.stringify(data, null, 2)); // ✅ Log full structure
 
-      localStorage.setItem("access_token", data.token.access_token);
-      localStorage.setItem("refresh_token", data.token.refresh_token);
-      setUser(data.user);
+      // ✅ Check if the response has the expected structure
+      if (data.token && data.token.access_token) {
+        localStorage.setItem("access_token", data.token.access_token);
+        localStorage.setItem("refresh_token", data.token.refresh_token);
+        setUser(data.user);
+      } else if (data.access_token) {
+        // Maybe tokens are at root level?
+        localStorage.setItem("access_token", data.access_token);
+        localStorage.setItem("refresh_token", data.refresh_token);
+        setUser(data);
+      } else {
+        console.error('Unexpected response structure:', data);
+        throw new Error('Invalid response structure from server');
+      }
     } finally {
       setIsLoading(false);
     }
