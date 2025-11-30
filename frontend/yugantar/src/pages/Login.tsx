@@ -11,16 +11,9 @@ import {
   DataChartAnimation,
   NetworkAnimation,
 } from "@/components/AnimationSVGs";
-import {
-  Eye,
-  EyeOff,
-  ArrowRight,
-  Mail,
-  Lock,
-  User,
-  Phone,
-} from "lucide-react";
+import { Eye, EyeOff, ArrowRight, Mail, Lock, User, Phone } from "lucide-react";
 import { toast } from "sonner";
+import { set } from "react-hook-form";
 
 export default function Login() {
   // wouter location
@@ -76,18 +69,17 @@ export default function Login() {
     setPasswordErrors([]);
   };
 
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
-    console.log('=== DEBUG INFO ===');
-    console.log('isLogin state:', isLogin);
-    console.log('!isLogin:', !isLogin);
-    console.log('API Base:', import.meta.env.VITE_API_BASE);
+
+    console.log("=== DEBUG INFO ===");
+    console.log("isLogin state:", isLogin);
+    console.log("!isLogin:", !isLogin);
+    console.log("API Base:", import.meta.env.VITE_API_BASE);
     try {
       if (!isLogin) {
-        console.log('Taking SIGNUP path');
+        console.log("Taking SIGNUP path");
         if (!formData.firstname) {
           toast.error("Please enter your name");
           setIsLoading(false);
@@ -103,20 +95,35 @@ export default function Login() {
           formData.address,
           formData.gender
         );
-        toast.success("Account created successfully!");
+        toast.success(
+          "Account created successfully! Check your email for verification."
+        );
+        setIsLogin(true); // Switch to login after successful signup
+        setFormData({
+          email: formData.email,
+          password: "",
+          firstname: "",
+          middlename: "",
+          lastname: "",
+          phonenumber: "",
+          address: "",
+          gender: "other",
+          confirmPassword: "",
+        });
+
       } else {
-        console.log('Taking LOGIN path');
         await login(formData.email, formData.password);
         toast.success("Logged in successfully!");
       }
       setLocation("/dashboard");
-    } catch (error) {
-      toast.error(
-        !isLogin
+    } catch (error: any) {
+      const errorMessage =
+        error.message ||
+        (!isLogin
           ? "Sign up failed. Please try again."
-          : "Login failed. Please check your credentials."
-      );
-      console.error(error);
+          : "Login failed. Please check your credentials.");
+
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -299,17 +306,17 @@ export default function Login() {
                   </div>
                 </div>
               )}
-              
+
               {/* Gender section */}
               {!isLogin && (
                 <div className="space-y-2">
-                  <Label className="text-foreground font-medium">
-                    Gender
-                  </Label>
+                  <Label className="text-foreground font-medium">Gender</Label>
                   <div className="flex gap-3">
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, gender: "male" })}
+                      onClick={() =>
+                        setFormData({ ...formData, gender: "male" })
+                      }
                       className={`flex-1 px-4 py-2 rounded-lg border transition-all ${
                         formData.gender === "male"
                           ? "bg-primary text-primary-foreground border-primary"
@@ -320,7 +327,9 @@ export default function Login() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, gender: "female" })}
+                      onClick={() =>
+                        setFormData({ ...formData, gender: "female" })
+                      }
                       className={`flex-1 px-4 py-2 rounded-lg border transition-all ${
                         formData.gender === "female"
                           ? "bg-primary text-primary-foreground border-primary"
@@ -331,7 +340,9 @@ export default function Login() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setFormData({ ...formData, gender: "other" })}
+                      onClick={() =>
+                        setFormData({ ...formData, gender: "other" })
+                      }
                       className={`flex-1 px-4 py-2 rounded-lg border transition-all ${
                         formData.gender === "other"
                           ? "bg-primary text-primary-foreground border-primary"
