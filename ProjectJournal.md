@@ -307,9 +307,11 @@ python -c "import secrets; print(secrets.token_hex(32))"
   - Another error I was making was by defining the endpoint as `verify-email/token`. That was totally wrong because the token would be coming as a query parameter. This led to wrong endpoint throwing errors.
 
 ---
+
 ## 2025-11-16
 
 - Deposit policy workflow
+
   ```bash
   CLIENT
     │
@@ -333,3 +335,14 @@ python -c "import secrets; print(secrets.token_hex(32))"
   DATABASE
 
   ```
+
+---
+
+## 2025-11-30
+
+- User login updates
+  - Created a `pages/Login.tsx` and `contexts/AuthContext.tsx`
+  - `AuthContext.tsx` handles authentication during login and signup creating tokens calling the fastapi endpoint
+  - `Login.tsx` calls the endpoints defined in the `AuthContext.tsx` and POST/GETs form data to and from the DB
+
+---

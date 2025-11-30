@@ -51,24 +51,7 @@ export default function Login() {
     });
   };
 
-  // Handle tab switch and reset form
-  const handleTabChange = (isLoginTab: boolean) => {
-    setIsLogin(isLoginTab);
-    // Clear form data when switching tabs
-    setFormData({
-      email: "",
-      password: "",
-      firstname: "",
-      middlename: "",
-      lastname: "",
-      phonenumber: "",
-      address: "",
-      gender: "other" as "male" | "female" | "other", // Add this
-      confirmPassword: "",
-    });
-    setPasswordErrors([]);
-  };
-
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
