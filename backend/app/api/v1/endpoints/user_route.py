@@ -55,6 +55,9 @@ async def register_user(
         )
     # Create the user
     new_user = user_service.create_user(session=session, user_in=user_in)
+    # Commit the session to save the user
+    session.commit()
+    session.refresh(new_user)
 
     # Send welcome email and verification link
     verification_token = create_url_safe_token(data={"email": new_user.email})
@@ -68,24 +71,7 @@ async def register_user(
         new_user.first_name + " " + new_user.last_name,
         verification_link,
     )
-
-    access_token = await create_access_token(
-        subject=str(new_user.id), expires_delta=timedelta(minutes=15)
-    )
-    refresh_token = await create_access_token(
-        subject=str(new_user.id), expires_delta=timedelta(days=7)
-    )
-    login_token = TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        token_type="bearer",
-    )
-
-    user_response = LoginSuccess(
-        token=login_token,
-        user=UserResponse.model_validate(new_user),
-    )
-    return user_response
+    return new_user
 
 
 @router.post("/login", response_model=LoginSuccess)
