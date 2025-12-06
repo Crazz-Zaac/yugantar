@@ -28,9 +28,6 @@ class UserService:
 
     def update_user(self, session: Session, db_user: User, user_in: UserUpdate) -> User:
         user_data = user_in.model_dump(exclude_unset=True)
-        if "password" in user_data:
-            user_data["hashed_password"] = get_password_hash(user_data.pop("password"))
-
         db_user.sqlmodel_update(user_data)
         session.add(db_user)
         session.commit()

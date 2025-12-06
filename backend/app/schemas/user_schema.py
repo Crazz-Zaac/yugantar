@@ -86,27 +86,11 @@ class UserUpdate(SQLModel):
     first_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     middle_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    gender: GenderEnum = Field(default=GenderEnum.OTHER)
+    date_of_birth: Optional[datetime] = Field(default=None)
     email: EmailStr = Field(default=None, max_length=100)
-    password: Optional[str] = Field(default=None, min_length=8, max_length=100)
     phone: Optional[str] = Field(default=None, max_length=15)
     address: Optional[str] = Field(default=None, max_length=255)
-
-    @field_validator("password")
-    def validate_password_strength(cls, value):
-        if value is None:
-            return value
-
-        # Ensure password doesn't exceed bcrypt's 72-byte limit
-        if len(value.encode("utf-8")) > 72:
-            raise ValueError("Password cannot exceed 72 bytes")
-
-        # Basic password strength validation
-        if not any(char.isdigit() for char in value):
-            raise ValueError("Password must contain at least one digit")
-        if not any(char.isalpha() for char in value):
-            raise ValueError("Password must contain at least one letter")
-
-        return value
 
 
 class UserPasswordChange(SQLModel):
