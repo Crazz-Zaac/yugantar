@@ -14,9 +14,15 @@ import {
   Trash2,
   Edit,
   Eye,
-  MoreVertical,
   AlertCircle
 } from "lucide-react";
+import { UserForUI } from "@/utils/normalizeUser";
+
+// Helper function to check if user is admin
+const isAdmin = (user: UserForUI | null): boolean => {
+  if (!user) return false;
+  return user.access_roles.split(",").includes("admin");
+};
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
@@ -25,7 +31,7 @@ export default function AdminDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Check if user is admin
-  if (user?.role !== "admin") {
+  if (!isAdmin(user)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="p-8 border border-gray-200 text-center max-w-md">
@@ -86,7 +92,7 @@ export default function AdminDashboard() {
 
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium text-gray-900">{user?.name}</p>
+              <p className="text-sm font-medium text-gray-900">{user?.first_name}</p>
               <p className="text-xs text-gray-600 font-semibold text-[#274add]">Administrator</p>
             </div>
             <button

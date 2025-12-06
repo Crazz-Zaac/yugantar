@@ -12,6 +12,7 @@ import Dashboard from "./pages/Dashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 
 import { AuthProvider } from "./contexts/AuthContext";
+import Settings from './pages/Settings';
 
 
 function Router() {
@@ -21,6 +22,7 @@ function Router() {
       <Route path={"/login"} component={Login} />
       <Route path={"/dashboard"} component={Dashboard} />
       <Route path={"/admin"} component={AdminDashboard} />
+      <Route path={"/settings"} component={Settings} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />
