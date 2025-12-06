@@ -49,16 +49,22 @@ services:
     image: frontend:v1
     build:
       context: ..
-      dockerfile: docker/Dockerfile.frontend
+      # dockerfile: docker/Dockerfile.frontend   # for production
+      dockerfile: docker/Dockerfile.frontend.dev
     container_name: yugantar-frontend
     environment:
+      CHOKIDAR_USEPOLLING: "true"       # ensures hot reload works on Docker
+      WATCHPACK_POLLING: "true"
       REACT_APP_API_URL: http://backend:8000  # This should point to the backend service
+    command: npm run dev
     ports:
-      - "3000:80"
+      - "3000:3000"  # Vite default dev server port
     depends_on:
       - backend
-    # volumes:
-    #   - ../frontend:/app
+    #TODO: remove this volume in production
+    volumes:
+      - ../frontend/yugantar:/app       # live code changes reflect instantly
+      - /app/node_modules  
     networks:
       - yugantar-network
     restart: unless-stopped
