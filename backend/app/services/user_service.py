@@ -47,7 +47,7 @@ class UserService:
         return user
 
     def get_user_by_email(self, session: Session, email: str) -> Optional[User]:
-        statement = select(User).where(User.email == email)
+        statement = select(User).where(User.email == email, User.disabled == False)
         return session.exec(statement).first()
 
     def get_user_by_id(self, session: Session, user_id: uuid.UUID) -> Optional[User]:
