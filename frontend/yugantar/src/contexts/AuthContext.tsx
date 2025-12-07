@@ -15,6 +15,10 @@ interface AuthContextType {
   signup: (...args: any) => Promise<void>;
   logout: () => void;
   updateProfile: (data: EditableUserFields) => Promise<void>;
+  changePassword: (
+    currentPassword: string,
+    newPassword: string
+  ) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -42,7 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (err) {
-        console.error(err);
+        console.error("Auth check failed:", err);
       } finally {
         setIsLoading(false);
       }
@@ -50,25 +54,219 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     checkAuth();
   }, []);
 
+  const signup = async (userData: Partial<UserForUI>, password: string) => {
+    setIsLoading(true);
+    try {
+      const apiData = denormalizeUser(userData);
+      const body = JSON.stringify({
+        ...apiData,
+        email: userData.email,
+        password,
+      });
+
+      console.log("Signup request body:", body);
+
+      const res = await fetch(`${API_BASE}/users/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error("Signup error response:", errorData);
+
+        if (errorData.detail) {
+          if (Array.isArray(errorData.detail)) {
+            console.error("Validation errors:", errorData.detail);
+            const firstError = errorData.detail[0];
+            throw new Error(firstError.msg || "Validation failed");
+          }
+          throw new Error(errorData.detail);
+        }
+        throw new Error("Failed to register");
+      }
+
+      const data = await res.json();
+      console.log("Signup success response:", data);
+
+      if (data.access_token && data.refresh_token) {
+        localStorage.setItem("access_token", data.access_token);
+        localStorage.setItem("refresh_token", data.refresh_token);
+        setUser(normalizeUser(data.user));
+      } else if (data.user) {
+        setUser(normalizeUser(data.user));
+      } else {
+        setUser(normalizeUser(data));
+      }
+    } catch (err) {
+      console.error("Signup error:", err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const login = async (email: string, password: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/users/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Login failed");
+      }
+
+      const data = await res.json();
+      console.log("=== LOGIN RESPONSE DEBUG ===");
+      console.log("Full response:", data);
+
+      // Backend returns tokens nested in 'token' object
+      const accessToken = data.token?.access_token || data.access_token;
+      const refreshToken = data.token?.refresh_token || data.refresh_token;
+
+      console.log("Access token:", accessToken);
+      console.log("Access token type:", typeof accessToken);
+      console.log("Access token length:", accessToken?.length);
+
+      // Store tokens
+      if (accessToken) {
+        localStorage.setItem("access_token", accessToken);
+        console.log("✓ Access token stored");
+      } else {
+        console.error("No access token in response!");
+      }
+
+      if (refreshToken) {
+        localStorage.setItem("refresh_token", refreshToken);
+        console.log("✓ Refresh token stored");
+      }
+
+      // Verify storage
+      const storedToken = localStorage.getItem("access_token");
+      console.log("Stored token length:", storedToken?.length);
+      console.log("Stored token preview:", storedToken?.substring(0, 20));
+
+      setUser(normalizeUser(data.user));
+    } catch (err) {
+      console.error("Login error:", err);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
+      const token = localStorage.getItem("access_token");
+
+      if (token) {
+        await fetch(`${API_BASE}/users/logout`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+      }
+    } catch (err) {
+      console.error("Logout error:", err);
+    } finally {
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
+      setUser(null);
+    }
+  };
+
   const updateProfile = async (data: EditableUserFields) => {
     const token = localStorage.getItem("access_token");
 
-    // Convert UI data to API format
-    const apiData = denormalizeUser(data);
+    if (!token) {
+      throw new Error("No authentication token found");
+    }
 
-    const res = await fetch(`${API_BASE}/users/me`, {
-      method: "PATCH",
+    // Debug: Log the token (first/last 10 chars only for security)
+    console.log("Token exists, length:", token.length);
+    console.log(
+      "Token preview:",
+      `${token.substring(0, 10)}...${token.substring(token.length - 10)}`
+    );
+
+    const apiData = denormalizeUser(data);
+    console.log("Update profile request data:", apiData);
+
+    try {
+      const res = await fetch(`${API_BASE}/users/me`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(apiData),
+      });
+
+      // Log response status
+      console.log("Update profile response status:", res.status);
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        console.error("Update profile error response:", errorData);
+
+        // If unauthorized, token might be expired
+        if (res.status === 401) {
+          console.error("Token might be expired or invalid");
+          // Optionally: trigger re-login
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("refresh_token");
+          setUser(null);
+          throw new Error("Session expired. Please log in again.");
+        }
+
+        throw new Error(errorData.detail || "Failed to update profile");
+      }
+
+      const updated: User = await res.json();
+      console.log("Update profile success:", updated);
+      setUser(normalizeUser(updated));
+    } catch (err) {
+      console.error("Update profile caught error:", err);
+      throw err;
+    }
+  };
+
+  const changePassword = async (
+    currentPassword: string,
+    newPassword: string
+  ) => {
+    const token = localStorage.getItem("access_token");
+
+    if (!token) {
+      throw new Error("No authentication token found");
+    }
+
+    const res = await fetch(`${API_BASE}/users/me/change-password`, {
+      method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
       },
-      body: JSON.stringify(apiData),
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+      }),
     });
 
-    if (!res.ok) throw new Error("Failed to update profile");
+    if (!res.ok) {
+      const errorData = await res.json();
+      console.error("Change password error:", errorData);
+      throw new Error(errorData.detail || "Failed to change password");
+    }
 
-    const updated: User = await res.json();
-    setUser(normalizeUser(updated));
+    const data = await res.json();
+    console.log("Password changed successfully:", data);
   };
 
   return (
@@ -77,10 +275,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user,
         isAuthenticated: !!user,
         isLoading,
-        login: async () => {}, // login
-        signup: async () => {}, // signup
-        logout: async () => {}, // logout
-        updateProfile, // updateProfile
+        login,
+        signup,
+        logout,
+        updateProfile,
+        changePassword,
       }}
     >
       {children}

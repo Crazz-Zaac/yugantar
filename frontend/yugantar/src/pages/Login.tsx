@@ -69,14 +69,16 @@ export default function Login() {
           return;
         }
         await signup(
-          formData.email,
-          formData.password,
-          formData.firstname,
-          formData.middlename,
-          formData.lastname,
-          formData.phonenumber,
-          formData.address,
-          formData.gender
+          {
+            email: formData.email,
+            first_name: formData.firstname,
+            middle_name: formData.middlename,
+            last_name: formData.lastname,
+            phone: formData.phonenumber,
+            address: formData.address,
+            gender: formData.gender,
+          },
+          formData.password
         );
         toast.success(
           "Account created successfully! Check your email for verification."
@@ -93,7 +95,6 @@ export default function Login() {
           gender: "other",
           confirmPassword: "",
         });
-
       } else {
         await login(formData.email, formData.password);
         toast.success("Logged in successfully!");

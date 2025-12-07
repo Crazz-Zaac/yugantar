@@ -1,21 +1,36 @@
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Lock, Bell, Shield, BadgeCheck, BadgeX } from "lucide-react";
+import { Lock, Bell, Shield, BadgeCheck, BadgeX, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { getEditableFields } from "@/utils/normalizeUser";
+import { toast } from "sonner";
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState("account");
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
-  const { user, updateProfile } = useAuth();
+  const { user, updateProfile, changePassword } = useAuth();
 
   const [formData, setFormData] = useState(getEditableFields(user));
 
-  // Update formData when user data loads
+  // Change Password Modal State
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [showPasswords, setShowPasswords] = useState({
+    current: false,
+    new: false,
+    confirm: false,
+  });
+  const [passwordError, setPasswordError] = useState("");
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
   useEffect(() => {
     if (user) {
       setFormData(getEditableFields(user));
@@ -25,7 +40,6 @@ export default function Settings() {
   const isAdmin = user?.access_roles?.split(",").includes("admin");
 
   const handleEdit = () => {
-    console.log("Edit clicked!");
     setIsEditing(true);
     setFormData(getEditableFields(user));
   };
@@ -41,8 +55,11 @@ export default function Settings() {
     try {
       await updateProfile(formData);
       setIsEditing(false);
+      toast.success("Profile updated successfully!");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update profile");
+      const errorMsg = err instanceof Error ? err.message : "Failed to update profile";
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setIsSaving(false);
     }
@@ -57,6 +74,58 @@ export default function Settings() {
       ...prev,
       [e.target.name]: e.target.value,
     }));
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPasswordData(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value,
+    }));
+    setPasswordError("");
+  };
+
+  const handleChangePassword = async () => {
+    setPasswordError("");
+
+    // Validation
+    if (!passwordData.currentPassword) {
+      setPasswordError("Please enter your current password");
+      return;
+    }
+    if (!passwordData.newPassword) {
+      setPasswordError("Please enter a new password");
+      return;
+    }
+    if (passwordData.newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters");
+      return;
+    }
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setPasswordError("New passwords do not match");
+      return;
+    }
+    if (passwordData.currentPassword === passwordData.newPassword) {
+      setPasswordError("New password must be different from current password");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await changePassword(passwordData.currentPassword, passwordData.newPassword);
+      toast.success("Password changed successfully!");
+      setShowPasswordModal(false);
+      setPasswordData({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : "Failed to change password";
+      setPasswordError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   return (
@@ -116,7 +185,6 @@ export default function Settings() {
               Your assigned roles. Only administrators can modify user roles.
               Contact an admin if you need role changes.
             </p>
-            {/* Roles Display - Read Only with Admin Info */}
             <div className="space-y-4 pt-4 border-t border-border">
               <div className="flex flex-wrap gap-2">
                 <label className="block text-sm font-medium text-foreground mb-2">
@@ -164,7 +232,6 @@ export default function Settings() {
                   ))}
                 </div>
               </div>
-              {/* Account Status Info Box */}
               <div className="flex items-center gap-3 p-4 border border-border rounded bg-muted/30">
                 {user?.is_verified === "true" ? (
                   <BadgeCheck className="h-6 w-6 text-green-500" />
@@ -199,7 +266,6 @@ export default function Settings() {
                   </div>
                 )}
 
-                {/* Name Fields */}
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">
@@ -257,7 +323,6 @@ export default function Settings() {
                   </div>
                 </div>
 
-                {/* DOB, Email and Phone */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-foreground">
@@ -335,7 +400,6 @@ export default function Settings() {
                   </div>
                 </div>
 
-                {/* Address */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">
                     Address
@@ -400,7 +464,11 @@ export default function Settings() {
                   Password
                 </h2>
               </div>
-              <Button variant="outline" className="border-border">
+              <Button 
+                variant="outline" 
+                className="border-border"
+                onClick={() => setShowPasswordModal(true)}
+              >
                 Change Password
               </Button>
             </div>
@@ -456,6 +524,141 @@ export default function Settings() {
                 <span className="text-foreground">System updates</span>
                 <input type="checkbox" className="rounded" />
               </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Change Password Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card border border-border rounded-lg p-6 w-full max-w-md">
+            <h3 className="text-xl font-semibold text-foreground mb-4">
+              Change Password
+            </h3>
+
+            {passwordError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/20 rounded text-red-500 text-sm mb-4">
+                {passwordError}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  Current Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPasswords.current ? "text" : "password"}
+                    name="currentPassword"
+                    value={passwordData.currentPassword}
+                    onChange={handlePasswordChange}
+                    className="w-full px-3 py-2 pr-10 border border-border rounded bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowPasswords(prev => ({
+                        ...prev,
+                        current: !prev.current,
+                      }))
+                    }
+                    className="absolute right-3 top-2.5 text-muted-foreground"
+                  >
+                    {showPasswords.current ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  New Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPasswords.new ? "text" : "password"}
+                    name="newPassword"
+                    value={passwordData.newPassword}
+                    onChange={handlePasswordChange}
+                    className="w-full px-3 py-2 pr-10 border border-border rounded bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowPasswords(prev => ({ ...prev, new: !prev.new }))
+                    }
+                    className="absolute right-3 top-2.5 text-muted-foreground"
+                  >
+                    {showPasswords.new ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">
+                  Confirm New Password
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPasswords.confirm ? "text" : "password"}
+                    name="confirmPassword"
+                    value={passwordData.confirmPassword}
+                    onChange={handlePasswordChange}
+                    className="w-full px-3 py-2 pr-10 border border-border rounded bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowPasswords(prev => ({
+                        ...prev,
+                        confirm: !prev.confirm,
+                      }))
+                    }
+                    className="absolute right-3 top-2.5 text-muted-foreground"
+                  >
+                    {showPasswords.confirm ? (
+                      <EyeOff className="h-5 w-5" />
+                    ) : (
+                      <Eye className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowPasswordModal(false);
+                    setPasswordData({
+                      currentPassword: "",
+                      newPassword: "",
+                      confirmPassword: "",
+                    });
+                    setPasswordError("");
+                  }}
+                  disabled={isChangingPassword}
+                  className="border-border"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleChangePassword}
+                  disabled={isChangingPassword}
+                  className="bg-primary text-primary-foreground hover:bg-primary/90"
+                >
+                  {isChangingPassword ? "Changing..." : "Change Password"}
+                </Button>
+              </div>
             </div>
           </div>
         </div>
