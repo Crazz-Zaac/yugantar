@@ -14,6 +14,7 @@ from app.schemas.user_schema import (
     LoginSuccess,
     TokenResponse,
     LoginRequest,
+    UserPasswordChange,
 )
 from app.services.user_service import UserService
 from app.api.dependencies.auth import get_current_user
@@ -55,9 +56,6 @@ async def register_user(
         )
     # Create the user
     new_user = user_service.create_user(session=session, user_in=user_in)
-    # Commit the session to save the user
-    session.commit()
-    session.refresh(new_user)
 
     # Send welcome email and verification link
     verification_token = create_url_safe_token(data={"email": new_user.email})
@@ -183,13 +181,37 @@ async def reset_password(
         ) from e
 
 
-@router.get("/logout", status_code=status.HTTP_200_OK)
-async def logout_user():
+@router.post("/me/change-password", status_code=status.HTTP_200_OK, tags=["password"])
+async def change_password(
+    payload: UserPasswordChange,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     """
-    Logout user by invalidating the token.
-    Note: Actual token invalidation logic depends on the token management strategy.
+    Change the current authenticated user's password.
     """
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
 
+    user_service.change_user_password(
+        session=session, user=current_user, new_password=payload.new_password
+    )
+    return {"msg": "Password changed successfully."}
+
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout_user(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """
+    Logout the current user.
+    Note: With JWT, logout is typically handled on the client side by deleting the token.
+    This endpoint is provided for completeness.
+    """
     return {"msg": "User logged out successfully."}
 
 
