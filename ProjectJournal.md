@@ -346,3 +346,12 @@ python -c "import secrets; print(secrets.token_hex(32))"
   - `Login.tsx` calls the endpoints defined in the `AuthContext.tsx` and POST/GETs form data to and from the DB
 
 ---
+
+## 2025-12-07
+
+- Solved the issue of token local storage. This resolved the issue of login, signup and user edit profile.
+
+  - The way the backend was send the token and the way frontend was retrieving the token wasn't aligned.
+  - This caused the token mismatch.
+
+- Added a new endpoint for `users/me/change-password`
