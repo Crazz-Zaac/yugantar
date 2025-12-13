@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi_mail import NameEmail
 from fastapi import BackgroundTasks
 from sqlmodel import Session
 from uuid import UUID
+from uuid import uuid4
 from datetime import timedelta
 
 from app.core.db import get_session
@@ -28,6 +29,7 @@ from app.services.email_notify import (
     send_registration_notification,
 )
 from app.core.config import settings
+from app.core.redis_client import redis_client
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -74,6 +76,7 @@ async def register_user(
 
 @router.post("/login", response_model=LoginSuccess)
 async def login_user(
+    reponse: Response,
     login_data: LoginRequest,
     session: Session = Depends(get_session),
 ):
@@ -92,8 +95,19 @@ async def login_user(
     access_token = await create_access_token(
         subject=str(user.id), expires_delta=timedelta(minutes=15)
     )
-    refresh_token = await create_access_token(
-        subject=str(user.id), expires_delta=timedelta(days=7)
+    refresh_token = str(uuid4())
+    redis_key = f"refresh_token:{refresh_token}"
+    redis_client.set(
+        redis_key, str(user.id), ex=timedelta(days=7)
+    )  # Store refresh token
+    # set resfresh token in httpOnly cookie
+    reponse.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        max_age=7 * 24 * 60 * 60,  # 7 days
+        secure=True,
+        samesite="strict",
     )
 
     login_token = TokenResponse(
@@ -204,15 +218,18 @@ async def change_password(
 
 @router.post("/logout", status_code=status.HTTP_200_OK)
 async def logout_user(
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
+    request: Request,
+    response: Response,
 ):
     """
-    Logout the current user.
-    Note: With JWT, logout is typically handled on the client side by deleting the token.
-    This endpoint is provided for completeness.
+    Logout the current user by deleting the refresh token cookie.
     """
-    return {"msg": "User logged out successfully."}
+    refresh_token = request.cookies.get("refresh_token")
+    if refresh_token:
+        redis_key = f"refresh_token:{refresh_token}"
+        redis_client.delete(redis_key)
+        response.delete_cookie(key="refresh_token")
+    return {"msg": "Successfully logged out."}
 
 
 # -----------------------------
