@@ -39,6 +39,7 @@ services:
       - "8001:8000"  # 8000 inside the container but mapped to 8001 on host
     depends_on:
       - db
+      - redis
     volumes: 
       - ../backend:/app
     networks:
@@ -69,19 +70,12 @@ services:
       - yugantar-network
     restart: unless-stopped
 
-  # portainer:
-  #   image: portainer/portainer-ce:2.32.0
-  #   # image: portainer/portainer-ce:latest
-  #   container_name: portainer
-  #   restart: always
-  #   volumes:
-  #     - /var/run/docker.sock:/var/run/docker.sock
-  #     - portainer_data:/data
-  #   ports:
-  #     - "9000:9000"
-  #     - "9443:9443" 
-  #   networks:
-  #     - yugantar-network
+  redis:
+    image: redis:latest
+    container_name: yugantar-redis
+    networks:
+      - yugantar-network
+    restart: unless-stopped
     
   
 # secrets:
