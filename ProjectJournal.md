@@ -17,8 +17,10 @@
 - [x] Create loan service
 - [x] Registration Successful Email Notifications
 - [ ] Forgot/Reset/renew account password
+- [x] Change Password
 - [x] Account Login and Logout
 - [x] Account verification (send link using `itsdangerous` package)
+- [x] Update user profile
 - [ ] Log every user's activity
 - [x] Create Deposit policy
 - [ ] Edit and Delete polity (must be either admin/moderator)
@@ -83,7 +85,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 - More closely:
 - `docker compose up --watch`
-- `docke rcompose down` or `docker compose down -v` (to remove volumes)
+- `docker compose down` or `docker compose down -v` (to remove volumes)
 - `docker compose run backend /bin/bash --remove-orphans` (name of service)
 - OR: `docker compose run backend python --remove-orphans`
 
@@ -351,7 +353,14 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 - Solved the issue of token local storage. This resolved the issue of login, signup and user edit profile.
 
-  - The way the backend was send the token and the way frontend was retrieving the token wasn't aligned.
+  - The way the backend was sending the token and the way frontend was retrieving the token wasn't aligned.
   - This caused the token mismatch.
 
 - Added a new endpoint for `users/me/change-password`
+
+---
+
+### 2025-12-13
+
+- Storing tokens in redis with expiry time
+- Handling tokens when logs out
