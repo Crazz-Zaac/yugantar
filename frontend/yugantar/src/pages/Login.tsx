@@ -13,7 +13,6 @@ import {
 } from "@/components/AnimationSVGs";
 import { Eye, EyeOff, ArrowRight, Mail, Lock, User, Phone } from "lucide-react";
 import { toast } from "sonner";
-import { set } from "react-hook-form";
 
 export default function Login() {
   // wouter location
@@ -27,9 +26,6 @@ export default function Login() {
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [showPassword, setShowPassword] = useState(false);
 
-  // toolkit navigation
-  // const navigate = useNavigate();
-
   // form data
   const [formData, setFormData] = useState({
     email: "",
@@ -39,7 +35,7 @@ export default function Login() {
     lastname: "",
     phonenumber: "",
     address: "",
-    gender: "other" as "male" | "female" | "other", // Add this
+    gender: "other" as "male" | "female" | "other", 
     confirmPassword: "",
   });
 
@@ -55,14 +51,8 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-
-    console.log("=== DEBUG INFO ===");
-    console.log("isLogin state:", isLogin);
-    console.log("!isLogin:", !isLogin);
-    console.log("API Base:", import.meta.env.VITE_API_BASE);
     try {
       if (!isLogin) {
-        console.log("Taking SIGNUP path");
         if (!formData.firstname) {
           toast.error("Please enter your name");
           setIsLoading(false);
@@ -96,10 +86,15 @@ export default function Login() {
           confirmPassword: "",
         });
       } else {
-        await login(formData.email, formData.password);
-        toast.success("Logged in successfully!");
+        const loggedInUser = await login(formData.email, formData.password);
+        if (loggedInUser?.access_roles.includes("admin")) {
+          toast.success("Welcome back, Admin!");
+          setLocation("/admin");
+        } else {
+          setLocation("/dashboard");
+          toast.success("Logged in successfully!");
+        }
       }
-      setLocation("/dashboard");
     } catch (error: any) {
       const errorMessage =
         error.message ||

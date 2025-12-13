@@ -2,245 +2,297 @@ import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Header } from "@/components/Header";
 import {
   Users,
   Shield,
   Activity,
   Settings,
+  Lock,
   LogOut,
   Menu,
   X,
   Trash2,
+  // Edit,
   Edit,
   Eye,
-  AlertCircle
+  MoreVertical,
+  AlertCircle,
+  FlaskRound,
 } from "lucide-react";
-import { UserForUI } from "@/utils/normalizeUser";
 
-// Helper function to check if user is admin
-const isAdmin = (user: UserForUI | null): boolean => {
-  if (!user) return false;
-  return user.access_roles.split(",").includes("admin");
-};
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: "admin" | "member" | "moderator";
+  cooperativeRole: "chairman" | "secretary" | "treasurer" | "member";
+  joinDate: string;
+  status: "active" | "inactive";
+  lastActivity: string;
+}
 
-export default function AdminDashboard() {
-  const { user, logout } = useAuth();
+const mockUsers: User[] = [
+  {
+    id: "1",
+    name: "Rajesh Kumar",
+    email: "rajesh@example.com",
+    role: "admin",
+    cooperativeRole: "chairman",
+    joinDate: "2023-01-15",
+    status: "active",
+    lastActivity: "2 minutes ago",
+  },
+  {
+    id: "2",
+    name: "Priya Sharma",
+    email: "priya@example.com",
+    role: "moderator",
+    cooperativeRole: "treasurer",
+    joinDate: "2023-02-20",
+    status: "active",
+    lastActivity: "1 hour ago",
+  },
+  {
+    id: "3",
+    name: "Amit Patel",
+    email: "amit@example.com",
+    role: "member",
+    cooperativeRole: "member",
+    joinDate: "2023-03-10",
+    status: "active",
+    lastActivity: "3 hours ago",
+  },
+  {
+    id: "4",
+    name: "Neha Singh",
+    email: "neha@example.com",
+    role: "member",
+    cooperativeRole: "member",
+    joinDate: "2023-04-05",
+    status: "inactive",
+    lastActivity: "5 days ago",
+  },
+];
+
+const AdminSection = ({
+  title,
+  children,
+  icon: Icon,
+}: {
+  title: string;
+  children: React.ReactNode;
+  icon: React.ReactNode;
+}) => (
+  <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+    <div className="flex items-center gap-3 mb-6">
+      <div className="p-2 bg-primary/10 rounded-lg">{Icon}</div>
+      <h2 className="text-xl font-semibold text-foreground">{title}</h2>
+    </div>
+    {children}
+  </div>
+);
+
+export default function Admin() {
+  const { logout } = useAuth();
   const [, setLocation] = useLocation();
-  const [activeTab, setActiveTab] = useState("overview");
+  const [activeTab, setActiveTab] = useState("users");
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // Check if user is admin
-  if (!isAdmin(user)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="p-8 border border-gray-200 text-center max-w-md">
-          <AlertCircle className="w-12 h-12 text-red-600 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h2>
-          <p className="text-gray-600 mb-6">You don't have permission to access the admin dashboard.</p>
-          <Button
-            onClick={() => setLocation("/dashboard")}
-            className="bg-[#274add] hover:bg-[#062497] text-white"
-          >
-            Go to Dashboard
-          </Button>
-        </Card>
-      </div>
-    );
-  }
+  const [users, setUsers] = useState<User[]>(mockUsers);
 
   const handleLogout = () => {
     logout();
-    setLocation("/");
+    setLocation("/login");
   };
 
-  const adminUsers = [
-    { id: 1, name: "John Doe", email: "john@cooperative.com", role: "admin", status: "active", joinDate: "2024-01-15" },
-    { id: 2, name: "Jane Smith", email: "jane@cooperative.com", role: "member", status: "active", joinDate: "2024-02-20" },
-    { id: 3, name: "Mike Johnson", email: "mike@cooperative.com", role: "member", status: "active", joinDate: "2024-03-10" },
-    { id: 4, name: "Sarah Wilson", email: "sarah@cooperative.com", role: "moderator", status: "inactive", joinDate: "2024-01-05" },
-    { id: 5, name: "Tom Brown", email: "tom@cooperative.com", role: "member", status: "active", joinDate: "2024-04-01" }
-  ];
+  const deleteUser = (id: string) => {
+    setUsers(users.filter(user => user.id !== id));
+  };
 
-  const activityLog = [
-    { id: 1, user: "Jane Smith", action: "Deposited $500", timestamp: "2 hours ago", type: "deposit" },
-    { id: 2, user: "Mike Johnson", action: "Requested loan of $2,000", timestamp: "5 hours ago", type: "loan" },
-    { id: 3, user: "Sarah Wilson", action: "Updated profile information", timestamp: "1 day ago", type: "profile" },
-    { id: 4, user: "Tom Brown", action: "Withdrew $300", timestamp: "2 days ago", type: "withdrawal" },
-    { id: 5, user: "John Doe", action: "Generated monthly report", timestamp: "3 days ago", type: "report" }
-  ];
+  const toggleUserStatus = (id: string) => {
+    setUsers(
+      users.map(user =>
+        user.id === id
+          ? {
+              ...user,
+              status: user.status === "active" ? "inactive" : "active",
+            }
+          : user
+      )
+    );
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-40">
-        <div className="flex items-center justify-between px-4 sm:px-6 py-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="lg:hidden p-2 hover:bg-gray-100 rounded-lg"
-            >
-              {sidebarOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#274add] to-[#062497] flex items-center justify-center">
-                <span className="text-white font-bold text-sm">C</span>
-              </div>
-              <span className="font-bold text-lg text-gray-900 hidden sm:inline">Admin Panel</span>
-            </div>
+    <div className="min-h-screen bg-background">
+      <Header showLogout={true} onLogout={handleLogout} />
+
+      <main className="px-4 sm:px-6 lg:px-8 py-8">
+        <div className="max-w-7xl mx-auto space-y-8">
+          {/* Header */}
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">
+              Admin Dashboard
+            </h1>
+            <p className="text-muted-foreground">
+              Manage users, roles, and cooperative settings
+            </p>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium text-gray-900">{user?.first_name}</p>
-              <p className="text-xs text-gray-600 font-semibold text-[#274add]">Administrator</p>
-            </div>
+          {/* Tabs */}
+          <div className="flex gap-2 border-b border-border">
             <button
-              onClick={handleLogout}
-              className="p-2 hover:bg-gray-100 rounded-lg text-gray-600 hover:text-gray-900"
-              title="Logout"
+              onClick={() => setActiveTab("users")}
+              className={`flex items-center gap-2 rounded-none px-4 py-2 font-medium border-b-2 ${
+                activeTab === "users"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:bg-transparent"
+              }`}
             >
-              <LogOut className="w-5 h-5" />
+              <Users className="h-4 w-4 mr-2" />
+              User Management
+            </button>
+            <button
+              onClick={() => setActiveTab("roles")}
+              className={`flex items-center gap-2 rounded-none px-4 py-2 font-medium border-b-2 ${
+                activeTab === "roles"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:bg-transparent"
+              }`}
+            >
+              <Shield className="h-4 w-4 mr-2" />
+              Role Management
+            </button>
+            <button
+              onClick={() => setActiveTab("activity")}
+              className={`flex items-center gap-2 rounded-none px-4 py-2 font-medium border-b-2 ${
+                activeTab === "activity"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:bg-transparent"
+              }`}
+            >
+              <Activity className="h-4 w-4 mr-2" />
+              Activity Logs
+            </button>
+            <button
+              onClick={() => setActiveTab("settings")}
+              className={`flex items-center gap-2 rounded-none px-4 py-2 font-medium border-b-2 ${
+                activeTab === "settings"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:bg-transparent"
+              }`}
+            >
+              <Settings className="h-4 w-4 mr-2" />
+              System Settings
             </button>
           </div>
-        </div>
-      </header>
 
-      <div className="flex">
-        {/* Sidebar */}
-        <aside
-          className={`${
-            sidebarOpen ? "translate-x-0" : "-translate-x-full"
-          } lg:translate-x-0 fixed lg:relative w-64 h-[calc(100vh-73px)] bg-white border-r border-gray-200 transition-transform duration-300 z-30 overflow-y-auto`}
-        >
-          <nav className="p-4 space-y-2">
-            {[
-              { id: "overview", label: "Overview", icon: Shield },
-              { id: "users", label: "User Management", icon: Users },
-              { id: "activity", label: "User Activity", icon: Activity },
-              { id: "roles", label: "Role Assignment", icon: Shield },
-              { id: "settings", label: "Admin Settings", icon: Settings }
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setActiveTab(item.id);
-                  setSidebarOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  activeTab === item.id
-                    ? "bg-[#274add] text-white"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="font-medium">{item.label}</span>
-              </button>
-            ))}
-          </nav>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 p-4 sm:p-6">
-          {activeTab === "overview" && (
-            <div className="space-y-6">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-                <p className="text-gray-600 mt-2">Manage cooperative members, roles, and system settings</p>
-              </div>
-
-              {/* Admin Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {[
-                  { label: "Total Users", value: "850", color: "#274add" },
-                  { label: "Active Sessions", value: "234", color: "#2c804c" },
-                  { label: "Pending Approvals", value: "12", color: "#e33400" },
-                  { label: "System Health", value: "99.8%", color: "#ffd900" }
-                ].map((stat, i) => (
-                  <Card key={i} className="p-6 border border-gray-200">
-                    <p className="text-sm text-gray-600 font-medium">{stat.label}</p>
-                    <p className="text-3xl font-bold mt-2" style={{ color: stat.color }}>
-                      {stat.value}
-                    </p>
-                  </Card>
-                ))}
-              </div>
-
-              {/* Quick Actions */}
-              <Card className="p-6 border border-gray-200">
-                <h2 className="text-lg font-bold text-gray-900 mb-4">Quick Actions</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <Button className="bg-[#274add] hover:bg-[#062497] text-white">
-                    Add New User
-                  </Button>
-                  <Button variant="outline" className="border-[#274add] text-[#274add]">
-                    Generate Report
-                  </Button>
-                  <Button variant="outline" className="border-[#274add] text-[#274add]">
-                    System Backup
-                  </Button>
-                  <Button variant="outline" className="border-[#274add] text-[#274add]">
-                    View Logs
-                  </Button>
-                </div>
-              </Card>
-            </div>
-          )}
-
+          {/* Content */}
           {activeTab === "users" && (
-            <div className="space-y-6">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
-                <Button className="bg-[#274add] hover:bg-[#062497] text-white">
-                  + Add User
-                </Button>
-              </div>
-
-              <Card className="p-6 border border-gray-200">
+            <AdminSection
+              title="User Management"
+              icon={<Users className="h-5 w-5 text-primary" />}
+            >
+              <div className="space-y-4">
+                {/* User List */}
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Name</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Email</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Role</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Status</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Join Date</th>
-                        <th className="text-left py-3 px-4 font-semibold text-gray-700">Actions</th>
+                      <tr className="border-b border-border">
+                        <th className="text-left py-3 px-4 font-semibold text-foreground">
+                          Name
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-foreground">
+                          Email
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-foreground">
+                          Access Role
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-foreground">
+                          Cooperative Role
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-foreground">
+                          Status
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-foreground">
+                          Last Activity
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-foreground">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
+
                     <tbody>
-                      {adminUsers.map((u) => (
-                        <tr key={u.id} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-3 px-4 font-medium text-gray-900">{u.name}</td>
-                          <td className="py-3 px-4 text-gray-600">{u.email}</td>
+                      {users.map(user => (
+                        <tr
+                          key={user.id}
+                          className="border-b border-border hover:bg-muted/50 transition-colors"
+                        >
+                          <td className="py-3 px-4 text-foreground">
+                            {user.name}
+                          </td>
+
+                          <td className="py-3 px-4 text-muted-foreground">
+                            {user.email}
+                          </td>
+
+                          {/* Access Role */}
                           <td className="py-3 px-4">
-                            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                              {u.role}
+                            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-primary/10 text-primary">
+                              {user.role}
                             </span>
                           </td>
+
+                          {/* Cooperative Role */}
+                          <td className="py-3 px-4">
+                            <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-secondary/10 text-secondary-foreground">
+                              {user.cooperativeRole}
+                            </span>
+                          </td>
+
+                          {/* Status */}
                           <td className="py-3 px-4">
                             <span
-                              className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                                u.status === "active"
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-gray-100 text-gray-800"
+                              className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
+                                user.status === "active"
+                                  ? "bg-success/10 text-success"
+                                  : "bg-muted text-muted-foreground"
                               }`}
                             >
-                              {u.status}
+                              {user.status}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-gray-600">{u.joinDate}</td>
+
+                          <td className="py-3 px-4 text-muted-foreground">
+                            {user.lastActivity}
+                          </td>
+
+                          {/* Actions (left-aligned now) */}
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-2">
-                              <button className="p-2 hover:bg-gray-200 rounded-lg text-gray-600 hover:text-gray-900">
-                                <Eye className="w-4 h-4" />
+                              <button
+                                className="h-8 w-8 p-0"
+                                onClick={() => toggleUserStatus(user.id)}
+                                title={
+                                  user.status === "active"
+                                    ? "Deactivate"
+                                    : "Activate"
+                                }
+                              >
+                                <Lock className="h-4 w-4" />
                               </button>
-                              <button className="p-2 hover:bg-gray-200 rounded-lg text-gray-600 hover:text-gray-900">
-                                <Edit className="w-4 h-4" />
+
+                              <button
+                                className="h-8 w-8 p-0 text-accent hover:text-accent/80"
+                                onClick={() => deleteUser(user.id)}
+                                title="Delete user"
+                              >
+                                <Trash2 className="h-4 w-4" />
                               </button>
-                              <button className="p-2 hover:bg-red-100 rounded-lg text-gray-600 hover:text-red-600">
-                                <Trash2 className="w-4 h-4" />
+
+                              <button className="h-8 w-8 p-0">
+                                <MoreVertical className="h-4 w-4" />
                               </button>
                             </div>
                           </td>
@@ -249,113 +301,211 @@ export default function AdminDashboard() {
                     </tbody>
                   </table>
                 </div>
-              </Card>
-            </div>
-          )}
-
-          {activeTab === "activity" && (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-gray-900">User Activity Log</h2>
-
-              <Card className="p-6 border border-gray-200">
-                <div className="space-y-4">
-                  {activityLog.map((log) => (
-                    <div key={log.id} className="flex items-start gap-4 pb-4 border-b border-gray-100 last:border-b-0">
-                      <div className="w-10 h-10 rounded-full bg-[#274add]/10 flex items-center justify-center flex-shrink-0">
-                        <Activity className="w-5 h-5 text-[#274add]" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">{log.user}</p>
-                        <p className="text-sm text-gray-600">{log.action}</p>
-                        <p className="text-xs text-gray-500 mt-1">{log.timestamp}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </div>
+              </div>
+            </AdminSection>
           )}
 
           {activeTab === "roles" && (
-            <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-gray-900">Role Assignment</h2>
+            <AdminSection
+              title="Role Management"
+              icon={<Shield className="h-5 w-5 text-primary" />}
+            >
+              <div className="space-y-6">
+                {/* Admin Role */}
+                <div className="border border-border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-foreground">Admin</h3>
+                    <button className="gap-2">
+                      <Edit className="h-4 w-4" />
+                      Edit
+                    </button>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Full system access - manage users, roles, and settings
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs rounded">
+                      User Management
+                    </span>
+                    <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs rounded">
+                      Role Assignment
+                    </span>
+                    <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs rounded">
+                      Delete Users
+                    </span>
+                    <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs rounded">
+                      System Settings
+                    </span>
+                  </div>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Moderator Role */}
+                <div className="border border-border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-foreground">Moderator</h3>
+                    <button className="gap-2">
+                      <Edit className="h-4 w-4" />
+                      Edit
+                    </button>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Limited administrative access - manage members and view
+                    reports
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs rounded">
+                      View Users
+                    </span>
+                    <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs rounded">
+                      View Reports
+                    </span>
+                    <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs rounded">
+                      Send Notifications
+                    </span>
+                  </div>
+                </div>
+
+                {/* Member Role */}
+                <div className="border border-border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-foreground">Member</h3>
+                    <button className="gap-2">
+                      <Edit className="h-4 w-4" />
+                      Edit
+                    </button>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Standard access - view personal data and transactions
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs rounded">
+                      View Dashboard
+                    </span>
+                    <span className="inline-block px-3 py-1 bg-primary/10 text-primary text-xs rounded">
+                      View Transactions
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </AdminSection>
+          )}
+
+          {activeTab === "activity" && (
+            <AdminSection
+              title="Activity Logs"
+              icon={<Activity className="h-5 w-5 text-primary" />}
+            >
+              <div className="space-y-3">
                 {[
-                  { name: "Admin", description: "Full system access", members: 2 },
-                  { name: "Moderator", description: "Manage members and approvals", members: 5 },
-                  { name: "Member", description: "Standard member access", members: 843 }
-                ].map((role, i) => (
-                  <Card key={i} className="p-6 border border-gray-200">
-                    <h3 className="font-bold text-lg text-gray-900 mb-2">{role.name}</h3>
-                    <p className="text-sm text-gray-600 mb-4">{role.description}</p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-2xl font-bold text-[#274add]">{role.members}</span>
-                      <Button variant="outline" size="sm" className="border-[#274add] text-[#274add]">
-                        Manage
-                      </Button>
-                    </div>
-                  </Card>
+                  "Rajesh Kumar logged in - 2 minutes ago",
+                  "Priya Sharma created new loan request - 1 hour ago",
+                  "Amit Patel made deposit of ₹5,000 - 3 hours ago",
+                  "System backup completed - 1 day ago",
+                  "Neha Singh account deactivated - 5 days ago",
+                  "New member Vikram Singh registered - 1 week ago",
+                  "Interest calculated for all accounts - 2 weeks ago",
+                ].map((log, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-4 p-3 border border-border rounded hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="w-2 h-2 bg-primary rounded-full"></div>
+                    <p className="text-sm text-foreground flex-1">{log}</p>
+                  </div>
                 ))}
               </div>
-            </div>
+            </AdminSection>
           )}
 
           {activeTab === "settings" && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-bold text-gray-900">Admin Settings</h2>
-
-              <Card className="p-6 border border-gray-200">
-                <div className="space-y-6">
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-900 mb-4">System Configuration</h3>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Cooperative Name
-                        </label>
-                        <input
-                          type="text"
-                          defaultValue="Cooperative Financial Platform"
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#274add] focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Admin Email
-                        </label>
-                        <input
-                          type="email"
-                          defaultValue="admin@cooperative.com"
-                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#274add] focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="flex items-center gap-2">
-                          <input type="checkbox" defaultChecked className="w-4 h-4" />
-                          <span className="text-sm font-medium text-gray-700">Enable new member approvals</span>
-                        </label>
-                      </div>
-                      <div>
-                        <label className="flex items-center gap-2">
-                          <input type="checkbox" defaultChecked className="w-4 h-4" />
-                          <span className="text-sm font-medium text-gray-700">Enable two-factor authentication</span>
-                        </label>
-                      </div>
+              <AdminSection
+                title="General Settings"
+                icon={<Settings className="h-5 w-5 text-primary" />}
+              >
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Cooperative Name
+                      </label>
+                      <input
+                        type="text"
+                        value="ABC Wealth Management"
+                        className="w-full px-3 py-2 border border-border rounded bg-background text-foreground"
+                        readOnly
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-foreground mb-2">
+                        Registration Number
+                      </label>
+                      <input
+                        type="text"
+                        value="ABC-2023-001"
+                        className="w-full px-3 py-2 border border-border rounded bg-background text-foreground"
+                        readOnly
+                      />
                     </div>
                   </div>
-
-                  <div className="pt-6 border-t border-gray-200">
-                    <Button className="bg-[#274add] hover:bg-[#062497] text-white">
-                      Save Settings
-                    </Button>
-                  </div>
+                  <Button className="bg-primary text-primary-foreground hover:bg-primary/90 px-6">
+                    Save Changes
+                  </Button>
                 </div>
-              </Card>
+              </AdminSection>
+
+              <AdminSection
+                title="Cooperative Roles"
+                icon={<Shield className="h-5 w-5 text-primary" />}
+              >
+                <div className="space-y-3">
+                  {["Chairman", "Secretary", "Treasurer", "Member"].map(
+                    role => (
+                      <div
+                        key={role}
+                        className="flex items-center justify-between p-3 border border-border rounded hover:bg-muted/50"
+                      >
+                        <span className="text-foreground font-medium">
+                          {role}
+                        </span>
+                        <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+                          Assign
+                        </Button>
+                      </div>
+                    )
+                  )}
+                </div>
+              </AdminSection>
+
+              <AdminSection
+                title="Security Settings"
+                icon={<Lock className="h-5 w-5 text-primary" />}
+              >
+                <div className="space-y-4">
+                  <label className="flex items-center gap-3 p-3 border border-border rounded cursor-pointer hover:bg-muted/50">
+                    <input type="checkbox" className="rounded" defaultChecked />
+                    <span className="text-foreground">
+                      Enable two-factor authentication
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-3 p-3 border border-border rounded cursor-pointer hover:bg-muted/50">
+                    <input type="checkbox" className="rounded" defaultChecked />
+                    <span className="text-foreground">
+                      Require password reset on first login
+                    </span>
+                  </label>
+                  <label className="flex items-center gap-3 p-3 border border-border rounded cursor-pointer hover:bg-muted/50">
+                    <input type="checkbox" className="rounded" defaultChecked />
+                    <span className="text-foreground">
+                      Log all admin activities
+                    </span>
+                  </label>
+                </div>
+              </AdminSection>
             </div>
           )}
-        </main>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

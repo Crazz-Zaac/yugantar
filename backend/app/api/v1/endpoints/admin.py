@@ -18,12 +18,19 @@ async def list_users(
     skip: int = 0,
     limit: int = Query(10, le=100),
     session: Session = Depends(get_session),
-    # current_admin: User = Depends(get_current_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
     """
     List users with pagination. Admin access required.
     """
+    if not current_admin:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Admin access required",
+        )
     users = user_service.get_all_users(session=session, skip=skip, limit=limit)
+    if not users:
+        return []
     return users
 
 
@@ -31,11 +38,16 @@ async def list_users(
 async def get_user_as_admin(
     user_id: UUID,
     session: Session = Depends(get_session),
-    # current_admin: User = Depends(get_current_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
     """
     Get user details by ID. Admin access required.
     """
+    if not current_admin:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Admin access required",
+        )
     user = user_service.get_user_by_id(session=session, user_id=user_id)
     if not user:
         raise HTTPException(

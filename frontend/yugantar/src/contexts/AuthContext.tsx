@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { User } from "@/types/user";
 import { apiClient } from "@/api/api";
+import { ENV } from "@/config/env";
 import {
   normalizeUser,
   UserForUI,
@@ -12,7 +13,7 @@ interface AuthContextType {
   user: UserForUI | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<UserForUI>;
   signup: (...args: any) => Promise<void>;
   logout: () => void;
   updateProfile: (data: EditableUserFields) => Promise<void>;
@@ -23,8 +24,7 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const API_BASE = import.meta.env.VITE_API_BASE;
-
+const API_BASE = ENV.API_BASE;
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserForUI | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -52,32 +52,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initAuth();
   }, []);
-
-  // useEffect(() => {
-  //   const checkAuth = async () => {
-  //     try {
-  //       const token = localStorage.getItem("access_token");
-  //       if (token) {
-  //         const res = await fetch(`${API_BASE}/users/me`, {
-  //           headers: { Authorization: `Bearer ${token}` },
-  //         });
-  //         if (res.ok) {
-  //           const data: User = await res.json();
-  //           setUser(normalizeUser(data));
-  //         } else {
-  //           localStorage.removeItem("access_token");
-  //           localStorage.removeItem("refresh_token");
-  //           setUser(null);
-  //         }
-  //       }
-  //     } catch (err) {
-  //       console.error("Auth check failed:", err);
-  //     } finally {
-  //       setIsLoading(false);
-  //     }
-  //   };
-  //   checkAuth();
-  // }, []);
 
   const signup = async (userData: Partial<UserForUI>, password: string) => {
     setIsLoading(true);
@@ -132,7 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<UserForUI> => {
     setIsLoading(true);
     try {
       const res = await apiClient.post("/users/login", {
@@ -146,7 +120,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       apiClient.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
 
       const me = await apiClient.get("/users/me");
-      setUser(normalizeUser(me.data));
+      const normalized_user = normalizeUser(me.data);
+      setUser(normalized_user);
+      return normalized_user;
     } catch (err) {
       console.error("Login error:", err);
       throw err;
