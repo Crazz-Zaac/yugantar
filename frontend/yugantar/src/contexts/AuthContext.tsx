@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { User } from "@/types/user";
+import { apiClient } from "@/api/api";
 import {
   normalizeUser,
   UserForUI,
@@ -29,30 +30,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const checkAuth = async () => {
+    const initAuth = async () => {
+      const token = localStorage.getItem("access_token");
+      if (!token) {
+        setIsLoading(false);
+        return;
+      }
+
+      apiClient.defaults.headers.common.Authorization = `Bearer ${token}`;
+
       try {
-        const token = localStorage.getItem("access_token");
-        if (token) {
-          const res = await fetch(`${API_BASE}/users/me`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (res.ok) {
-            const data: User = await res.json();
-            setUser(normalizeUser(data));
-          } else {
-            localStorage.removeItem("access_token");
-            localStorage.removeItem("refresh_token");
-            setUser(null);
-          }
-        }
-      } catch (err) {
-        console.error("Auth check failed:", err);
+        const res = await apiClient.get("/users/me");
+        setUser(normalizeUser(res.data));
+      } catch {
+        localStorage.removeItem("access_token");
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
     };
-    checkAuth();
+
+    initAuth();
   }, []);
+
+  // useEffect(() => {
+  //   const checkAuth = async () => {
+  //     try {
+  //       const token = localStorage.getItem("access_token");
+  //       if (token) {
+  //         const res = await fetch(`${API_BASE}/users/me`, {
+  //           headers: { Authorization: `Bearer ${token}` },
+  //         });
+  //         if (res.ok) {
+  //           const data: User = await res.json();
+  //           setUser(normalizeUser(data));
+  //         } else {
+  //           localStorage.removeItem("access_token");
+  //           localStorage.removeItem("refresh_token");
+  //           setUser(null);
+  //         }
+  //       }
+  //     } catch (err) {
+  //       console.error("Auth check failed:", err);
+  //     } finally {
+  //       setIsLoading(false);
+  //     }
+  //   };
+  //   checkAuth();
+  // }, []);
 
   const signup = async (userData: Partial<UserForUI>, password: string) => {
     setIsLoading(true);
@@ -110,48 +135,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/users/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      const res = await apiClient.post("/users/login", {
+        email,
+        password,
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || "Login failed");
-      }
+      const accessToken = res.data.token.access_token;
+      localStorage.setItem("access_token", accessToken);
 
-      const data = await res.json();
-      console.log("=== LOGIN RESPONSE DEBUG ===");
-      console.log("Full response:", data);
+      apiClient.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
 
-      // Backend returns tokens nested in 'token' object
-      const accessToken = data.token?.access_token || data.access_token;
-      const refreshToken = data.token?.refresh_token || data.refresh_token;
-
-      console.log("Access token:", accessToken);
-      console.log("Access token type:", typeof accessToken);
-      console.log("Access token length:", accessToken?.length);
-
-      // Store tokens
-      if (accessToken) {
-        localStorage.setItem("access_token", accessToken);
-        console.log("✓ Access token stored");
-      } else {
-        console.error("No access token in response!");
-      }
-
-      if (refreshToken) {
-        localStorage.setItem("refresh_token", refreshToken);
-        console.log("✓ Refresh token stored");
-      }
-
-      // Verify storage
-      const storedToken = localStorage.getItem("access_token");
-      console.log("Stored token length:", storedToken?.length);
-      console.log("Stored token preview:", storedToken?.substring(0, 20));
-
-      setUser(normalizeUser(data.user));
+      const me = await apiClient.get("/users/me");
+      setUser(normalizeUser(me.data));
     } catch (err) {
       console.error("Login error:", err);
       throw err;
@@ -162,21 +157,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
-      const token = localStorage.getItem("access_token");
-
-      if (token) {
-        await fetch(`${API_BASE}/users/logout`, {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-      }
+      await apiClient.post("/users/logout");
     } catch (err) {
       console.error("Logout error:", err);
     } finally {
       localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
       setUser(null);
     }
   };

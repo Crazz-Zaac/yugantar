@@ -1,11 +1,20 @@
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Lock, Bell, Shield, BadgeCheck, BadgeX, Eye, EyeOff } from "lucide-react";
+import {
+  Lock,
+  Bell,
+  Shield,
+  BadgeCheck,
+  BadgeX,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { getEditableFields } from "@/utils/normalizeUser";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
 
 export default function Settings() {
   const [activeTab, setActiveTab] = useState("account");
@@ -13,7 +22,9 @@ export default function Settings() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const { user, updateProfile, changePassword } = useAuth();
+  const [, setLocation] = useLocation();
 
+  // Profile Form State
   const [formData, setFormData] = useState(getEditableFields(user));
 
   // Change Password Modal State
@@ -30,6 +41,37 @@ export default function Settings() {
   });
   const [passwordError, setPasswordError] = useState("");
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const validatePassword = (password: string) => {
+    const errors: string[] = [];
+
+    if (password.length < 8) {
+      errors.push("Password must be at least 8 characters");
+    }
+
+    if (new TextEncoder().encode(password).length > 72) {
+      errors.push("Password cannot exceed 72 bytes");
+    }
+
+    if (!/[A-Z]/.test(password)) {
+      errors.push("Password must contain at least one uppercase letter");
+    }
+
+    if (!/[a-z]/.test(password)) {
+      errors.push("Password must contain at least one lowercase letter");
+    }
+
+    if (!/\d/.test(password)) {
+      errors.push("Password must contain at least one digit");
+    }
+
+    return errors;
+  };
+
+  // track password validation errors
+  const [passwordValidationErrors, setPasswordValidationErrors] = useState<
+    string[]
+  >([]);
 
   useEffect(() => {
     if (user) {
@@ -57,7 +99,8 @@ export default function Settings() {
       setIsEditing(false);
       toast.success("Profile updated successfully!");
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Failed to update profile";
+      const errorMsg =
+        err instanceof Error ? err.message : "Failed to update profile";
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -77,15 +120,30 @@ export default function Settings() {
   };
 
   const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+
     setPasswordData(prev => ({
       ...prev,
-      [e.target.name]: e.target.value,
+      [name]: value,
     }));
+
     setPasswordError("");
+
+    if (name === "newPassword") {
+      const validationErrors = validatePassword(value);
+      setPasswordValidationErrors(validationErrors);
+    }
   };
 
   const handleChangePassword = async () => {
     setPasswordError("");
+
+    // Validate new password
+    const validationErrors = validatePassword(passwordData.newPassword);
+    if (validationErrors.length > 0) {
+      setPasswordValidationErrors(validationErrors);
+      return;
+    }
 
     // Validation
     if (!passwordData.currentPassword) {
@@ -111,16 +169,33 @@ export default function Settings() {
 
     setIsChangingPassword(true);
     try {
-      await changePassword(passwordData.currentPassword, passwordData.newPassword);
+      await changePassword(
+        passwordData.currentPassword,
+        passwordData.newPassword
+      );
       toast.success("Password changed successfully!");
+      // Success message
+      toast.success(
+        "Password changed successfully! Please log in again with your new password.",
+        {
+          duration: 5000,
+        }
+      );
+
       setShowPasswordModal(false);
       setPasswordData({
         currentPassword: "",
         newPassword: "",
         confirmPassword: "",
       });
+
+      // Redirect to login page after a short delay
+      setTimeout(() => {
+        setLocation("/login");
+      }, 2000);
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : "Failed to change password";
+      const errorMsg =
+        err instanceof Error ? err.message : "Failed to change password";
       setPasswordError(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -464,8 +539,8 @@ export default function Settings() {
                   Password
                 </h2>
               </div>
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 className="border-border"
                 onClick={() => setShowPasswordModal(true)}
               >
@@ -601,6 +676,17 @@ export default function Settings() {
                     )}
                   </button>
                 </div>
+                {passwordValidationErrors.length > 0 &&
+                  passwordData.newPassword && (
+                    <ul className="text-red-500 text-xs mt-2 space-y-1">
+                      {passwordValidationErrors.map((err, idx) => (
+                        <li key={idx} className="flex items-start gap-1">
+                          <span className="text-red-500 mt-0.5">•</span>
+                          <span>{err}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
               </div>
 
               <div className="space-y-2">
