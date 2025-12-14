@@ -1,7 +1,7 @@
 import uuid
 from typing import List, Optional
 from fastapi import HTTPException, status
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 
 from app.core.security import get_password_hash, verify_password
 from app.models.user_model import User
@@ -65,9 +65,15 @@ class UserService:
             )
         return user
 
+    def get_total_user_count(self, session: Session) -> int:
+        """Get total user count (admin only)."""
+        statement = select(func.count()).select_from(User)
+        total = session.exec(statement).one()
+        return total
+
     # this method is for admin use to get all users
     def get_all_users(
-        self, session: Session, skip: int = 0, limit: int = 100
+        self, session: Session, skip: int = 0, limit: int = 10
     ) -> List[User]:
         """Get all user (admin only)."""
         statement = select(User).offset(skip).limit(limit)

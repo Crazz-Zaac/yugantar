@@ -29,9 +29,9 @@ class UserBase(SQLModel):
 
     phone: str = Field(..., max_length=15)
     address: str = Field(..., max_length=255)
-    
+
     is_verified: bool = Field(default=False)
-    
+
     disabled: bool = Field(default=False)
     # user roles and cooperative roles will be assigned by the system/admin after registration
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -114,10 +114,10 @@ class UserPasswordChange(SQLModel):
 # Schema for returning user information (response model)
 class UserResponse(UserBase):
     id: uuid.UUID
-    
+
     access_roles: List[AccessRole]
     cooperative_roles: List[CooperativeRole]
-    
+
     created_at: datetime
     updated_at: datetime
 
@@ -137,8 +137,6 @@ class AdminAssignUserRoles(SQLModel):
 
     access_roles: Optional[List[AccessRole]] = None
     cooperative_roles: Optional[List[CooperativeRole]] = None
-    
-    disabled: Optional[bool] = None
 
 
 # Schema for admin to list users
@@ -159,6 +157,7 @@ class UserListResponse(SQLModel):
     access_roles: List[AccessRole]  # Fixed: was AccessRole (not a list)
     cooperative_roles: List[CooperativeRole]  # Fixed: was CooperativeRole (not a list)
 
+    is_verified: bool
     disabled: bool
     created_at: datetime
 
@@ -170,6 +169,13 @@ class UserListResponse(SQLModel):
         if self.middle_name:
             return f"{self.first_name} {self.middle_name} {self.last_name}"
         return f"{self.first_name} {self.last_name}"
+
+
+class PaginatedUserListResponse(SQLModel):
+    total: int
+    users: List[UserListResponse]
+    skip: int
+    limit: int
 
 
 # Schema for internal use with hashed password
@@ -212,7 +218,7 @@ class UserPublic(SQLModel):
 class LoginSuccess(SQLModel):
     token: TokenResponse
     user: UserResponse
-    
+
 
 class LoginRequest(SQLModel):
     email: EmailStr
