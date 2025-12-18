@@ -321,7 +321,7 @@ export default function AdminDashboard() {
 
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="bg-muted">
                     <tr className="border-b border-border">
                       <th className="text-left py-3 px-4 font-semibold text-foreground">
                         Name
@@ -346,6 +346,7 @@ export default function AdminDashboard() {
                       </th>
                     </tr>
                   </thead>
+
                   <tbody>
                     {paginatedUsers.length === 0 ? (
                       <tr>
@@ -362,10 +363,10 @@ export default function AdminDashboard() {
                           key={user.id}
                           className="border-b border-border hover:bg-muted/50 transition-colors"
                         >
-                          <td className="py-3 px-4">
+                          <td className="text-left py-3 px-4">
                             {user.first_name} {user.last_name}
                           </td>
-                          <td className="py-3 px-4 text-muted-foreground">
+                          <td className="text-left py-3 px-4 text-muted-foreground">
                             {user.email}
                           </td>
                           <td className="py-3 px-4">
@@ -392,8 +393,8 @@ export default function AdminDashboard() {
                               ))}
                             </div>
                           </td>
-                          <td className="py-3 px-4">
-                            <div className="inline-flex items-center gap-2 px-2 py-1 rounded text-xs font-medium">
+                          <td className="text-left py-3 px-4">
+                            <div className="text-left inline-flex items-center gap-2 px-2 py-1 rounded text-xs font-medium">
                               {user.is_verified === true ? (
                                 <>
                                   <BadgeCheck className="h-4 w-4 text-green-500" />
