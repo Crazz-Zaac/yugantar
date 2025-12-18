@@ -29,9 +29,9 @@ class UserBase(SQLModel):
 
     phone: str = Field(..., max_length=15)
     address: str = Field(..., max_length=255)
-    
+
     is_verified: bool = Field(default=False)
-    
+
     disabled: bool = Field(default=False)
     # user roles and cooperative roles will be assigned by the system/admin after registration
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -86,27 +86,11 @@ class UserUpdate(SQLModel):
     first_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     middle_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    gender: GenderEnum = Field(default=GenderEnum.OTHER)
+    date_of_birth: Optional[datetime] = Field(default=None)
     email: EmailStr = Field(default=None, max_length=100)
-    password: Optional[str] = Field(default=None, min_length=8, max_length=100)
     phone: Optional[str] = Field(default=None, max_length=15)
     address: Optional[str] = Field(default=None, max_length=255)
-
-    @field_validator("password")
-    def validate_password_strength(cls, value):
-        if value is None:
-            return value
-
-        # Ensure password doesn't exceed bcrypt's 72-byte limit
-        if len(value.encode("utf-8")) > 72:
-            raise ValueError("Password cannot exceed 72 bytes")
-
-        # Basic password strength validation
-        if not any(char.isdigit() for char in value):
-            raise ValueError("Password must contain at least one digit")
-        if not any(char.isalpha() for char in value):
-            raise ValueError("Password must contain at least one letter")
-
-        return value
 
 
 class UserPasswordChange(SQLModel):
@@ -130,10 +114,10 @@ class UserPasswordChange(SQLModel):
 # Schema for returning user information (response model)
 class UserResponse(UserBase):
     id: uuid.UUID
-    
+
     access_roles: List[AccessRole]
     cooperative_roles: List[CooperativeRole]
-    
+
     created_at: datetime
     updated_at: datetime
 
@@ -153,8 +137,6 @@ class AdminAssignUserRoles(SQLModel):
 
     access_roles: Optional[List[AccessRole]] = None
     cooperative_roles: Optional[List[CooperativeRole]] = None
-    
-    disabled: Optional[bool] = None
 
 
 # Schema for admin to list users
@@ -175,6 +157,7 @@ class UserListResponse(SQLModel):
     access_roles: List[AccessRole]  # Fixed: was AccessRole (not a list)
     cooperative_roles: List[CooperativeRole]  # Fixed: was CooperativeRole (not a list)
 
+    is_verified: bool
     disabled: bool
     created_at: datetime
 
@@ -186,6 +169,13 @@ class UserListResponse(SQLModel):
         if self.middle_name:
             return f"{self.first_name} {self.middle_name} {self.last_name}"
         return f"{self.first_name} {self.last_name}"
+
+
+class PaginatedUserListResponse(SQLModel):
+    total: int
+    users: List[UserListResponse]
+    skip: int
+    limit: int
 
 
 # Schema for internal use with hashed password
@@ -223,3 +213,13 @@ class UserPublic(SQLModel):
         if self.last_name:
             return f"{self.first_name} {self.last_name[0]}."
         return self.first_name
+
+
+class LoginSuccess(SQLModel):
+    token: TokenResponse
+    user: UserResponse
+
+
+class LoginRequest(SQLModel):
+    email: EmailStr
+    password: str

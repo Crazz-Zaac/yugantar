@@ -30,51 +30,52 @@ services:
     image: backend:v1
     build:
       context: ..
-      dockerfile: docker/Dockerfile.backend
+      # dockerfile: docker/Dockerfile.backend
+      dockerfile: docker/Dockerfile.backend.dev
     container_name: yugantar-backend
     env_file:
       - ../backend/.env
     ports:
-      - "8001:8000"
+      - "8001:8000"  # 8000 inside the container but mapped to 8001 on host
     depends_on:
       - db
+      - redis
+    volumes: 
+      - ../backend:/app
     networks:
       - yugantar-network
     restart: unless-stopped
   
-  # frontend:
-  #   image: frontend:v1
-  #   build:
-  #     context: ../frontend
-  #     dockerfile: ../docker/Dockerfile.frontend
-  #   container_name: yugantar-frontend
-  #   environment:
-  #     REACT_APP_API_URL: http://localhost:8000  # Adjust if backend is hosted elsewhere
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - backend
-  #   networks:
-  #     - yugantar-network
-  #   restart: unless-stopped
-  portainer:
-    image: portainer/portainer-ce:latest
-    container_name: portainer
-    # command: -H unix:///var/run/docker.sock
-    command: [
-        "--host", "unix:///var/run/docker.sock",
-        "--no-analytics"
-    ]
-    restart: always
-    user: "0:0"  # Run as root
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - portainer_data:/data
+  frontend:
+    image: frontend:v1
+    build:
+      context: ..
+      # dockerfile: docker/Dockerfile.frontend   # for production
+      dockerfile: docker/Dockerfile.frontend.dev
+    container_name: yugantar-frontend
+    environment:
+      CHOKIDAR_USEPOLLING: "true"       # ensures hot reload works on Docker
+      WATCHPACK_POLLING: "true"
+      REACT_APP_API_URL: http://backend:8000  # This should point to the backend service
+    command: npm run dev
     ports:
-      - "9000:9000"
-      - "8000:8000"
+      - "3000:3000"  # Vite default dev server port
+    depends_on:
+      - backend
+    #TODO: remove this volume in production
+    volumes:
+      - ../frontend/yugantar:/app       # live code changes reflect instantly
+      - /app/node_modules  
     networks:
       - yugantar-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:latest
+    container_name: yugantar-redis
+    networks:
+      - yugantar-network
+    restart: unless-stopped
     
   
 # secrets:
@@ -86,7 +87,7 @@ services:
 volumes:
   db_data:
   pgadmin_data:
-  portainer_data:
+  # portainer_data:
 
 networks:
   yugantar-network:

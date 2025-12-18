@@ -17,8 +17,10 @@
 - [x] Create loan service
 - [x] Registration Successful Email Notifications
 - [ ] Forgot/Reset/renew account password
+- [x] Change Password
 - [x] Account Login and Logout
 - [x] Account verification (send link using `itsdangerous` package)
+- [x] Update user profile
 - [ ] Log every user's activity
 - [x] Create Deposit policy
 - [ ] Edit and Delete polity (must be either admin/moderator)
@@ -83,7 +85,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 - More closely:
 - `docker compose up --watch`
-- `docke rcompose down` or `docker compose down -v` (to remove volumes)
+- `docker compose down` or `docker compose down -v` (to remove volumes)
 - `docker compose run backend /bin/bash --remove-orphans` (name of service)
 - OR: `docker compose run backend python --remove-orphans`
 
@@ -307,9 +309,11 @@ python -c "import secrets; print(secrets.token_hex(32))"
   - Another error I was making was by defining the endpoint as `verify-email/token`. That was totally wrong because the token would be coming as a query parameter. This led to wrong endpoint throwing errors.
 
 ---
+
 ## 2025-11-16
 
 - Deposit policy workflow
+
   ```bash
   CLIENT
     │
@@ -333,3 +337,51 @@ python -c "import secrets; print(secrets.token_hex(32))"
   DATABASE
 
   ```
+
+---
+
+## 2025-11-30
+
+- User login updates
+  - Created a `pages/Login.tsx` and `contexts/AuthContext.tsx`
+  - `AuthContext.tsx` handles authentication during login and signup creating tokens calling the fastapi endpoint
+  - `Login.tsx` calls the endpoints defined in the `AuthContext.tsx` and POST/GETs form data to and from the DB
+
+---
+
+## 2025-12-07
+
+- Solved the issue of token local storage. This resolved the issue of login, signup and user edit profile.
+
+  - The way the backend was sending the token and the way frontend was retrieving the token wasn't aligned.
+  - This caused the token mismatch.
+
+- Added a new endpoint for `users/me/change-password`
+
+---
+
+### 2025-12-13
+
+- Storing tokens in redis with expiry time
+- Handling tokens when user logs out
+
+---
+
+### 2025-12-14
+
+- Fixed the issue with `getAllUsers()` method. `UserListResponse` schema wasn't sending the `is_verified` field due to which
+  the value wasn't being properly displayed in the AdminDashboard `Verification Status` which was all being set to `Unverified`.
+- Was being unable to update the user `Verification Status` because I hadn't included the `is_verified` flag in the `UserListResponse()` class
+  - Including the flag in the schema solved the issue
+
+---
+
+### 2025-12-18
+
+- I was re-creating `refresh_token` using the `create_access_token()` method
+- Due to token expiry, the UI would silently log user out
+  - This was handled by passing a http token using `WithCredentials = True`
+- During user login, the data entered in the `Email` and `Password` field would be copied to `Email` and `Password` even when switched `Sign Up` form. This was because the same form field was being share between among `Login` and `Sign Up`
+  - This was solved by creating a separate `signUpData` and `loginData` using `{isLogin ? loginData.password : signupData.password}`
+
+---

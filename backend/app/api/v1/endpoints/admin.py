@@ -5,7 +5,12 @@ from uuid import UUID
 
 from app.core.db import get_session
 from app.models.user_model import User
-from app.schemas.user_schema import UserResponse, AdminAssignUserRoles, UserListResponse
+from app.schemas.user_schema import (
+    UserResponse,
+    AdminAssignUserRoles,
+    UserListResponse,
+    PaginatedUserListResponse,
+)
 from app.services.user_service import UserService
 from app.api.dependencies.admin import get_current_admin
 
@@ -13,29 +18,47 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 user_service = UserService()
 
 
-@router.get("/users", response_model=List[UserListResponse])
+@router.get("/users", response_model=PaginatedUserListResponse)
 async def list_users(
     skip: int = 0,
     limit: int = Query(10, le=100),
     session: Session = Depends(get_session),
-    # current_admin: User = Depends(get_current_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
     """
     List users with pagination. Admin access required.
     """
+    if not current_admin:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Admin access required",
+        )
     users = user_service.get_all_users(session=session, skip=skip, limit=limit)
-    return users
+    total = user_service.get_total_user_count(session=session)
+    if not users:
+        return []
+    return PaginatedUserListResponse(
+        total=total,
+        users=users,
+        skip=skip,
+        limit=limit,
+    )
 
 
 @router.get("/users/{user_id}", response_model=UserResponse)
 async def get_user_as_admin(
     user_id: UUID,
     session: Session = Depends(get_session),
-    # current_admin: User = Depends(get_current_admin),
+    current_admin: User = Depends(get_current_admin),
 ):
     """
     Get user details by ID. Admin access required.
     """
+    if not current_admin:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Admin access required",
+        )
     user = user_service.get_user_by_id(session=session, user_id=user_id)
     if not user:
         raise HTTPException(
@@ -95,7 +118,7 @@ async def delete_user_as_admin(
     return None
 
 
-@router.post("users/{user_id}/toggle-disabled", response_model=UserResponse)
+@router.post("/users/{user_id}/toggle-disabled", response_model=UserResponse)
 async def toggle_user_disabled_status(
     user_id: UUID,
     session: Session = Depends(get_session),
