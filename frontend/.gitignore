@@ -38,3 +38,6 @@ coverage/
 
 # Misc
 *.local
+
+# ignore .vite folder
+.vite/
