@@ -363,4 +363,25 @@ python -c "import secrets; print(secrets.token_hex(32))"
 ### 2025-12-13
 
 - Storing tokens in redis with expiry time
-- Handling tokens when logs out
+- Handling tokens when user logs out
+
+---
+
+### 2025-12-14
+
+- Fixed the issue with `getAllUsers()` method. `UserListResponse` schema wasn't sending the `is_verified` field due to which
+  the value wasn't being properly displayed in the AdminDashboard `Verification Status` which was all being set to `Unverified`.
+- Was being unable to update the user `Verification Status` because I hadn't included the `is_verified` flag in the `UserListResponse()` class
+  - Including the flag in the schema solved the issue
+
+---
+
+### 2025-12-18
+
+- I was re-creating `refresh_token` using the `create_access_token()` method
+- Due to token expiry, the UI would silently log user out
+  - This was handled by passing a http token using `WithCredentials = True`
+- During user login, the data entered in the `Email` and `Password` field would be copied to `Email` and `Password` even when switched `Sign Up` form. This was because the same form field was being share between among `Login` and `Sign Up`
+  - This was solved by creating a separate `signUpData` and `loginData` using `{isLogin ? loginData.password : signupData.password}`
+
+---
