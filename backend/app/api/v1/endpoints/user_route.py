@@ -91,15 +91,20 @@ async def login_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Generate tokens
+    # Generate access tokens
     access_token = await create_access_token(
-        subject=str(user.id), expires_delta=timedelta(minutes=15)
+        subject=str(user.id),
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
+    
+    # Generate refresh token
     refresh_token = str(uuid4())
     redis_key = f"refresh_token:{refresh_token}"
     redis_client.set(
         redis_key, str(user.id), ex=timedelta(days=7)
     )  # Store refresh token
+    
+    
     # set resfresh token in httpOnly cookie
     reponse.set_cookie(
         key="refresh_token",
@@ -107,7 +112,7 @@ async def login_user(
         httponly=True,
         max_age=7 * 24 * 60 * 60,  # 7 days
         secure=True,
-        samesite="strict",
+        samesite="lax",
     )
 
     login_token = TokenResponse(

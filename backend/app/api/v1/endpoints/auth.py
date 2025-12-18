@@ -38,12 +38,12 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expiry = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = await create_access_token(
         subject=str(
             user.id
         ),  # Fixed: was User.id (class) instead of user.id (instance)
-        expires_delta=access_token_expires,
+        expires_delta=access_token_expiry,
     )
 
     # generate refresh token
@@ -54,13 +54,6 @@ async def login_for_access_token(
         timedelta(days=7),  # Token valid for 7 days
         str(user.id),
     )
-
-    # Refresh token should have longer expiration
-    refresh_token_expires = timedelta(days=7)  # Adjust as needed
-    refresh_token = await create_access_token(
-        subject=str(user.id), expires_delta=refresh_token_expires  # Fixed: was User.id
-    )
-
     # send refresh token in response
     response.set_cookie(
         key="refresh_token",
@@ -68,7 +61,7 @@ async def login_for_access_token(
         httponly=True,
         max_age=7 * 24 * 60 * 60,  # 7 days
         secure=True,
-        samesite="strict",
+        samesite="lax",
     )
 
     return TokenResponse(
