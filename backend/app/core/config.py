@@ -79,6 +79,7 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = "yugantar_db"
+    
 
     @computed_field  # type: ignore[prop-decorator]
     @property

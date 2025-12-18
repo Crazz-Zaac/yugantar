@@ -1,13 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi_mail import NameEmail
 from fastapi import BackgroundTasks
 from sqlmodel import Session
 from uuid import UUID
+from uuid import uuid4
 from datetime import timedelta
 
 from app.core.db import get_session
 from app.models.user_model import User
-from app.schemas.user_schema import UserCreate, UserUpdate, UserResponse
+from app.schemas.user_schema import (
+    UserCreate,
+    UserUpdate,
+    UserResponse,
+    LoginSuccess,
+    TokenResponse,
+    LoginRequest,
+    UserPasswordChange,
+)
 from app.services.user_service import UserService
 from app.api.dependencies.auth import get_current_user
 from app.core.security import (
@@ -20,6 +29,7 @@ from app.services.email_notify import (
     send_registration_notification,
 )
 from app.core.config import settings
+from app.core.redis_client import redis_client
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -61,27 +71,62 @@ async def register_user(
         new_user.first_name + " " + new_user.last_name,
         verification_link,
     )
-
     return new_user
 
 
-@router.post("/login", response_model=UserResponse)
+@router.post("/login", response_model=LoginSuccess)
 async def login_user(
-    email: str,
-    password: str,
+    reponse: Response,
+    login_data: LoginRequest,
     session: Session = Depends(get_session),
 ):
     """
     Authenticate user and return user details.
     """
-    user = user_service.get_user_by_email(session=session, email=email)
-    if not user or not verify_password(password, user.hashed_password):
+    user = user_service.get_user_by_email(session=session, email=login_data.email)
+    if not user or not verify_password(login_data.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return user
+
+    # Generate access tokens
+    access_token = await create_access_token(
+        subject=str(user.id),
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+    
+    # Generate refresh token
+    refresh_token = str(uuid4())
+    redis_key = f"refresh_token:{refresh_token}"
+    redis_client.set(
+        redis_key, str(user.id), ex=timedelta(days=7)
+    )  # Store refresh token
+    
+    
+    # set resfresh token in httpOnly cookie
+    reponse.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        max_age=7 * 24 * 60 * 60,  # 7 days
+        secure=True,
+        samesite="lax",
+    )
+
+    login_token = TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+    )
+
+    user_response = LoginSuccess(
+        token=login_token,
+        user=UserResponse.model_validate(user),
+    )
+
+    return user_response
 
 
 @router.get("/me", response_model=UserResponse)
@@ -155,14 +200,41 @@ async def reset_password(
         ) from e
 
 
-@router.get("/logout", status_code=status.HTTP_200_OK)
-async def logout_user():
+@router.post("/me/change-password", status_code=status.HTTP_200_OK, tags=["password"])
+async def change_password(
+    payload: UserPasswordChange,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     """
-    Logout user by invalidating the token.
-    Note: Actual token invalidation logic depends on the token management strategy.
+    Change the current authenticated user's password.
     """
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
 
-    return {"msg": "User logged out successfully."}
+    user_service.change_user_password(
+        session=session, user=current_user, new_password=payload.new_password
+    )
+    return {"msg": "Password changed successfully."}
+
+
+@router.post("/logout", status_code=status.HTTP_200_OK)
+async def logout_user(
+    request: Request,
+    response: Response,
+):
+    """
+    Logout the current user by deleting the refresh token cookie.
+    """
+    refresh_token = request.cookies.get("refresh_token")
+    if refresh_token:
+        redis_key = f"refresh_token:{refresh_token}"
+        redis_client.delete(redis_key)
+        response.delete_cookie(key="refresh_token")
+    return {"msg": "Successfully logged out."}
 
 
 # -----------------------------

@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
 from datetime import timedelta
+from uuid import uuid4
 
 from app.models.user_model import User
 from app.services.user_service import UserService
@@ -9,6 +10,7 @@ from app.core.security import create_access_token, decode_url_safe_token
 from app.schemas.user_schema import TokenResponse
 from app.core.config import settings
 from app.core.db import get_session
+from app.core.redis_client import redis_client
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 user_service = UserService()
@@ -16,6 +18,7 @@ user_service = UserService()
 
 @router.post("/login", response_model=TokenResponse)
 async def login_for_access_token(
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: Session = Depends(get_session),
 ):
@@ -35,18 +38,30 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token_expiry = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = await create_access_token(
         subject=str(
             user.id
         ),  # Fixed: was User.id (class) instead of user.id (instance)
-        expires_delta=access_token_expires,
+        expires_delta=access_token_expiry,
     )
 
-    # Refresh token should have longer expiration
-    refresh_token_expires = timedelta(days=7)  # Adjust as needed
-    refresh_token = await create_access_token(
-        subject=str(user.id), expires_delta=refresh_token_expires  # Fixed: was User.id
+    # generate refresh token
+    refresh_token = str(uuid4())
+    # store refresh token in Redis with expiration
+    redis_client.setex(
+        f"refresh_token:{refresh_token}",  # Redis key
+        timedelta(days=7),  # Token valid for 7 days
+        str(user.id),
+    )
+    # send refresh token in response
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        max_age=7 * 24 * 60 * 60,  # 7 days
+        secure=True,
+        samesite="lax",
     )
 
     return TokenResponse(
@@ -58,39 +73,42 @@ async def login_for_access_token(
 
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_access_token(
-    token: str,  # Accept refresh token as a body parameter
+    request: Request,
     session: Session = Depends(get_session),
 ):
     """
     Refresh access token using refresh token.
     """
-    import jwt
 
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate refresh token",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-
-    try:
-        payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+    refresh_token = request.cookies.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token missing",
+            headers={"WWW-Authenticate": "Bearer"},
         )
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-    except jwt.PyJWTError:
-        raise credentials_exception
+
+    # Validate refresh token from Redis
+    user_id = redis_client.get(f"refresh_token:{refresh_token}")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     # Get user from database
     from uuid import UUID
     from sqlmodel import select
 
-    statement = select(User).where(User.id == UUID(user_id))
+    statement = select(User).where(User.id == UUID(str(user_id)))
     user = session.exec(statement).first()
 
     if not user:
-        raise credentials_exception
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
 
     # Create new access token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -100,9 +118,10 @@ async def refresh_access_token(
 
     return TokenResponse(
         access_token=access_token,
-        refresh_token=token,  # Return the same refresh token
+        refresh_token=refresh_token,  # Return the same refresh token
         token_type="bearer",
     )
+
 
 # route to verify email token only
 @router.get("/verify-email", status_code=status.HTTP_200_OK)
@@ -111,7 +130,9 @@ async def verify_email_token(token: str, session: Session = Depends(get_session)
     Verify email using the provided token.
     """
     try:
-        token_data = decode_url_safe_token(token=token, max_age=86400)  # 24 hours expiry
+        token_data = decode_url_safe_token(
+            token=token, max_age=86400
+        )  # 24 hours expiry
         user_email = token_data.get("email")
         if not user_email:
             raise ValueError("Invalid token data")
@@ -130,12 +151,13 @@ async def verify_email_token(token: str, session: Session = Depends(get_session)
         )
 
     if user.is_verified:
-       return {"msg": "Email is already verified"}
+        return {"msg": "Email is already verified"}
 
     user.is_verified = True
     from datetime import datetime, timezone
+
     user.updated_at = datetime.now(timezone.utc)
-    
+
     session.add(user)
     session.commit()
     session.refresh(user)
