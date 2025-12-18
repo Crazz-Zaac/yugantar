@@ -1,7 +1,7 @@
-import { apiClient } from "./api";
+import { apiClient, refreshClient } from "./api";
 
 let isRefreshing = false;
-let refreshQueue: (() => void)[] = [];
+let refreshQueue: ((token: string) => void)[] = [];
 
 apiClient.interceptors.response.use(
   (response) => response,
@@ -17,16 +17,16 @@ apiClient.interceptors.response.use(
       if (!isRefreshing) {
         isRefreshing = true;
         try {
-          const res = await apiClient.post("/auth/refresh");
-         const newAccessToken = res.data.access_token ?? res.data.token?.access_token;
+          const res = await refreshClient.post("/auth/refresh");
+          const newAccessToken = res.data.token?.access_token;
 
           localStorage.setItem("access_token", newAccessToken);
 
-          refreshQueue.forEach((cb) => cb());
+          refreshQueue.forEach(cb => cb(newAccessToken));
           refreshQueue = [];
-        } catch {
+        } catch (err) {
           localStorage.removeItem("access_token");
-          localStorage.removeItem("refresh_token");
+          // localStorage.removeItem("refresh_token");
           window.location.href = "/login";
           return Promise.reject(error);
         } finally {
@@ -35,7 +35,10 @@ apiClient.interceptors.response.use(
       }
 
       return new Promise((resolve) => {
-        refreshQueue.push(() => resolve(apiClient(originalRequest)));
+        refreshQueue.push((token: string) => {
+          originalRequest.headers.Authorization = `Bearer ${token}`;
+          resolve(apiClient(originalRequest));
+        });
       });
     }
 

@@ -1,9 +1,9 @@
-import { useState } from 'react'
-import './App.css'
-import { Toaster } from '@components/ui/sonner';
-import { TooltipProvider } from '@components/ui/tooltip';
-import NotFound from '@pages/NotFound';
-import { Route, Switch } from 'wouter';
+import { useState } from "react";
+import "./App.css";
+import { Toaster } from "@components/ui/sonner";
+import { TooltipProvider } from "@components/ui/tooltip";
+import NotFound from "@pages/NotFound";
+import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 
@@ -12,8 +12,9 @@ import Dashboard from "./pages/Dashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 
 import { AuthProvider } from "./contexts/AuthContext";
-import Settings from './pages/Settings';
-
+import Settings from "./pages/Settings";
+import { User } from "lucide-react";
+import { UserProvider } from "./contexts/UserContext";
 
 function Router() {
   return (
@@ -21,7 +22,14 @@ function Router() {
       <Route path={"/"} component={Login} />
       <Route path={"/login"} component={Login} />
       <Route path={"/dashboard"} component={Dashboard} />
-      <Route path={"/admin"} component={AdminDashboard} />
+
+      {/* Admin Routes */}
+      <Route path={"/admin"}>
+        <UserProvider>
+          <AdminDashboard />
+        </UserProvider>
+      </Route>
+
       <Route path={"/settings"} component={Settings} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}

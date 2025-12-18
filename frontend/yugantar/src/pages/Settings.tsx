@@ -79,7 +79,7 @@ export default function Settings() {
     }
   }, [user]);
 
-  const isAdmin = user?.access_roles?.split(",").includes("admin");
+  const isAdmin = user?.access_roles?.includes("admin");
 
   const handleEdit = () => {
     setIsEditing(true);
@@ -284,7 +284,7 @@ export default function Settings() {
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Access Role:
                   </label>
-                  {user?.access_roles?.split(",").map((role: string) => (
+                  {user?.access_roles?.map((role: string) => (
                     <span
                       key={role}
                       className="px-3 py-1 bg-blue-600 rounded-full text-white text-xs font-medium capitalize"
@@ -297,7 +297,7 @@ export default function Settings() {
                   <label className="block text-sm font-medium text-foreground mb-2">
                     Cooperative Role:
                   </label>
-                  {user?.cooperative_roles?.split(",").map((role: string) => (
+                  {user?.cooperative_roles?.map((role: string) => (
                     <span
                       key={role}
                       className="px-3 py-1 bg-blue-500 rounded-full text-white text-xs font-medium capitalize"
@@ -308,17 +308,17 @@ export default function Settings() {
                 </div>
               </div>
               <div className="flex items-center gap-3 p-4 border border-border rounded bg-muted/30">
-                {user?.is_verified === "true" ? (
+                {user?.is_verified ? (
                   <BadgeCheck className="h-6 w-6 text-green-500" />
                 ) : (
                   <BadgeX className="h-6 w-6 text-red-500" />
                 )}
                 <div>
                   <p className="text-sm font-medium text-foreground">
-                    Account Status
+                    Account Verification
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {user?.is_verified === "true"
+                    {user?.is_verified
                       ? "Your account is verified"
                       : "Account verification pending"}
                   </p>

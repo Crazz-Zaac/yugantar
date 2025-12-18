@@ -26,25 +26,41 @@ export default function Login() {
   const [passwordErrors, setPasswordErrors] = useState<string[]>([]);
   const [showPassword, setShowPassword] = useState(false);
 
-  // form data
-  const [formData, setFormData] = useState({
+  // login data
+  const [loginData, setLoginData] = useState({
     email: "",
     password: "",
+  });
+
+  // signup data
+  const [signupData, setSignupData] = useState({
+    email: "",
+    password: "",
+    confirmPassword: "",
     firstname: "",
     middlename: "",
     lastname: "",
     phonenumber: "",
     address: "",
-    gender: "other" as "male" | "female" | "other", 
-    confirmPassword: "",
+    gender: "other" as "male" | "female" | "other",
   });
+
+  // Reset password fields and errors when switching between login and signup
+  useEffect(() => {
+    setLoginData(prev => ({ ...prev, password: "" }));
+    setSignupData(prev => ({ ...prev, password: "", confirmPassword: "" }));
+    setPasswordErrors([]);
+  }, [isLogin]);
 
   // Handle form input changes
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
+    const { name, value } = e.target;
+
+    if (isLogin) {
+      setLoginData(prev => ({ ...prev, [name]: value }));
+    } else {
+      setSignupData(prev => ({ ...prev, [name]: value }));
+    }
   };
 
   // Handle form submission
@@ -53,29 +69,30 @@ export default function Login() {
     setIsLoading(true);
     try {
       if (!isLogin) {
-        if (!formData.firstname) {
+        if (!signupData.firstname) {
           toast.error("Please enter your name");
           setIsLoading(false);
           return;
         }
         await signup(
           {
-            email: formData.email,
-            first_name: formData.firstname,
-            middle_name: formData.middlename,
-            last_name: formData.lastname,
-            phone: formData.phonenumber,
-            address: formData.address,
-            gender: formData.gender,
+            email: signupData.email,
+            first_name: signupData.firstname,
+            middle_name: signupData.middlename,
+            last_name: signupData.lastname,
+            phone: signupData.phonenumber,
+            address: signupData.address,
+            gender: signupData.gender,
           },
-          formData.password
+          signupData.password
         );
+
         toast.success(
           "Account created successfully! Check your email for verification."
         );
         setIsLogin(true); // Switch to login after successful signup
-        setFormData({
-          email: formData.email,
+        setSignupData({
+          email: " ",
           password: "",
           firstname: "",
           middlename: "",
@@ -86,7 +103,7 @@ export default function Login() {
           confirmPassword: "",
         });
       } else {
-        const loggedInUser = await login(formData.email, formData.password);
+        const loggedInUser = await login(loginData.email, loginData.password);
         if (loggedInUser?.access_roles.includes("admin")) {
           toast.success("Welcome back, Admin!");
           setLocation("/admin");
@@ -228,7 +245,7 @@ export default function Login() {
                       name="firstname"
                       type="text"
                       placeholder="John"
-                      value={formData.firstname}
+                      value={signupData.firstname}
                       onChange={handleChange}
                       className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground focus:ring-primary"
                       required={!isLogin}
@@ -244,7 +261,7 @@ export default function Login() {
                       name="middlename"
                       type="text"
                       placeholder="Kumar"
-                      value={formData.middlename}
+                      value={signupData.middlename}
                       onChange={handleChange}
                       className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground focus:ring-primary"
                       required={false}
@@ -260,7 +277,7 @@ export default function Login() {
                       name="lastname"
                       type="text"
                       placeholder="Doe"
-                      value={formData.lastname}
+                      value={signupData.lastname}
                       onChange={handleChange}
                       className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground focus:ring-primary"
                       required={!isLogin}
@@ -277,7 +294,7 @@ export default function Login() {
                       type="tel"
                       placeholder="+977 9812345678"
                       pattern="[+0-9]{10,15}"
-                      value={formData.phonenumber}
+                      value={signupData.phonenumber}
                       onChange={handleChange}
                       className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground focus:ring-primary"
                       required={!isLogin}
@@ -294,10 +311,10 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() =>
-                        setFormData({ ...formData, gender: "male" })
+                        setSignupData({ ...signupData, gender: "male" })
                       }
                       className={`flex-1 px-4 py-2 rounded-lg border transition-all ${
-                        formData.gender === "male"
+                        signupData.gender === "male"
                           ? "bg-primary text-primary-foreground border-primary"
                           : "bg-background border-border text-foreground hover:border-primary"
                       }`}
@@ -307,10 +324,10 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() =>
-                        setFormData({ ...formData, gender: "female" })
+                        setSignupData({ ...signupData, gender: "female" })
                       }
                       className={`flex-1 px-4 py-2 rounded-lg border transition-all ${
-                        formData.gender === "female"
+                        signupData.gender === "female"
                           ? "bg-primary text-primary-foreground border-primary"
                           : "bg-background border-border text-foreground hover:border-primary"
                       }`}
@@ -320,10 +337,10 @@ export default function Login() {
                     <button
                       type="button"
                       onClick={() =>
-                        setFormData({ ...formData, gender: "other" })
+                        setSignupData({ ...signupData, gender: "other" })
                       }
                       className={`flex-1 px-4 py-2 rounded-lg border transition-all ${
-                        formData.gender === "other"
+                        signupData.gender === "other"
                           ? "bg-primary text-primary-foreground border-primary"
                           : "bg-background border-border text-foreground hover:border-primary"
                       }`}
@@ -346,7 +363,7 @@ export default function Login() {
                     name="email"
                     type="email"
                     placeholder="you@example.com"
-                    value={formData.email}
+                    value={isLogin ? loginData.email : signupData.email}
                     onChange={handleChange}
                     className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground focus:ring-primary"
                     required
@@ -369,7 +386,7 @@ export default function Login() {
                     name="password"
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
-                    value={formData.password}
+                    value={isLogin ? loginData.password : signupData.password}
                     onChange={e => {
                       handleChange(e);
 
@@ -424,13 +441,24 @@ export default function Login() {
                     <Input
                       id="confirmPassword"
                       name="confirmPassword"
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       placeholder="••••••••"
-                      value={formData.confirmPassword}
+                      value={signupData.confirmPassword}
                       onChange={handleChange}
                       className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground focus:ring-primary"
                       required={!isLogin}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-3 text-muted-foreground"
+                    >
+                      {showPassword ? (
+                        <EyeOff className="h-5 w-5" />
+                      ) : (
+                        <Eye className="h-5 w-5" />
+                      )}
+                    </button>
                   </div>
                 </div>
               )}

@@ -1,9 +1,16 @@
 import axios from 'axios';
+import { ENV } from '@/config/env';
 
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE,
+  baseURL: ENV.API_BASE,
   withCredentials: true,
 });
+
+export const refreshClient = axios.create({
+  baseURL: ENV.API_BASE,
+  withCredentials: true,
+});
+
 
 apiClient.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token');

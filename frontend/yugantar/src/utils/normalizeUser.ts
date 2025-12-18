@@ -1,10 +1,21 @@
 import { User } from "@/types/user";
 
-export type UserForUI = {
-  [K in keyof User]: string;
+export type UserForUI = Omit<User, "access_roles" | "cooperative_roles"> & {
+  access_roles: string[];
+  cooperative_roles: string[];
+  is_verified: boolean;
+  disabled: boolean;
 };
 
 export function normalizeUser(user: User): UserForUI {
+  // Helper to safely convert to boolean
+  const toBoolean = (value: any): boolean => {
+    if (typeof value === 'boolean') return value;
+    if (typeof value === 'string') return value.toLowerCase() === 'true';
+    if (typeof value === 'number') return value !== 0;
+    return Boolean(value);
+  };
+
   return {
     ...user,
     first_name: user.first_name ?? "",
@@ -15,12 +26,16 @@ export function normalizeUser(user: User): UserForUI {
     address: user.address ?? "",
     gender: user?.gender ?? "other",
     date_of_birth: user.date_of_birth ?? "",
-    // Convert other fields to strings
     id: user.id ?? "",
-    is_verified: String(user.is_verified),
-    disabled: String(user.disabled),
-    access_roles: user.access_roles.join(","),
-    cooperative_roles: user.cooperative_roles.join(","),
+    // Properly convert to boolean, handling string "true"/"false"
+    is_verified: toBoolean(user.is_verified),
+    disabled: toBoolean(user.disabled),
+    access_roles: Array.isArray(user.access_roles)
+      ? user.access_roles.map(String)
+      : [],
+    cooperative_roles: Array.isArray(user.cooperative_roles)
+      ? user.cooperative_roles.map(String)
+      : [],
     joined_at: user.joined_at ?? "",
     created_at: user.created_at ?? "",
     updated_at: user.updated_at ?? "",

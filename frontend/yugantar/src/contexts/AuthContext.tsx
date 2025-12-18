@@ -162,6 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const res = await fetch(`${API_BASE}/users/me`, {
         method: "PATCH",
+        credentials: "include", // Include credentials for cookie-based auth
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
