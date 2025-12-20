@@ -16,6 +16,7 @@
 - [x] Create loan schema
 - [x] Create loan service
 - [x] Registration Successful Email Notifications
+- [ ] Implement `react-helmet-async` or `document.title` to dynamically set web page title
 - [ ] Forgot/Reset/renew account password
 - [x] Change Password
 - [x] Account Login and Logout
@@ -23,7 +24,7 @@
 - [x] Update user profile
 - [ ] Log every user's activity
 - [x] Create Deposit policy
-- [ ] Edit and Delete polity (must be either admin/moderator)
+- [ ] Edit and Delete policy (must be either admin/moderator)
 - [ ] Create Deposit api
 - [ ] Make deposits based on the active policy
 - [ ] Create celery docker service with proper configs
@@ -46,17 +47,17 @@
 python -c "import secrets; print(secrets.token_hex(32))"
 ```
 
+- To create secrets for docker to read
+
+```bash
+mkdir -p secrets # in root folder
+echo "password" > secrets/db_password.txt
+echo "password" > secrets/pgadmin_password.txt"
+```
+
 ## Alembic
 
-1. To create secrets for docker to read
-
-   ```bash
-   mkdir -p secrets # in root folder
-   echo "password" > secrets/db_password.txt
-   echo "password" > secrets/pgadmin_password.txt"
-   ```
-
-2. Alembic migrations
+1. Alembic migrations
 
 ```bash
     alembic revision --autogenerate -m 'initial tables'
@@ -72,6 +73,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
     # then apply the migration
     alembic upgrade head
 ```
+**Note**: Before making migrations, make sure the models have been imported in their respective `.init.py` file
 
 ## Docker
 
