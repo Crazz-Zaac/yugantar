@@ -58,7 +58,15 @@ export const deleteUserById = async (userId: string) => {
     throw new Error("Failed to delete user");
   }
 
-  return response.json();
+  if (response.status !== 204) {
+    return;
+  }
+
+  const contentType = response.headers.get("Content-Type");
+  if(contentType && contentType.includes("application/json")) {
+    return response.json();
+  }
+  return;
 }
 
 // Toggle user disabled status by ID (admin only)

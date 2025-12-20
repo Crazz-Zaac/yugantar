@@ -2,8 +2,8 @@ from sqlmodel import Session, select
 from sqlmodel import desc
 from typing import Optional, Dict, Any, Type, TypeVar, Sequence
 from datetime import datetime, timezone
-import json
 import uuid
+from decimal import Decimal
 
 from app.models.policy.base_policy import BasePolicy
 from app.models.policy.policy_change_log import PolicyChangeLog, ChangeType
@@ -16,6 +16,18 @@ class PolicyService:
     Generic service for managing policy records in the database.
     """
 
+    def _json_safe(value: Any) -> Any:
+        """
+        Converts a value to a JSON-safe format.
+        """
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if isinstance(value, uuid.UUID):
+            return str(value)
+        if isinstance(value, Decimal):
+            return str(value)
+        return value
+
     @staticmethod
     def _get_model_changes(
         old_model: Optional[BasePolicy], new_model: BasePolicy
@@ -26,7 +38,10 @@ class PolicyService:
         changes = {}
         if old_model is None:
             for field in new_model.__fields__:
-                changes[field] = {"old": None, "new": getattr(new_model, field)}
+                changes[field] = {
+                    "old": None,
+                    "new": PolicyService._json_safe(getattr(new_model, field)),
+                }
         else:
             for field in new_model.__fields__:
 
@@ -38,10 +53,16 @@ class PolicyService:
 
                 if isinstance(old_value, datetime) and isinstance(new_value, datetime):
                     if abs((old_value - new_value).total_seconds()) > 1:
-                        changes[field] = {"old": old_value, "new": new_value}
+                        changes[field] = {
+                            "old": PolicyService._json_safe(old_value),
+                            "new": PolicyService._json_safe(new_value),
+                        }
                 else:
                     if old_value != new_value:
-                        changes[field] = {"old": old_value, "new": new_value}
+                        changes[field] = {
+                            "old": PolicyService._json_safe(old_value),
+                            "new": PolicyService._json_safe(new_value),
+                        }
         return changes
 
     @staticmethod
@@ -52,12 +73,7 @@ class PolicyService:
         data = {}
         for field in policy.__fields__:
             value = getattr(policy, field)
-            if isinstance(value, datetime):
-                data[field] = value.isoformat()
-            elif isinstance(value, uuid.UUID):
-                data[field] = str(value)
-            else:
-                data[field] = value
+            data[field] = PolicyService._json_safe(value)
         return data
 
     @staticmethod
@@ -73,11 +89,15 @@ class PolicyService:
         Creates a new policy record in the database with automatic change logging.
         """
         policy.created_by = created_by
-        policy.updated_by = created_by
         policy.version = 1
 
+        # first the new policy needs to be added to the session and committed
+        db_session.add(policy)
+        db_session.commit()
+        db_session.refresh(policy)
+
         change_log = PolicyChangeLog(
-            policy_id=policy.policy_id,
+            policy_id=str(policy.policy_id),
             policy_type=policy.__class__.__name__,
             change_type=ChangeType.CREATED.value,
             version_before=None,
@@ -89,14 +109,9 @@ class PolicyService:
             changed_from_ip=ip_address,
             user_agent=user_agent,
         )
-
-        with db_session.begin():
-            db_session.add(policy)
-            db_session.flush()
-            # add change log
-            db_session.add(change_log)
-            db_session.commit()
-            db_session.refresh(policy)
+        # add change log
+        db_session.add(change_log)
+        db_session.commit()
 
         return policy
 
@@ -131,6 +146,9 @@ class PolicyService:
         existing_policy.updated_at = datetime.now(timezone.utc)
         existing_policy.version += 1
 
+        # first the existing policy needs to be added to the session
+        db_session.add(existing_policy)
+
         old_model = policy_class(**{k: v for k, v in old_policy_snapshot.items()})
 
         changes = PolicyService._get_model_changes(old_model, existing_policy)
@@ -157,13 +175,10 @@ class PolicyService:
             changed_from_ip=ip_address,
             user_agent=user_agent,
         )
-        with db_session.begin():
-            db_session.add(existing_policy)
-            db_session.flush()
-            # add change log
-            db_session.add(change_log)
-            db_session.commit()
-            db_session.refresh(existing_policy)
+        # add change log
+        db_session.add(change_log)
+        db_session.commit()
+        db_session.refresh(existing_policy)
 
         return existing_policy
 

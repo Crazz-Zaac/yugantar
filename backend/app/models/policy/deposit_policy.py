@@ -1,5 +1,4 @@
-from sqlmodel import SQLModel, Field, Relationship
-from typing import Optional
+from sqlmodel import Field, Relationship
 
 from .base_policy import BasePolicy
 from app.models.deposit_model import Deposit
@@ -23,6 +22,10 @@ class DepositPolicy(BasePolicy, table=True):
         default=30,
         ge=1,
         description="Number of days between required deposits",
+    )
+
+    is_occasional: bool = Field(
+        default=False, description="Indicates whether the policy is occasional"
     )
 
     deposits: list["Deposit"] = Relationship(back_populates="deposit_policy")

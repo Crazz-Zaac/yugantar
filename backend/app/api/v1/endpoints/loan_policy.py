@@ -4,40 +4,40 @@ from uuid import UUID
 from datetime import datetime
 
 from app.core.db import get_session
-from app.schemas.policy.deposit_policy_schema import (
-    DepositPolicyCreate,
-    DepositPolicyUpdate,
-    DepositPolicyResponse,
+from app.schemas.policy.loan_policy_schema import (
+    LoanPolicyCreate,
+    LoanPolicyUpdate,
+    LoanPolicyResponse,
 )
-from app.services.deposit_policy_service import DepositPolicyService
+from app.services.loan_policy_service import LoanPolicyService
 from app.api.dependencies.admin import get_current_moderator_or_admin
+from app.core.config import settings
 from app.models.user_model import User
-
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 
-deposit_policy_service = DepositPolicyService()
+loan_policy_service = LoanPolicyService()
 
 
 @router.post(
-    "/deposit",
-    response_model=DepositPolicyResponse,
+    "/loan",
+    response_model=LoanPolicyResponse,
     status_code=status.HTTP_201_CREATED,
 )
-def create_deposit_policy(
-    policy_in: DepositPolicyCreate,
+def create_loan_policy(
+    policy_in: LoanPolicyCreate,
     request: Request,
     current_user: User = Depends(get_current_moderator_or_admin),
     session: Session = Depends(get_session),
 ):
     """
-    Create a new deposit policy.
+    Create a new loan policy.
     Only moderators and admins can perform this action.
     """
     client_ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
 
-    new_policy = deposit_policy_service.create_deposit_policy(
+    new_policy = loan_policy_service.create_loan_policy(
         session=session,
         policy_in=policy_in,
         ip_address=client_ip,
@@ -48,36 +48,35 @@ def create_deposit_policy(
 
 
 @router.put(
-    "/deposit/{policy_id}",
-    response_model=DepositPolicyResponse,
+    "/loan/{policy_id}",
+    response_model=LoanPolicyResponse,
     status_code=status.HTTP_200_OK,
 )
-def update_deposit_policy(
+def update_loan_policy(
     policy_id: UUID,
-    policy_in: DepositPolicyUpdate,
+    policy_in: LoanPolicyUpdate,
     request: Request,
     current_user: User = Depends(get_current_moderator_or_admin),
     session: Session = Depends(get_session),
 ):
     """
-    Update an existing deposit policy.
+    Update an existing loan policy.
     Only moderators and admins can perform this action.
     """
     client_ip = request.client.host if request.client else None
 
-    change_reason = policy_in.change_reason
-    if not change_reason:
+    if not policy_in.change_reason:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Change reason must be provided for updating the policy.",
+            detail="Change reason must be provided for updating a loan policy.",
         )
 
-    updated_policy = deposit_policy_service.update_deposit_policy(
+    updated_policy = loan_policy_service.update_loan_policy(
         session=session,
         policy_id=policy_id,
         policy_in=policy_in,
-        ip_address=client_ip,
         updated_by=current_user.email,
         change_reason=policy_in.change_reason,
+        ip_address=client_ip,
     )
     return updated_policy

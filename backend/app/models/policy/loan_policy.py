@@ -1,6 +1,8 @@
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import Field, Relationship
+from sqlalchemy import Column, Numeric
 from typing import Optional
 from decimal import Decimal
+from typing_extensions import Annotated
 from typing import TYPE_CHECKING
 
 from .base_policy import BasePolicy
@@ -9,23 +11,38 @@ if TYPE_CHECKING:
     from app.models.loan_model import Loan
 
 
+Money = Annotated[
+    Decimal,
+    Field(
+        ge=Decimal("0.00"),
+        max_digits=12,
+        decimal_places=2,
+    ),
+]
+
+
 class LoanPolicy(BasePolicy, table=True):
 
     __table_args__ = {"extend_existing": True}
 
-    max_loan_amount: float = Field(
-        default=0.0,
-        ge=1,
+    max_loan_amount: Money = Field(
+        sa_column=Column(
+            Numeric(12, 2),
+            nullable=False,
+            server_default="0.00",
+        ),
         description="The maximum allowable loan amount under this policy",
     )
-    min_loan_amount: float = Field(
-        default=0.0,
-        ge=0.1,
+    min_loan_amount: Money = Field(
+        sa_column=Column(
+            Numeric(12, 2),
+            nullable=False,
+            server_default="0.00",
+        ),
         description="The minimum allowable loan amount under this policy",
     )
     interest_rate: Decimal = Field(
-        default=1.0,
-        ge=0.1,
+        sa_column=Column(Numeric(5, 2), nullable=False, server_default="1.00"),
         description="The interest rate applied to loans under this policy",
     )
     grace_period_days: int = Field(

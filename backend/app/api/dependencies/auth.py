@@ -10,7 +10,10 @@ from app.core.config import settings
 from app.models.user_model import User
 
 # tokenUrl should match the actual login endpoint
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")  # or "api/v1/login/token" depending on your setup
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/api/v1/auth/login"
+)  # or "api/v1/login/token" depending on your setup
+
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme),
@@ -24,13 +27,24 @@ async def get_current_user(
     )
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+            options={"verify_exp": True},
         )
         user_id: str = payload.get("sub")
         if user_id is None:
             raise credentials_exception
         token_data = UUID(user_id)
-    except (jwt.PyJWTError, ValueError):
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except jwt.InvalidTokenError:
+        raise credentials_exception
+    except jwt.PyJWTError:
         raise credentials_exception
 
     statement = select(User).where(User.id == token_data)
@@ -39,10 +53,15 @@ async def get_current_user(
         raise credentials_exception
     return user
 
+
 async def get_current_active_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
     """Ensure the current user is active."""
     if current_user.disabled:
-        raise HTTPException(status_code=400, detail="Inactive user")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is disabled",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return current_user

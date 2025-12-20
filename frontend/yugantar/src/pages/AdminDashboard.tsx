@@ -133,6 +133,37 @@ export default function AdminDashboard() {
     setLocation("/login");
   };
 
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+  // Delete user handler with pagination adjustment for edge cases
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`Are you sure you want to delete ${userName}?`)) {
+      return;
+    }
+
+    setDeletingUserId(userId);
+
+    try {
+      await deleteUser(userId);
+
+      // ✅ Check if we need to go back a page after deletion
+      const newFilteredCount = filteredUsers.length - 1;
+      const newTotalPages = Math.ceil(newFilteredCount / pageSize);
+
+      // If current page is now beyond the last page, go to the last page
+      if (currentPage > newTotalPages && newTotalPages > 0) {
+        setCurrentPage(newTotalPages);
+      }
+
+      // Optional: Show success message
+      console.log("User deleted successfully");
+    } catch (err) {
+      console.error("Failed to delete user:", err);
+      alert("Failed to delete user. Please try again.");
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
   // Get unique roles for filter dropdown
   const uniqueRoles = Array.from(
     new Set(users.flatMap(user => user.access_roles))
@@ -321,7 +352,7 @@ export default function AdminDashboard() {
 
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
-                  <thead>
+                  <thead className="bg-muted">
                     <tr className="border-b border-border">
                       <th className="text-left py-3 px-4 font-semibold text-foreground">
                         Name
@@ -346,6 +377,7 @@ export default function AdminDashboard() {
                       </th>
                     </tr>
                   </thead>
+
                   <tbody>
                     {paginatedUsers.length === 0 ? (
                       <tr>
@@ -362,10 +394,10 @@ export default function AdminDashboard() {
                           key={user.id}
                           className="border-b border-border hover:bg-muted/50 transition-colors"
                         >
-                          <td className="py-3 px-4">
+                          <td className="text-left py-3 px-4">
                             {user.first_name} {user.last_name}
                           </td>
-                          <td className="py-3 px-4 text-muted-foreground">
+                          <td className="text-left py-3 px-4 text-muted-foreground">
                             {user.email}
                           </td>
                           <td className="py-3 px-4">
@@ -392,8 +424,8 @@ export default function AdminDashboard() {
                               ))}
                             </div>
                           </td>
-                          <td className="py-3 px-4">
-                            <div className="inline-flex items-center gap-2 px-2 py-1 rounded text-xs font-medium">
+                          <td className="text-left py-3 px-4">
+                            <div className="text-left inline-flex items-center gap-2 px-2 py-1 rounded text-xs font-medium">
                               {user.is_verified === true ? (
                                 <>
                                   <BadgeCheck className="h-4 w-4 text-green-500" />
@@ -436,11 +468,21 @@ export default function AdminDashboard() {
                               </button>
 
                               <button
-                                className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50 rounded flex items-center justify-center"
-                                onClick={() => deleteUser(user.id)}
+                                className="h-8 w-8 p-0 text-red-500 hover:text-red-600 hover:bg-red-50 rounded flex items-center justify-center disabled:opacity-50"
+                                onClick={() =>
+                                  handleDeleteUser(
+                                    user.id,
+                                    `${user.first_name} ${user.last_name}`
+                                  )
+                                }
+                                disabled={deletingUserId === user.id}
                                 title="Delete user"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                {deletingUserId === user.id ? (
+                                  <div className="h-4 w-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
                               </button>
                               <Button
                                 className="gap-2"

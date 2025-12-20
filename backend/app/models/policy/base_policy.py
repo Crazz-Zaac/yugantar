@@ -25,7 +25,7 @@ class BasePolicy(SQLModel, table=False):
     version: int = Field(
         default=1, ge=1, description="Policy version number, incremented on each update"
     )
-    
+
     # Effective dates
     effective_from: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc),
@@ -44,19 +44,9 @@ class BasePolicy(SQLModel, table=False):
         description="Identifier of the user who created the policy",
     )
 
-    updated_by: Optional[str] = Field(
-        default=None,
-        max_length=100,
-        description="Identifier of the user who last updated the policy",
-    )
-
     # status flags
     is_active: bool = Field(
         default=True, description="Indicates whether the policy is currently active"
-    )
-
-    is_occasional: bool = Field(
-        default=False, description="Indicates whether the policy is occasional"
     )
 
     # Timestamp fields
@@ -66,11 +56,12 @@ class BasePolicy(SQLModel, table=False):
         description="Timestamp when the policy was created",
     )
 
-    updated_at: datetime = Field(
-        default_factory=lambda: datetime.now(timezone.utc),
-        sa_column_kwargs={"onupdate": datetime.now(timezone.utc)},
-        description="Timestamp when the policy was last updated",
+    updated_by: Optional[str] = Field(
+        default=None, description="User who last updated the policy"
     )
-    
+    updated_at: Optional[datetime] = Field(
+        default=None, description="Timestamp of the last update to the policy"
+    )
+
     class Config:
         from_attributes = True

@@ -118,11 +118,26 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
   // delete user by ID
   const deleteUser = async (userId: string) => {
+    console.log("🗑️ Deleting user:", userId);
+    console.log("📊 Users before delete:", users.length);
+
     try {
       await deleteUserById(userId);
-      setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-      setTotalUsers(prev => prev - 1);
+
+      console.log("✅ Backend deletion successful");
+
+      setUsers(prevUsers => {
+        const newUsers = prevUsers.filter(user => user.id !== userId);
+        console.log("📊 Users after delete:", newUsers.length);
+        return newUsers;
+      });
+
+      setTotalUsers(prev => {
+        console.log("📊 Total users:", prev - 1);
+        return prev - 1;
+      });
     } catch (err) {
+      console.error("❌ Delete failed:", err);
       setError("Failed to delete user");
       throw err;
     }
