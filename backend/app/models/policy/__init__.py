@@ -4,6 +4,7 @@ from .loan_policy import LoanPolicy
 from .penalty_policy import PenaltyPolicy
 from .interest_policy import InterestPolicy
 from .investment_policy import InvestmentPolicy
+from .policy_change_log import PolicyChangeLog, ChangeType
 
 __all__ = [
     "BasePolicy",
@@ -12,5 +13,7 @@ __all__ = [
     "PenaltyPolicy",
     "InterestPolicy",
     "InvestmentPolicy",
+    "PolicyChangeLog",
+    "ChangeType",
 ]
 
