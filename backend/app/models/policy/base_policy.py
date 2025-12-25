@@ -1,7 +1,16 @@
 from sqlmodel import SQLModel, Field
+from sqlalchemy import Enum as SAEnum, Column
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
+from enum import Enum
 import uuid
+
+
+class PolicyStatus(str, Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    VOID = "void"
 
 
 class BasePolicy(SQLModel, table=False):
@@ -44,9 +53,11 @@ class BasePolicy(SQLModel, table=False):
         description="Identifier of the user who created the policy",
     )
 
-    # status flags
-    is_active: bool = Field(
-        default=True, description="Indicates whether the policy is currently active"
+    # policy status
+    status: PolicyStatus = Field(
+        default=PolicyStatus.DRAFT,
+        nullable=False,
+        description="Lifecycle status of the policy",
     )
 
     # Timestamp fields
