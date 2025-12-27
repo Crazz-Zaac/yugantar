@@ -27,6 +27,8 @@ class LoanPolicyCreate(SQLModel):
     
     status: PolicyStatus = PolicyStatus.DRAFT
     
+    emi_applicable: bool = False
+    
     effective_from: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     effective_to: Optional[datetime] = None
     created_by: Optional[str] = None
@@ -45,7 +47,7 @@ class LoanPolicyUpdate(SQLModel):
     change_reason: str  # required for audit
 
     status: Optional[PolicyStatus] = None
-
+    emi_applicable: bool 
     requires_collateral: Optional[bool] = None
     effective_from: Optional[datetime] = None
     effective_to: Optional[datetime] = None
@@ -68,6 +70,7 @@ class LoanPolicyResponse(SQLModel):
     requires_collateral: bool
     
     status: PolicyStatus
+    emi_applicable: bool
     
     effective_from: datetime
     effective_to: Optional[datetime]

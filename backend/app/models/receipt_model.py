@@ -17,11 +17,11 @@ class Receipt(BaseModel, table=True):
 
     __table_args__ = {"extend_existing": True}
 
-    user_id: Optional[uuid.UUID] = Field(foreign_key="user.id", index=True)
-    receipt_screenshot: Optional[str] = Field(max_length=255, nullable=True)
-    amount: float = Field()
+    txn_number: Optional[int] = Field(
+        index=True, unique=True, description="Transaction number for the receipt"
+    )
     date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    notes: Optional[str] = Field(max_length=255, nullable=True)
+    user_id: Optional[uuid.UUID] = Field(foreign_key="user.id", index=True)
 
     # Relationships
     user: "User" = Relationship(back_populates="receipts")

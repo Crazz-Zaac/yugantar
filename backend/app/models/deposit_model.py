@@ -15,10 +15,21 @@ if TYPE_CHECKING:
 from .base import BaseModel
 
 
-class DepositStatus(str, Enum):
+class DepositTiming(str, Enum):
     EARLY = "early"
     ON_TIME = "on_time"
     LATE = "late"
+
+
+class DepositVerificationStatus(str, Enum):
+    PENDING = "pending"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+
+
+class DepositType(str, Enum):
+    CURRENT = "current"
+    ADVANCE = "advance"
 
 
 class Deposit(BaseModel, table=True):
@@ -29,26 +40,14 @@ class Deposit(BaseModel, table=True):
     )
 
     deposited_amount: float = Field(gt=0)
-    amount_to_be_deposited: float = Field(
-        gt=0,
-        description="Amount that should be deposited as per policy",
-    )
 
-    deposit_frequency_days: int = Field(
-        ge=1,
-        description="Number of days between required deposits as per policy",
-    )
-
-    late_deposit_fine: float = Field(
-        ge=0.0,
-        description="The percentage of late fee applied to late deposits as per policy",
-    )
+    deposit_type: DepositType = Field(default=DepositType.CURRENT)
 
     # Clearer date naming
     deposited_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     due_deposit_date: datetime = Field()
 
-    deposit_status: DepositStatus = Field(default=DepositStatus.LATE)
+    deposit_timing: DepositTiming = Field(default=DepositTiming.LATE)
 
     # Foreign keys
     user_id: uuid.UUID = Field(foreign_key="user.id", index=True)
@@ -56,9 +55,11 @@ class Deposit(BaseModel, table=True):
     receipt_id: Optional[uuid.UUID] = Field(foreign_key="receipt.id", nullable=True)
 
     # Additional fields from schema
-    receipt_screenshot: Optional[str] = Field(max_length=255, nullable=True)
+    # deposit verification status
+    verification_status: DepositVerificationStatus = Field(
+        default=DepositVerificationStatus.PENDING
+    )
     verified_by: Optional[str] = Field(max_length=100, nullable=True)
-    notes: Optional[str] = Field(max_length=500, nullable=True)
 
     # Relationships
     loan: Optional["Loan"] = Relationship(back_populates="deposits")

@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from .user_model import User
     from .deposit_model import Deposit
     from .policy.loan_policy import LoanPolicy
+    from .loan_payment import LoanPayment
 
 
 from .base import BaseModel
@@ -112,12 +113,11 @@ class Loan(BaseModel, table=True):
         description="Maximum number of renewals allowed for this loan",
     )
 
-    notes: Optional[str] = Field(max_length=255, nullable=True)
-
     # Relationships
     user: "User" = Relationship(back_populates="loans")
     deposits: List["Deposit"] = Relationship(back_populates="loan")
     policy: Optional["LoanPolicy"] = Relationship(back_populates="loans")
+    payments: List["LoanPayment"] = Relationship(back_populates="loan")
 
     # Self-referential relationship for renewals
     parent_loan: Optional["Loan"] = Relationship(
