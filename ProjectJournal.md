@@ -428,3 +428,21 @@ echo "password" > secrets/pgadmin_password.txt"
     )
   ```
 
+---
+
+### 2025-12-27
+
+- Added newer fields to `Deposit`, `Receipt`, `Fine` and `Loan` models
+- Created a new model `loan_payment` which can better handle user's different payment situations:
+  ```python
+    Only deposit
+    Deposit + Fine
+    Current Deposit + Advanced deposit
+    Current Deposit + Advanced deposit + Fine
+    Only loan
+    Complete Principle + Interest
+    Only Interest
+    Only Principle
+    All
+  ```
+
