@@ -1,8 +1,15 @@
 from sqlmodel import SQLModel
 from datetime import datetime, timezone
 from typing import Optional
+from enum import Enum
 import uuid
 
+
+class PolicyStatus(str, Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    VOID = "void"
 
 # -----------------------------
 # Create Schema
@@ -15,7 +22,7 @@ class DepositPolicyCreate(SQLModel):
     effective_from: datetime = datetime.now(timezone.utc)
     effective_to: Optional[datetime] = None
     
-    is_active: bool = True
+    status : PolicyStatus = PolicyStatus.DRAFT
     is_occasional: bool = False
     
     created_by: Optional[str] = None
@@ -33,7 +40,7 @@ class DepositPolicyUpdate(SQLModel):
     effective_from: Optional[datetime] = None
     effective_to: Optional[datetime] = None
 
-    is_active: Optional[bool] = None
+    status: Optional[PolicyStatus] = None
     is_occasional: Optional[bool] = None
 
     updated_at: datetime = datetime.now(timezone.utc)
@@ -53,7 +60,7 @@ class DepositPolicyResponse(SQLModel):
     effective_from: datetime
     effective_to: Optional[datetime]
 
-    is_active: bool
+    status: PolicyStatus
     is_occasional: bool
 
     created_by: Optional[str]

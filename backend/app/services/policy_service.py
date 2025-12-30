@@ -2,10 +2,11 @@ from sqlmodel import Session, select
 from sqlmodel import desc
 from typing import Optional, Dict, Any, Type, TypeVar, Sequence
 from datetime import datetime, timezone
+from fastapi import HTTPException, status
 import uuid
 from decimal import Decimal
 
-from app.models.policy.base_policy import BasePolicy
+from app.models.policy.base_policy import BasePolicy, PolicyStatus
 from app.models.policy.policy_change_log import PolicyChangeLog, ChangeType
 
 TPolicy = TypeVar("TPolicy", bound=BasePolicy)
@@ -181,6 +182,46 @@ class PolicyService:
         db_session.refresh(existing_policy)
 
         return existing_policy
+    
+    @staticmethod
+    def delete_policy(
+        db_session: Session,
+        policy_class: Type[TPolicy],
+        policy_id: uuid.UUID,
+    ) -> None:
+        """
+        Deletes an existing policy record from the database.
+        """
+        statement = select(policy_class).where(policy_class.policy_id == policy_id)
+        policy = db_session.exec(statement).first()
+        
+        
+        if not policy:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Policy not found",
+            )
+            
+        if policy.status == PolicyStatus.ACTIVE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Active policies cannot be deleted",
+            )
+        
+        if policy.effective_from <= datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Policies that have taken effect cannot be deleted",
+            )
+            
+
+        # delete the policy
+        db_session.delete(policy)
+
+        # add change log
+        db_session.commit()
+
+        return None
 
     @staticmethod
     def deactivate_policy(

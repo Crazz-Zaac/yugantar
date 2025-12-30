@@ -4,6 +4,7 @@ from uuid import UUID
 from datetime import datetime
 
 from app.core.db import get_session
+from app.models.policy.deposit_policy import DepositPolicy
 from app.schemas.policy.deposit_policy_schema import (
     DepositPolicyCreate,
     DepositPolicyUpdate,
@@ -45,6 +46,28 @@ def create_deposit_policy(
         created_by=current_user.email,
     )
     return new_policy
+
+@router.delete(
+    "/deposit/{policy_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_deposit_policy(
+    policy_id: UUID,
+    request: Request,
+    current_user: User = Depends(get_current_moderator_or_admin),
+    session: Session = Depends(get_session),
+):
+    """
+    Delete an existing deposit policy.
+    Only moderators and admins can perform this action.
+    """
+
+    deposit_policy_service.delete_policy(
+        db_session=session,
+        policy_id=policy_id,
+        policy_class=DepositPolicy,
+    )
+    return None
 
 
 @router.put(

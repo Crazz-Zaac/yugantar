@@ -4,6 +4,7 @@ from typing import Optional
 from decimal import Decimal
 from typing_extensions import Annotated
 from typing import TYPE_CHECKING
+from sqlalchemy.sql.sqltypes import Boolean
 
 from .base_policy import BasePolicy
 
@@ -54,6 +55,14 @@ class LoanPolicy(BasePolicy, table=True):
         default=0,
         ge=0,
         description="Maximum number of times a loan can be renewed under this policy",
+    )
+    emi_applicable: bool = Field(
+        sa_column=Column(
+            Boolean,
+            nullable=False,
+            server_default="false",  # IMPORTANT
+        ),
+        description="Whether EMI repayment is allowed under this policy",
     )
     requires_collateral: bool = Field(
         default=False,

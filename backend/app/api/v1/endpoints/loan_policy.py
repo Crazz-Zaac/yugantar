@@ -4,6 +4,7 @@ from uuid import UUID
 from datetime import datetime
 
 from app.core.db import get_session
+from app.models.policy.loan_policy import LoanPolicy
 from app.schemas.policy.loan_policy_schema import (
     LoanPolicyCreate,
     LoanPolicyUpdate,
@@ -45,6 +46,28 @@ def create_loan_policy(
         created_by=current_user.email,
     )
     return new_policy
+
+@router.delete(
+    "/loan/{policy_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_loan_policy(
+    policy_id: UUID,
+    request: Request,
+    current_user: User = Depends(get_current_moderator_or_admin),
+    session: Session = Depends(get_session),
+):
+    """
+    Delete an existing loan policy.
+    Only moderators and admins can perform this action.
+    """
+
+    loan_policy_service.delete_policy(
+        db_session=session,
+        policy_id=policy_id,
+        policy_class=LoanPolicy,
+    )
+    return None
 
 
 @router.put(

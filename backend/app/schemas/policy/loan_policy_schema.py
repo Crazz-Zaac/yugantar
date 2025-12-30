@@ -3,6 +3,14 @@ from datetime import datetime, timezone
 from typing import Optional
 import uuid
 from decimal import Decimal
+from enum import Enum
+
+
+class PolicyStatus(str, Enum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    EXPIRED = "expired"
+    VOID = "void"
 
 
 # -----------------------------
@@ -16,6 +24,10 @@ class LoanPolicyCreate(SQLModel):
     grace_period_days: int = 0
     max_renewals: Optional[int] = 0
     requires_collateral: bool = False
+    
+    status: PolicyStatus = PolicyStatus.DRAFT
+    
+    emi_applicable: bool = False
     
     effective_from: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     effective_to: Optional[datetime] = None
@@ -34,6 +46,8 @@ class LoanPolicyUpdate(SQLModel):
     max_renewals: Optional[int] = None
     change_reason: str  # required for audit
 
+    status: Optional[PolicyStatus] = None
+    emi_applicable: bool 
     requires_collateral: Optional[bool] = None
     effective_from: Optional[datetime] = None
     effective_to: Optional[datetime] = None
@@ -55,7 +69,8 @@ class LoanPolicyResponse(SQLModel):
     max_renewals: Optional[int]
     requires_collateral: bool
     
-    is_active: bool
+    status: PolicyStatus
+    emi_applicable: bool
     
     effective_from: datetime
     effective_to: Optional[datetime]

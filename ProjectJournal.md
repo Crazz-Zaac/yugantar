@@ -73,6 +73,7 @@ echo "password" > secrets/pgadmin_password.txt"
     # then apply the migration
     alembic upgrade head
 ```
+
 **Note**: Before making migrations, make sure the models have been imported in their respective `.init.py` file
 
 ## Docker
@@ -385,5 +386,74 @@ echo "password" > secrets/pgadmin_password.txt"
   - This was handled by passing a http token using `WithCredentials = True`
 - During user login, the data entered in the `Email` and `Password` field would be copied to `Email` and `Password` even when switched `Sign Up` form. This was because the same form field was being share between among `Login` and `Sign Up`
   - This was solved by creating a separate `signUpData` and `loginData` using `{isLogin ? loginData.password : signupData.password}`
+
+---
+
+### 2025-12-24
+
+- Initially Deposit and Loan Policies can never be deleted. Every changes to them are logged to policy change table. The problem is,
+  how to handle, when the authorized person created a policy with the wrong inputs?
+
+  - To handle this a new column `status` was defined for each policy as an `Enum`
+    ```python
+      class PolicyStatus(str, Enum):
+        DRAFT = "draft"
+        ACTIVE = "active"
+        EXPIRED = "expired"
+        VOID = "void"
+    ```
+  - With this the newly created policy will be set to `DRAFT` by default and therefore can be deleted.
+  - BUT the policies cannot deleted once the `effective_from == datetime.now()`
+
+---
+
+### 2025-12-25
+
+- Alembic migrations wasn't straight forward while creating `Enum`s data type for `status` column. Simply `alembic upgrade head` didn't work.
+  - Therefore, the migration script needed to be edited manually to create the enum fields. For example:
+  ```python
+    policy_status = sa.Enum("DRAFT", "ACTIVE", "EXPIRED", "VOID", name="policystatus")
+    policy_status.create(op.get_bind(), checkfirst=True)
+  ```
+  - Next thing is, we must provide the default value for such fields and for that use `server_default="DRAFT"` for example.
+  ```python
+    op.add_column(
+        "interestpolicy",
+        sa.Column(
+            "status",
+            sa.Enum("DRAFT", "ACTIVE", "EXPIRED", "VOID", name="policystatus"),
+            nullable=False,
+            server_default="DRAFT",
+        ),
+    )
+  ```
+
+---
+
+### 2025-12-27
+
+- Added newer fields to `Deposit`, `Receipt`, `Fine` and `Loan` models
+- Created a new model `loan_payment` which can better handle user's different payment situations:
+  ```python
+    Only deposit
+    Deposit + Fine
+    Current Deposit + Advanced deposit
+    Current Deposit + Advanced deposit + Fine
+    Only loan
+    Complete Principle + Interest
+    Only Interest
+    Only Principle
+    All
+  ```
+
+---
+
+### 2025-12-30
+
+- Created `models/mixins/money.py` to convert money into rupees to avoid storing money as a float
+- Removed duplicate fields from `deposit` and `fine` models
+- Added field validations in deposit model
+- Created `deposit_service` for deposit model
+- Created schema response and service for the fine model
 
 ---
