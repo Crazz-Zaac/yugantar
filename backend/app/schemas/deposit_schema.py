@@ -1,14 +1,13 @@
 from sqlmodel import SQLModel, Field
 from typing import Optional
-from enum import Enum
 from datetime import datetime, timezone
-from pydantic import field_validator
-from sqlalchemy import Column, String
-from sqlalchemy.dialects.postgresql import ARRAY
+from pydantic import model_validator, field_validator
 import uuid
+from decimal import Decimal
 
-from app.models.deposit_model import DepositStatus
-from app.models.policy.deposit_policy import DepositPolicy
+from app.models.deposit_model import DepositTiming
+from app.models.deposit_model import DepositType
+from app.models.deposit_model import DepositVerificationStatus
 
 
 # ----------------------------
@@ -17,48 +16,47 @@ from app.models.policy.deposit_policy import DepositPolicy
 
 
 class DepositBase(SQLModel):
-    deposited_amount: float = Field(..., gt=0)
-    amount_to_be_deposited: float = Field(..., gt=0)
-    deposit_frequency_days: int = Field(..., ge=1)
-    
-    # Clearer date naming    
+    deposited_amount: Decimal
+    amount_to_be_deposited: Optional[int] = None
+    deposit_frequency_days: Optional[int] = None
+
+    # Clearer date naming
     deposited_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     due_deposit_date: datetime
-    deposit_status: DepositStatus = Field(default=DepositStatus.LATE)
-    
+    deposit_status: DepositTiming = Field(default=DepositTiming.LATE)
+
     late_deposit_fine: Optional[float] = Field(default=0.0, ge=0)
-    is_paid: bool = Field(default=False)
-    
+
     verified_by: Optional[str] = None
-    
+
+    # this will not be stored in DB, just for API purposes
+    receipt_screenshot: Optional[str] = None
+
     # receipt details
-    receipt_screenshot: Optional[str] = Field(
-    default=None, description="path to the screenshot"
-    )
     receipt_id: Optional[uuid.UUID] = None
-    
-    notes: Optional[str] = Field(default=None, max_length=255)
 
-    @field_validator("late_deposit_fine")
-    def validate_fine_amount(cls, value, info):
-        if value > 0 and not info.data.get("due_deposit_date"):
-            raise ValueError(
-                "Fine amount cannot be greater than 0 if due deposit date is not set."
+    # deposited amount is in rupees for API
+    @classmethod
+    def from_orm(cls, obj, update=None):
+        return cls(
+            **obj.__dict__,
+            deposited_amount=(
+                obj.amount_rupees if obj.amount_rupees is not None else Decimal(0)
             )
-        return value
+        )
 
-    @field_validator("deposited_amount")
-    def validate_amount(cls, value, info):
-        amount_to_be_deposited = info.data.get("amount_to_be_deposited")
-        if value < amount_to_be_deposited:
-            raise ValueError(
-                f"Deposited amount cannot be less than {amount_to_be_deposited}."
-            )
-        return value
+    @model_validator(mode="before")
+    def set_policy_values(cls, values):
+        """Set deposit_frequency_days and late_deposit_fine from policy if policy_id is provided."""
+        policy = values.get("deposit_policy")
+        if policy:
+            values["deposit_frequency_days"] = policy.deposit_frequency_days
+            values["late_deposit_fine"] = policy.late_deposit_fine
+            values["amount_to_be_deposited"] = policy.deposit_amount_threshold
+        return values
 
-    @field_validator("receipt_screenshot")
+    @field_validator("receipt_screenshot", mode="before")
     def validate_receipt_screenshot(cls, value):
-        # More logic to add later
         if value is None:
             raise ValueError("Please upload receipt screenshot.")
         if value and not value.lower().endswith((".png", ".jpg", ".jpeg")):
@@ -69,42 +67,43 @@ class DepositBase(SQLModel):
 
 
 class DepositCreate(DepositBase):
-    deposit_amount: float = Field(..., gt=0)
-    deposit_status: DepositStatus = Field(default=DepositStatus.LATE)
+    deposit_status: DepositTiming = Field(default=DepositTiming.LATE)
+    verification_status: DepositVerificationStatus = Field(
+        default=DepositVerificationStatus.PENDING
+    )
+    deposit_type: DepositType = Field(default=DepositType.CURRENT)
 
 
 class DepositUpdate(SQLModel):
-    deposited_amount: Optional[float] = Field(default=None, gt=0)
-    deposited_date: Optional[datetime] = None
-    deposit_status: Optional[DepositStatus] = None
+    deposited_amount: Optional[int] = Field(default=None, gt=0)
+    deposited_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    deposit_status: Optional[DepositTiming] = None
 
-    verified_by: Optional[str] = None
     receipt_screenshot: Optional[str] = None
     fine_amount: Optional[float] = Field(default=None, ge=0)
-    is_paid: Optional[bool] = None
-
-    notes: Optional[str] = Field(default=None, max_length=255)
 
 
 class DepositResponse(DepositBase):
     id: uuid.UUID
     policy_id: Optional[uuid.UUID]
-    user_id: uuid.UUID
 
+    user_id: uuid.UUID
     loan_id: Optional[uuid.UUID]
     receipt_id: uuid.UUID
+    receipt_screenshot: Optional[str]
 
-    deposited_amount: float
-    amount_to_be_deposited: float
+    deposited_amount: Decimal
+    amount_to_be_deposited: int
     deposited_date: datetime
     due_deposit_date: datetime
-    deposit_status: DepositStatus
 
-    receipt_screenshot: Optional[str]
+    deposit_status: DepositTiming
+    deposit_type: DepositType
+
     verified_by: Optional[str]
+    verifcation_status: DepositVerificationStatus
 
-    fine_amount: Optional[float]
-    is_paid: bool
+    fine_amount: Optional[int]
 
     created_at: datetime
     updated_at: datetime
