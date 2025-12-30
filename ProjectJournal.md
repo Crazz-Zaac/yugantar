@@ -415,7 +415,7 @@ echo "password" > secrets/pgadmin_password.txt"
     policy_status = sa.Enum("DRAFT", "ACTIVE", "EXPIRED", "VOID", name="policystatus")
     policy_status.create(op.get_bind(), checkfirst=True)
   ```
-  - Next thing  is, we must provide the default value for such fields and for that use `server_default="DRAFT"` for example.
+  - Next thing is, we must provide the default value for such fields and for that use `server_default="DRAFT"` for example.
   ```python
     op.add_column(
         "interestpolicy",
@@ -446,3 +446,14 @@ echo "password" > secrets/pgadmin_password.txt"
     All
   ```
 
+---
+
+### 2025-12-30
+
+- Created `models/mixins/money.py` to convert money into rupees to avoid storing money as a float
+- Removed duplicate fields from `deposit` and `fine` models
+- Added field validations in deposit model
+- Created `deposit_service` for deposit model
+- Created schema response and service for the fine model
+
+---
