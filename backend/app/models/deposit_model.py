@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from .policy.deposit_policy import DepositPolicy
 
 from .base import BaseModel
+from .mixins.money import MoneyMixin
 
 
 class DepositTiming(str, Enum):
@@ -32,15 +33,16 @@ class DepositType(str, Enum):
     ADVANCE = "advance"
 
 
-class Deposit(BaseModel, table=True):
+class Deposit(BaseModel, MoneyMixin, table=True):
     __table_args__ = {"extend_existing": True}
 
     policy_id: Optional[uuid.UUID] = Field(
         default=None, foreign_key="depositpolicy.policy_id", index=True, nullable=True
     )
 
-    deposited_amount: float = Field(gt=0)
-
+    # the deposited amount is now inherited from MoneyMixin
+    # the amount is stored in amount_paisa for precision
+    
     deposit_type: DepositType = Field(default=DepositType.CURRENT)
 
     # Clearer date naming
@@ -50,16 +52,17 @@ class Deposit(BaseModel, table=True):
     deposit_timing: DepositTiming = Field(default=DepositTiming.LATE)
 
     # Foreign keys
-    user_id: uuid.UUID = Field(foreign_key="user.id", index=True)
-    loan_id: Optional[uuid.UUID] = Field(foreign_key="loan.id", nullable=True)
     receipt_id: Optional[uuid.UUID] = Field(foreign_key="receipt.id", nullable=True)
 
-    # Additional fields from schema
+    # Additional fields 
     # deposit verification status
     verification_status: DepositVerificationStatus = Field(
         default=DepositVerificationStatus.PENDING
     )
     verified_by: Optional[str] = Field(max_length=100, nullable=True)
+
+    user_id: uuid.UUID = Field(foreign_key="user.id", index=True)
+    loan_id: Optional[uuid.UUID] = Field(foreign_key="loan.id", nullable=True)
 
     # Relationships
     loan: Optional["Loan"] = Relationship(back_populates="deposits")

@@ -1,6 +1,6 @@
 from sqlmodel import Relationship, Field
 from sqlalchemy import Column, Enum as SqlEnum
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 import uuid
 from enum import Enum
@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
 
 from .base import BaseModel
+from .mixins.money import MoneyMixin
 
 
 class LoanStatus(str, Enum):
@@ -38,23 +39,20 @@ class Loan(BaseModel, table=True):
     )
 
     # principal amount
-    principal_amount: float = Field(description="Original amount borrowed by the user")
+    principal_paisa: int = Field(description="Original amount borrowed by the user")
     interest_rate: Decimal = Field(
         decimal_places=2, description="Interest rate applied to the loan"
     )
-    penalties_incurred: float = Field(
+    penalties_paisa: int = Field(
         default=0.0,
         description="Total penalties incurred on the loan",
     )
-    interest_paid: float = Field(
-        default=0.0,
-        description="Total interest amount paid by the user",
-    )
-    accrued_interest: float = Field(
+    
+    accrued_interest_paisa: int = Field(
         default=0.0,
         description="Total interest amount accrued on the loan",
     )
-    loan_amount: float = Field(
+    total_paid_paisa: int = Field(
         description="Total loan amount including interest and penalties"
     )
 
@@ -73,19 +71,10 @@ class Loan(BaseModel, table=True):
 
     # approval and rejection details
     approved_by: Optional[str] = Field(max_length=100, nullable=True)
-    approved_at: Optional[datetime] = Field(nullable=True)
+    approved_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
     rejected_by: Optional[str] = Field(max_length=100, nullable=True)
     rejected_at: Optional[datetime] = Field(nullable=True)
     rejection_reason: Optional[str] = Field(max_length=255, nullable=True)
-
-    # EMI/installment amount
-    monthly_installment: float = Field(description="Monthly installment amount")
-    next_payment_due_date: Optional[datetime] = Field(
-        default=None, description="Next payment due date"
-    )
-    remaining_amount: float = Field(
-        default=0.0, description="Remaining amount to be paid"
-    )
 
     # when funds were released to user
     disbursed_at: Optional[datetime] = Field(
