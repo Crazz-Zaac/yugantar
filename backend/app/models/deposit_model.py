@@ -39,7 +39,7 @@ class Deposit(BaseModel, MoneyMixin, table=True):
     policy_id: Optional[uuid.UUID] = Field(
         default=None, foreign_key="depositpolicy.policy_id", index=True, nullable=True
     )
-
+    
     # the deposited amount is now inherited from MoneyMixin
     # the amount is stored in amount_paisa for precision
     
@@ -61,7 +61,7 @@ class Deposit(BaseModel, MoneyMixin, table=True):
     )
     verified_by: Optional[str] = Field(max_length=100, nullable=True)
 
-    user_id: uuid.UUID = Field(foreign_key="user.id", index=True)
+    user_id: uuid.UUID = Field(foreign_key="user.id", index=True, nullable=False)
     loan_id: Optional[uuid.UUID] = Field(foreign_key="loan.id", nullable=True)
 
     # Relationships

@@ -58,10 +58,10 @@ class User(BaseModel, table=True):
     address: str = Field(max_length=255)
 
     cooperative_roles: List[CooperativeRole] = Field(
-        sa_column=Column(JSON), default_factory=lambda: [CooperativeRole.MEMBER.value]
+        sa_column=Column(JSON), default_factory=lambda: [CooperativeRole.MEMBER]
     )
     access_roles: List[AccessRole] = Field(
-        sa_column=Column(JSON), default_factory=lambda: [AccessRole.USER.value]
+        sa_column=Column(JSON), default_factory=lambda: [AccessRole.USER]
     )
     # Indicates if the user's email is verified
     is_verified: bool = Field(default=False, nullable=False)
