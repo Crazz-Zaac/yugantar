@@ -74,14 +74,13 @@ class DepositCreate(DepositBase):
     deposit_type: DepositType = Field(default=DepositType.CURRENT)
 
 
-class DepositUpdate(SQLModel):
+class DepositUserUpdate(SQLModel):
     deposited_amount: Optional[int] = Field(default=None, gt=0)
-    deposited_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    deposit_status: Optional[DepositTiming] = None
-
     receipt_screenshot: Optional[str] = None
-    fine_amount: Optional[float] = Field(default=None, ge=0)
 
+class DepositModeratorUpdate(SQLModel):
+    verification_status: DepositVerificationStatus
+    verified_by: Optional[str] = None
 
 class DepositResponse(DepositBase):
     id: uuid.UUID
