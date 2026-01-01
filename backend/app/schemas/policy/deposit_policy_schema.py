@@ -3,28 +3,29 @@ from datetime import datetime, timezone
 from typing import Optional
 from enum import Enum
 import uuid
+from decimal import Decimal
 
+from app.models.policy.deposit_policy import DepositScheduleType
+from app.models.policy.base_policy import PolicyStatus
 
-class PolicyStatus(str, Enum):
-    DRAFT = "draft"
-    ACTIVE = "active"
-    EXPIRED = "expired"
-    VOID = "void"
 
 # -----------------------------
 # Create Schema
 # -----------------------------
 class DepositPolicyCreate(SQLModel):
-    deposit_amount_threshold: float
+    amount_paisa: Decimal
     late_deposit_fine: float  # in percentage
-    deposit_frequency_days: int
-    
+
+    schedule_type: DepositScheduleType = DepositScheduleType.MONTHLY_FIXED_DAY
+    due_day_of_month: Optional[int] = None
+    allowed_months: Optional[int] = None
+    max_occurrences: Optional[int] = None
+
+    status: PolicyStatus = PolicyStatus.DRAFT
+
     effective_from: datetime = datetime.now(timezone.utc)
     effective_to: Optional[datetime] = None
-    
-    status : PolicyStatus = PolicyStatus.DRAFT
-    is_occasional: bool = False
-    
+
     created_by: Optional[str] = None
 
 
@@ -32,18 +33,19 @@ class DepositPolicyCreate(SQLModel):
 # Update Schema
 # -----------------------------
 class DepositPolicyUpdate(SQLModel):
-    deposit_amount_threshold: Optional[float] = None
-    late_deposit_fine: Optional[float] = None
-    deposit_frequency_days: Optional[int] = None
-    change_reason: str  # required for audit
+    amount_paisa: Optional[Decimal] = None
+    late_deposit_fine: Optional[float] = None  # in percentage
+
+    schedule_type: Optional[DepositScheduleType] = None
+    due_day_of_month: Optional[int] = None
+    allowed_months: Optional[int] = None
+    max_occurrences: Optional[int] = None
+
+    status: Optional[PolicyStatus] = None
 
     effective_from: Optional[datetime] = None
     effective_to: Optional[datetime] = None
 
-    status: Optional[PolicyStatus] = None
-    is_occasional: Optional[bool] = None
-
-    updated_at: datetime = datetime.now(timezone.utc)
     updated_by: Optional[str] = None
 
 
@@ -52,20 +54,20 @@ class DepositPolicyUpdate(SQLModel):
 # -----------------------------
 class DepositPolicyResponse(SQLModel):
     policy_id: uuid.UUID
-    deposit_amount_threshold: float
+    amount_paisa: Decimal
     late_deposit_fine: float  # in percentage
-    deposit_frequency_days: int
-    version: int
 
-    effective_from: datetime
-    effective_to: Optional[datetime]
+    schedule_type: DepositScheduleType
+    due_day_of_month: Optional[int] = None
+    allowed_months: Optional[int] = None
+    max_occurrences: Optional[int] = None
 
     status: PolicyStatus
-    is_occasional: bool
+    effective_from: datetime
+    effective_to: Optional[datetime] = None
 
-    created_by: Optional[str]
-    created_at: Optional[datetime] = None
-
+    created_by: Optional[str] = None
+    created_at: datetime
     updated_by: Optional[str] = None
     updated_at: Optional[datetime] = None
 

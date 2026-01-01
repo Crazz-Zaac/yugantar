@@ -5,7 +5,6 @@ from pydantic import model_validator, field_validator
 import uuid
 from decimal import Decimal
 
-from app.models.deposit_model import DepositTiming
 from app.models.deposit_model import DepositType
 from app.models.deposit_model import DepositVerificationStatus
 
@@ -16,14 +15,14 @@ from app.models.deposit_model import DepositVerificationStatus
 
 
 class DepositBase(SQLModel):
+    policy_id: Optional[uuid.UUID] = None
+
     deposited_amount: Decimal
-    amount_to_be_deposited: Optional[int] = None
-    deposit_frequency_days: Optional[int] = None
+    amount_to_be_deposited: Optional[Decimal] = None
 
     # Clearer date naming
     deposited_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     due_deposit_date: datetime
-    deposit_status: DepositTiming = Field(default=DepositTiming.LATE)
 
     late_deposit_fine: Optional[float] = Field(default=0.0, ge=0)
 
@@ -50,9 +49,8 @@ class DepositBase(SQLModel):
         """Set deposit_frequency_days and late_deposit_fine from policy if policy_id is provided."""
         policy = values.get("deposit_policy")
         if policy:
-            values["deposit_frequency_days"] = policy.deposit_frequency_days
             values["late_deposit_fine"] = policy.late_deposit_fine
-            values["amount_to_be_deposited"] = policy.deposit_amount_threshold
+            values["amount_to_be_deposited"] = policy.amount_rupees
         return values
 
     @field_validator("receipt_screenshot", mode="before")
@@ -67,7 +65,6 @@ class DepositBase(SQLModel):
 
 
 class DepositCreate(DepositBase):
-    deposit_status: DepositTiming = Field(default=DepositTiming.LATE)
     verification_status: DepositVerificationStatus = Field(
         default=DepositVerificationStatus.PENDING
     )
@@ -78,9 +75,11 @@ class DepositUserUpdate(SQLModel):
     deposited_amount: Optional[int] = Field(default=None, gt=0)
     receipt_screenshot: Optional[str] = None
 
+
 class DepositModeratorUpdate(SQLModel):
     verification_status: DepositVerificationStatus
     verified_by: Optional[str] = None
+
 
 class DepositResponse(DepositBase):
     id: uuid.UUID
@@ -92,11 +91,10 @@ class DepositResponse(DepositBase):
     receipt_screenshot: Optional[str]
 
     deposited_amount: Decimal
-    amount_to_be_deposited: int
+
     deposited_date: datetime
     due_deposit_date: datetime
 
-    deposit_status: DepositTiming
     deposit_type: DepositType
 
     verified_by: Optional[str]
