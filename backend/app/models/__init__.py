@@ -10,7 +10,8 @@ from .deposit_model import Deposit
 from .loan_model import Loan
 from .receipt_model import Receipt
 from .fine_model import Fine
-from .expense_model import ExpenditureModel
+# from .expense_model import ExpenditureModel
+from .loan_payment import LoanPayment
 
 # Dictionary to map model names to their classes
 ALL_MODELS = {
@@ -20,7 +21,10 @@ ALL_MODELS = {
     "loan": Loan,
     "fine": Fine,
     "receipt": Receipt,
-    "expendituremodel": ExpenditureModel,
+    "loanpayment": LoanPayment,
+    "depositpolicy": DepositPolicy,
+    "loanpolicy": LoanPolicy,
+    # "expendituremodel": ExpenditureModel,
 }
 
 

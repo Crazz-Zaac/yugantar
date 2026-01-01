@@ -457,3 +457,11 @@ echo "password" > secrets/pgadmin_password.txt"
 - Created schema response and service for the fine model
 
 ---
+
+### 2026-01-01
+
+- I received `INTEGER NOT NULL` error as I was trying to add a NOT NULL column to an existing table that already has rows
+  - The workaround was to edit the migration script in alembic and set a `server_default=` some value
+- Added some important utilities for deposit and currency conversion
+  - `deposit_date_utils.py` will calculate the due date and fine amount
+  - `financial_utils.py` provides NPR rupees to paisa, paisa to rupess and some formatting

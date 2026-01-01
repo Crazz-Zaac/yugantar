@@ -1,4 +1,4 @@
-from .deposit_schema import DepositBase, DepositCreate, DepositUpdate
+from .deposit_schema import DepositBase, DepositCreate, DepositModeratorUpdate, DepositUserUpdate
 from .receipt_schema import ReceiptBase, ReceiptCreate, ReceiptUpdate
 from .user_schema import UserBase, UserCreate, UserUpdate, CooperativeRole
 from .loan_schema import LoanBase, LoanUpdate #, LoanCreate
@@ -11,7 +11,8 @@ all_schemas = [
     CooperativeRole,
     DepositBase,
     DepositCreate,
-    DepositUpdate,
+    DepositModeratorUpdate,
+    DepositUserUpdate,
     ReceiptBase,
     ReceiptCreate,
     ReceiptUpdate,
@@ -27,7 +28,8 @@ __all__ = [
     "CooperativeRole",
     "DepositBase",
     "DepositCreate",
-    "DepositUpdate",
+    "DepositModeratorUpdate",
+    "DepositUserUpdate",
     "ReceiptBase",
     "ReceiptCreate",
     "ReceiptUpdate",

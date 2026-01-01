@@ -16,12 +16,6 @@ from .base import BaseModel
 from .mixins.money import MoneyMixin
 
 
-class DepositTiming(str, Enum):
-    EARLY = "early"
-    ON_TIME = "on_time"
-    LATE = "late"
-
-
 class DepositVerificationStatus(str, Enum):
     PENDING = "pending"
     VERIFIED = "verified"
@@ -42,26 +36,24 @@ class Deposit(BaseModel, MoneyMixin, table=True):
 
     # the deposited amount is now inherited from MoneyMixin
     # the amount is stored in amount_paisa for precision
-    
+
     deposit_type: DepositType = Field(default=DepositType.CURRENT)
 
     # Clearer date naming
     deposited_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    due_deposit_date: datetime = Field()
-
-    deposit_timing: DepositTiming = Field(default=DepositTiming.LATE)
+    due_deposit_date: datetime = Field(index=True)
 
     # Foreign keys
     receipt_id: Optional[uuid.UUID] = Field(foreign_key="receipt.id", nullable=True)
 
-    # Additional fields 
+    # Additional fields
     # deposit verification status
     verification_status: DepositVerificationStatus = Field(
         default=DepositVerificationStatus.PENDING
     )
     verified_by: Optional[str] = Field(max_length=100, nullable=True)
 
-    user_id: uuid.UUID = Field(foreign_key="user.id", index=True)
+    user_id: uuid.UUID = Field(foreign_key="user.id", index=True, nullable=False)
     loan_id: Optional[uuid.UUID] = Field(foreign_key="loan.id", nullable=True)
 
     # Relationships
