@@ -6,13 +6,27 @@ from sqlmodel import Session, select
 from datetime import datetime, timezone
 
 from app.models.fine_model import Fine
-from app.schemas.fine_schema import FineBase, FineResponse
+from app.schemas.fine_schema import FineBase
 
 
 class FineService:
     """
     Service class for managing fines.
     """
+
+    def create_fine(
+        self,
+        session: Session,
+        fine_in: FineBase,
+    ) -> Fine:
+        fine_data = fine_in.model_dump()
+        new_fine = Fine(**fine_data)
+
+        session.add(new_fine)
+        session.commit()
+        session.refresh(new_fine)
+
+        return new_fine
 
     def get_fine(
         self,
