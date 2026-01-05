@@ -2,7 +2,8 @@ from sqlmodel import SQLModel, Field
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
-from pydantic import BaseModel, field_validator
+from pydantic import field_validator
+from decimal import Decimal
 
 # ----------------------------
 # Receipt Schemas
@@ -10,12 +11,12 @@ from pydantic import BaseModel, field_validator
 
 
 class ReceiptBase(SQLModel):
-    user_id: int
-    deposit_id: Optional[int] = Field(default=None, gt=0)
+    user_id: uuid.UUID
     receipt_screenshot: Optional[str] = Field(default=None, max_length=255)
-    amount: float = Field(..., gt=0)
+    
+    amount: Decimal = Field(..., gt=0)
+    txn_number: Optional[int] = None
     date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    notes: Optional[str] = Field(default=None, max_length=255)
 
     @field_validator("receipt_screenshot")
     def validate_receipt_screenshot(cls, value):
@@ -47,11 +48,12 @@ class ReceiptCreate(ReceiptBase):
     pass
     
 class ReceiptUpdate(SQLModel):
-    deposit_id: Optional[int] = Field(default=None, gt=0)
     receipt_screenshot: Optional[str] = Field(default=None, max_length=255)
+    
     amount: Optional[float] = Field(default=None, gt=0)
+    txn_number: Optional[int] = None
     date: Optional[datetime] = None
-    notes: Optional[str] = Field(default=None, max_length=255)
+    
 
     @field_validator("receipt_screenshot")
     def validate_receipt_screenshot(cls, value):
