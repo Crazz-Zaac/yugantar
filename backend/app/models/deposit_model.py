@@ -43,9 +43,6 @@ class Deposit(BaseModel, MoneyMixin, table=True):
     deposited_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     due_deposit_date: datetime = Field(index=True)
 
-    # Foreign keys
-    receipt_id: Optional[uuid.UUID] = Field(foreign_key="receipt.id", nullable=True)
-
     # Additional fields
     # deposit verification status
     verification_status: DepositVerificationStatus = Field(
@@ -53,6 +50,10 @@ class Deposit(BaseModel, MoneyMixin, table=True):
     )
     verified_by: Optional[str] = Field(max_length=100, nullable=True)
 
+    # Foreign keys
+    receipt_id: Optional[uuid.UUID] = Field(
+        foreign_key="receipt.id", nullable=True, unique=True
+    )
     user_id: uuid.UUID = Field(foreign_key="user.id", index=True, nullable=False)
     loan_id: Optional[uuid.UUID] = Field(foreign_key="loan.id", nullable=True)
 
