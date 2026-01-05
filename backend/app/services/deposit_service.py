@@ -11,6 +11,7 @@ from app.schemas.deposit_schema import (
     DepositUserUpdate,
     DepositModeratorUpdate,
 )
+from app.services.receipt_service import ReceiptService
 from app.models.user_model import User, CooperativeRole
 from app.utils.deposit_date_utils import (
     calculate_due_date,
@@ -18,6 +19,8 @@ from app.utils.deposit_date_utils import (
     is_deposit_late,
     days_until_due,
 )
+from app.models.mixins.money import MoneyMixin
+from app.models.fine_model import Fine
 
 
 class DepositService:
@@ -42,15 +45,25 @@ class DepositService:
         due_date = calculate_due_date(policy=policy, reference_date=now)
 
         deposit_data = deposit_in.model_dump(
-            exclude={"receipt_screenshot", "due_deposit_date"}
+            exclude={
+                "receipt_screenshot",
+                "deposited_date",  # we let the service set this
+                "due_deposit_date",
+                "receipt_id",  # we set this later once receipt is created
+            }
         )
+
+        # we set deposited_date and due_deposit_date explicitly
+        # by excluding them from deposit_data
         new_deposit = Deposit(
             **deposit_data,
             user_id=user_id,
             due_deposit_date=due_date,
             deposited_date=now,
+            amount_paisa=MoneyMixin.rupees_to_paisa(deposit_in.deposited_amount),
         )
 
+        # Check for late deposit and apply fine if necessary
         if is_deposit_late(now, due_date):
             fine_amount = calculate_late_fine(
                 deposited_date=now,
@@ -58,7 +71,14 @@ class DepositService:
                 amount_to_be_deposited=policy.amount_rupees,
                 late_deposit_fine_percentage=policy.late_deposit_fine,
             )
-            # TODO: Store fine_amount somewhere if needed
+            fine = Fine(
+                user_id=user_id,
+                deposit_id=new_deposit.id,
+                amount_rupees=fine_amount,
+                fine_type="LATE_DEPOSIT",
+                date=now,
+            )
+            session.add(fine)
 
         session.add(new_deposit)
         session.commit()
@@ -155,7 +175,7 @@ class DepositService:
             )
 
         return db_deposit
-    
+
     def get_upcoming_deposits(
         self,
         session: Session,
@@ -170,12 +190,16 @@ class DepositService:
         now = datetime.now(timezone.utc)
         end_date = now + timedelta(days=days_ahead)
 
-        statement = select(Deposit).where(
-            Deposit.user_id == user_id,
-            Deposit.due_deposit_date >= now,
-            Deposit.due_deposit_date <= end_date,
-        ).order_by(Deposit.due_deposit_date)  # typing: ignore
-        
+        statement = (
+            select(Deposit)
+            .where(
+                Deposit.user_id == user_id,
+                Deposit.due_deposit_date >= now,
+                Deposit.due_deposit_date <= end_date,
+            )
+            .order_by(Deposit.due_deposit_date)
+        )  # typing: ignore
+
         result = session.exec(statement).all()
 
         return list(result)
