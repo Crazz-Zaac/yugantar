@@ -9,6 +9,8 @@
 - SQL Model
 - Pydantic
 - Alembic
+- Redis
+- Celery
 
 ### Frontend techstack
 
