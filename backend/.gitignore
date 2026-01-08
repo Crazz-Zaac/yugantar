@@ -215,3 +215,6 @@ versions/
 # !alembic/versions/__init__.py
 
 imp_docs/
+
+# receipts folder
+receipts/

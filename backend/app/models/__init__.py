@@ -13,6 +13,8 @@ from .fine_model import Fine
 # from .expense_model import ExpenditureModel
 from .loan_payment import LoanPayment
 
+from .mixins.money import MoneyMixin
+
 # Dictionary to map model names to their classes
 ALL_MODELS = {
     "base": BaseModel,
@@ -24,6 +26,7 @@ ALL_MODELS = {
     "loanpayment": LoanPayment,
     "depositpolicy": DepositPolicy,
     "loanpolicy": LoanPolicy,
+    "moneymixin": MoneyMixin,
     # "expendituremodel": ExpenditureModel,
 }
 

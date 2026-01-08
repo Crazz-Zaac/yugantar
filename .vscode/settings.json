@@ -1,4 +1,8 @@
 {
   "python.formatting.provider": "black",
-  "editor.formatOnSave": true
+  "editor.formatOnSave": true,
+  "python-envs.pythonProjects": [],
+  "python.analysis.extraPaths": ["${workspaceFolder}/backend"],
+  "python.analysis.autoSearchPaths": true,
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python"
 }

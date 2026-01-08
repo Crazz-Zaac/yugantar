@@ -5,3 +5,5 @@ versions/
 
 # unnecessary docs folder
 imp_docs/
+
+.vscode/
