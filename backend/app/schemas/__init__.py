@@ -14,6 +14,6 @@ __all__ = [
     "UserUpdate",
     "LoanCreate",
     "LoanUpdate",
-    "ExpenseCreate",
-    "ExpenseUpdate",
+    # "ExpenseCreate",
+    # "ExpenseUpdate",
 ]

@@ -1,11 +1,21 @@
 #!/bin/sh
 set -e
 
+ROLE="${ROLE:-web}"
 
+if [ "$ROLE" = "web" ]; then
+  echo "Running web container"
 
-# Create admin user if not exists
-echo "Creating admin user if not exists..."
-python -m app.scripts.create_admin_user
+  python -m app.scripts.create_admin_user
 
-# Start FastAPI using the venv Python
-exec uvicorn main:app --host 0.0.0.0 --port 8000 "$@"
+  exec uvicorn main:app --host 0.0.0.0 --port 8000
+
+elif [ "$ROLE" = "worker" ]; then
+  echo "Running celery worker"
+
+  exec celery -A app.worker.celery_app worker --loglevel=info
+
+else
+  echo "Unknown ROLE=$ROLE"
+  exit 1
+fi
