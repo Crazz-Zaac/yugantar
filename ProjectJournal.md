@@ -109,7 +109,6 @@ echo "password" > secrets/pgadmin_password.txt"
 ## 2025-10-11
 
 - Defined the password hashing logics:
-
   - Created `app/core/config.py` for fetching all the environment variables from `.env`
   - Created token creation, password verification and password hashing in `app/core/security.py` using `jwt` and `passlib`
 
@@ -128,7 +127,6 @@ echo "password" > secrets/pgadmin_password.txt"
 ## 2025-10-13
 
 - Solved the issue of API not updating the change to route:
-
   - Initially I had tested with a `/ping` route which even after creating a new endpoint `/api/v1/endpoints/user` it kept showing
   - Had to completely delete the `yugantar-backend` and rebuild it
 
@@ -153,14 +151,12 @@ echo "password" > secrets/pgadmin_password.txt"
 - Created `dependencies/admin.py` that returns the current admin or moderator
 
 - Created `endpoints/admin.py` to:
-
   - list all users
   - if user is admin, then get user's ID
   - As an admin update and delete user's data
   - Disable user as an admin
 
 - Created `api/dependencies/auth.py` for authentication to:
-
   - `get_current_user`
     - Use `JWT` to decode using token and secret key
     - Extract the user ID from the payload
@@ -170,7 +166,6 @@ echo "password" > secrets/pgadmin_password.txt"
     - check if the user is active and not disabled
 
 - Created `api/endpoints/user_login.py` to:
-
   - `login_for_access_token`:
     - authenticates the user by email and password
     - calculate the token expiry in minutes
@@ -183,7 +178,6 @@ echo "password" > secrets/pgadmin_password.txt"
   - Create a new access token and return the updated token
 
 - Updated `endpoints/user_route.py` to:
-
   - allow currently logged in user to get own details, update and delete account
 
 - Updated `app/services/user_service.py` for admin related functionality:
@@ -208,11 +202,9 @@ echo "password" > secrets/pgadmin_password.txt"
 - Team meeting
 
 - Feedbacks:
-
   - Expense Policy
     - Meeting expense
   - Investment Policy
-
     - invested by
     - asset
     - amount
@@ -228,7 +220,6 @@ echo "password" > secrets/pgadmin_password.txt"
   - President
     - Approves loan
   - ADMIN
-
     - Role assignment
     - Full IT department
     - Renew password every 6 months
@@ -266,7 +257,6 @@ echo "password" > secrets/pgadmin_password.txt"
 ## 2025-11-07
 
 - Enums should be explicitly created in alembic migrations (`alembic/env.py`)
-
   - First define the enum
   - Create it
   - Set the type of the respective column to this enum type
@@ -355,7 +345,6 @@ echo "password" > secrets/pgadmin_password.txt"
 ## 2025-12-07
 
 - Solved the issue of token local storage. This resolved the issue of login, signup and user edit profile.
-
   - The way the backend was sending the token and the way frontend was retrieving the token wasn't aligned.
   - This caused the token mismatch.
 
@@ -393,7 +382,6 @@ echo "password" > secrets/pgadmin_password.txt"
 
 - Initially Deposit and Loan Policies can never be deleted. Every changes to them are logged to policy change table. The problem is,
   how to handle, when the authorized person created a policy with the wrong inputs?
-
   - To handle this a new column `status` was defined for each policy as an `Enum`
     ```python
       class PolicyStatus(str, Enum):
@@ -411,11 +399,14 @@ echo "password" > secrets/pgadmin_password.txt"
 
 - Alembic migrations wasn't straight forward while creating `Enum`s data type for `status` column. Simply `alembic upgrade head` didn't work.
   - Therefore, the migration script needed to be edited manually to create the enum fields. For example:
+
   ```python
     policy_status = sa.Enum("DRAFT", "ACTIVE", "EXPIRED", "VOID", name="policystatus")
     policy_status.create(op.get_bind(), checkfirst=True)
   ```
+
   - Next thing is, we must provide the default value for such fields and for that use `server_default="DRAFT"` for example.
+
   ```python
     op.add_column(
         "interestpolicy",
@@ -464,4 +455,32 @@ echo "password" > secrets/pgadmin_password.txt"
   - The workaround was to edit the migration script in alembic and set a `server_default=` some value
 - Added some important utilities for deposit and currency conversion
   - `deposit_date_utils.py` will calculate the due date and fine amount
-  - `financial_utils.py` provides NPR rupees to paisa, paisa to rupess and some formatting
+  - `financial_utils.py` converts NPR rupees to paisa, paisa to rupess and some formatting
+
+---
+
+### 2026-01-26
+
+- Created `ocr_service`
+  - use opencv to read image
+  - extract data using `pytesseract`
+  - use regex to match the pattern to extract `amount`, `charge`(if exists), `date` and `reference`
+  - return as a dictionary
+
+- Created `ocr_task`
+  - take `image_path`
+  - Calls the `ocr_service`
+  - Extracts the data
+  - Returns the data in `JSON` format
+
+- Created a shared volumes, an upload directory for `backend` and `clery-worker` containers
+
+- Created `celery_app`
+  - auto discovers tasks registered as `@celery_app.task` inside `/app/tasks/*.py`
+
+- Created `ocr.py`
+  - creates `/tmp/ocr_uploads` directory if not present
+  - validates the file size, max 10MB
+  - provides unique file name to the uploaded file
+  - queues the ocr processing task and celery handles it
+  - returns JSON response with `status`, `task_id` and `message`

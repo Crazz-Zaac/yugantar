@@ -30,6 +30,12 @@ dependencies = [
     "python-multipart (>=0.0.20,<0.0.21)",
     "fastapi-mail (>=1.5.7,<2.0.0)",
     "itsdangerous (>=2.2.0,<3.0.0)",
+    "pytesseract (>=0.3.13,<0.4.0)",
+    "pdf2image (>=1.17.0,<2.0.0)",
+    "opencv-python (>=4.12.0.88,<5.0.0.0)",
+    "ipykernel (>=7.1.0,<8.0.0)",
+    "notebook (>=7.5.1,<8.0.0)",
+    "matplotlib (>=3.10.8,<4.0.0)",
 ]
 
 [tool.poetry]
@@ -53,3 +59,7 @@ dev = [
 [tool.ruff]
 line-length = 88
 select = ["E", "F", "I"]
+
+[tool.mypy]
+mypy_path = ["backend"]
+explicit_package_bases = true
