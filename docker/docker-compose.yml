@@ -42,6 +42,7 @@ services:
       - redis
     volumes: 
       - ../backend:/app
+      - upload-data:/tmp/ocr_uploads  # shared volume for uploaded data
     networks:
       - yugantar-network
     restart: unless-stopped
@@ -65,7 +66,8 @@ services:
     #TODO: remove this volume in production
     volumes:
       - ../frontend/yugantar:/app       # live code changes reflect instantly
-      - /app/node_modules  
+      - /app/node_modules
+      - upload-data:/app/uploads # shared volume for uploaded data
     networks:
       - yugantar-network
     restart: unless-stopped
@@ -73,6 +75,8 @@ services:
   redis:
     image: redis:latest
     container_name: yugantar-redis
+    # ports:
+    #   - "6379:6379"
     networks:
       - yugantar-network
     restart: unless-stopped
@@ -91,9 +95,30 @@ services:
       - redis
     volumes:
       - ../backend:/app
+      - upload-data:/tmp/ocr_uploads # shared volume for uploaded data
     networks:
       - yugantar-network
-    restart: unless-stopped  
+    restart: unless-stopped
+    tmpfs:
+      - /tmp  # Use tmpfs for /tmp to improve performance and reduce disk I/O
+
+  celery_beat:
+    image: celery:v1
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend.dev
+    container_name: yugantar-celery-beat
+    env_file:
+      - ../backend/.env
+    environment:
+      ROLE: beat
+    depends_on:
+      - redis
+    volumes:
+      - ../backend:/app
+    networks:
+      - yugantar-network
+    restart: unless-stopped 
   
 # secrets:
 #   db_password:
@@ -104,6 +129,8 @@ services:
 volumes:
   db_data:
   pgadmin_data:
+  redis_data:
+  upload-data:  # shared between backend, frontend, and celery worker
   # portainer_data:
 
 networks:
