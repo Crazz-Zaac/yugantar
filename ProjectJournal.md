@@ -92,6 +92,8 @@ echo "password" > secrets/pgadmin_password.txt"
 - `docker compose run backend /bin/bash --remove-orphans` (name of service)
 - OR: `docker compose run backend python --remove-orphans`
 
+- To access the terminal of a running container use `docker exec -it <container_name_or_id> /bin/bash`
+
 ---
 
 # History
