@@ -486,3 +486,11 @@ echo "password" > secrets/pgadmin_password.txt"
   - provides unique file name to the uploaded file
   - queues the ocr processing task and celery handles it
   - returns JSON response with `status`, `task_id` and `message`
+
+---
+### 2026-02-01
+
+- Moved `alembic.ini` inside `backend/`
+- Corrected the `backend/alembic/env.py` to import package from `app/` instead of `backend/`
+- Now using a fixed version of postgres. `postgres: 18`
+- 
