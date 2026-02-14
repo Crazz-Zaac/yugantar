@@ -54,7 +54,7 @@ services:
       # dockerfile: docker/Dockerfile.frontend   # for production
       dockerfile: docker/Dockerfile.frontend.dev
     container_name: yugantar-frontend
-    environment:
+    environment:  # TODO: move to .env file in future
       CHOKIDAR_USEPOLLING: "true"       # ensures hot reload works on Docker
       WATCHPACK_POLLING: "true"
       REACT_APP_API_URL: http://backend:8000  # This should point to the backend service
