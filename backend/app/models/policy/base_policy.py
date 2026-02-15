@@ -8,6 +8,7 @@ import uuid
 
 class PolicyStatus(str, Enum):
     DRAFT = "draft"
+    FINALIZED = "finalized"
     ACTIVE = "active"
     EXPIRED = "expired"
     VOID = "void"

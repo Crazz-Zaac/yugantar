@@ -92,6 +92,8 @@ echo "password" > secrets/pgadmin_password.txt"
 - `docker compose run backend /bin/bash --remove-orphans` (name of service)
 - OR: `docker compose run backend python --remove-orphans`
 
+- To access the terminal of a running container use `docker exec -it <container_name_or_id> /bin/bash`
+
 ---
 
 # History
@@ -484,3 +486,11 @@ echo "password" > secrets/pgadmin_password.txt"
   - provides unique file name to the uploaded file
   - queues the ocr processing task and celery handles it
   - returns JSON response with `status`, `task_id` and `message`
+
+---
+### 2026-02-01
+
+- Moved `alembic.ini` inside `backend/`
+- Corrected the `backend/alembic/env.py` to import package from `app/` instead of `backend/`
+- Now using a fixed version of postgres. `postgres: 18`
+- 

@@ -62,7 +62,7 @@ async def register_user(
     # Send welcome email and verification link
     verification_token = create_url_safe_token(data={"email": new_user.email})
     verification_link = (
-        f"{settings.BACKEND_HOST}/api/v1/auth/verify-email?token={verification_token}"
+        f"{settings.FRONTEND_HOST}/verify-email?token={verification_token}"
     )
 
     background_tasks.add_task(
@@ -96,15 +96,14 @@ async def login_user(
         subject=str(user.id),
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
-    
+
     # Generate refresh token
     refresh_token = str(uuid4())
     redis_key = f"refresh_token:{refresh_token}"
     redis_client.set(
         redis_key, str(user.id), ex=timedelta(days=7)
     )  # Store refresh token
-    
-    
+
     # set resfresh token in httpOnly cookie
     reponse.set_cookie(
         key="refresh_token",

@@ -10,10 +10,10 @@ echo "Python Version: $(python --version)"
 echo "==================================="
 
 # Wait for dependencies 
-if [ -n "$WAIT_FOR_DB" ]; then
-  echo "Waiting for database..."
-  python -m app.scripts.wait_for_db
-fi
+# if [ -n "$WAIT_FOR_DB" ]; then
+#   echo "Waiting for database..."
+#   python -m app.scripts.wait_for_db
+# fi
 
 case "$ROLE" in
   web)

@@ -15,11 +15,11 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 # create all policy models
-from backend.app.models.policy import *  
+from app.models.policy import *  
 # import all models to register them with SQLModel metadata
-from backend.app.models import *    
-from backend.app.core.db import engine 
-from backend.app.core.config import settings
+from app.models import *    
+from app.core.db import engine 
+from app.core.config import settings
 
 from alembic import context
 # this is the Alembic Config object, which provides
