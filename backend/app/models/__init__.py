@@ -1,4 +1,5 @@
 from sqlmodel import SQLModel
+
 # Import all policy models to ensure they are registered
 from .policy.deposit_policy import DepositPolicy
 from .policy.loan_policy import LoanPolicy
@@ -10,8 +11,10 @@ from .deposit_model import Deposit
 from .loan_model import Loan
 from .receipt_model import Receipt
 from .fine_model import Fine
+
 # from .expense_model import ExpenditureModel
 from .loan_payment import LoanPayment
+from .notification_model import Notification
 
 from .mixins.money import MoneyMixin
 
@@ -31,7 +34,6 @@ ALL_MODELS = {
 }
 
 
-
 # Utility functions to get models information
 def get_model(model_name: str):
     """
@@ -42,6 +44,7 @@ def get_model(model_name: str):
         return ALL_MODELS[model_name]
     else:
         raise ValueError(f"Model {model_name} not found.")
+
 
 # Functions to create and drop tables
 def create_table(model_name: str, engine):
@@ -55,6 +58,7 @@ def create_table(model_name: str, engine):
     else:
         raise ValueError(f"Model {model_name} not found.")
 
+
 def drop_table(model_name: str, engine):
     """
     Drop a table based on the model name.
@@ -66,12 +70,14 @@ def drop_table(model_name: str, engine):
     else:
         raise ValueError(f"Model {model_name} not found.")
 
+
 def create_all_tables(engine):
     """
     Create all tables defined in SQLModel models.
     """
     SQLModel.metadata.create_all(engine)
     return "All tables created successfully."
+
 
 def drop_all_tables(engine):
     """
@@ -80,10 +86,11 @@ def drop_all_tables(engine):
     SQLModel.metadata.drop_all(engine)
     return "All tables dropped successfully."
 
+
 __all__ = [
     "BaseModel",
     "User",
-    "Deposit", 
+    "Deposit",
     "Loan",
     "Receipt",
     "Fine",

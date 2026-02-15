@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
+from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
 from datetime import timedelta
@@ -123,11 +124,22 @@ async def refresh_access_token(
     )
 
 
-# route to verify email token only
-@router.get("/verify-email", status_code=status.HTTP_200_OK)
+# route to verify email token only — redirects to frontend
+@router.get("/verify-email")
+async def verify_email_redirect(token: str):
+    """
+    Redirect to the frontend verification page which will call
+    the actual verify API and display the result nicely.
+    """
+    frontend_url = f"{settings.FRONTEND_HOST}/verify-email?token={token}"
+    return RedirectResponse(url=frontend_url)
+
+
+# actual verification logic called by the frontend
+@router.post("/verify-email", status_code=status.HTTP_200_OK)
 async def verify_email_token(token: str, session: Session = Depends(get_session)):
     """
-    Verify email using the provided token.
+    Verify email using the provided token. Called by the frontend page.
     """
     try:
         token_data = decode_url_safe_token(

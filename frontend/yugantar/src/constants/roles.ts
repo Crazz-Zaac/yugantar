@@ -1,12 +1,14 @@
 export const ACCESS_ROLES = [
   "user",
   "moderator",
+  "admin",
 ] as const;
 
 export const COOPERATIVE_ROLES = [
   "member",
   "secretary",
   "treasurer",
+  "president",
 ] as const;
 
 
