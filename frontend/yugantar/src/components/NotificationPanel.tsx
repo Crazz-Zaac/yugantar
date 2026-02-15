@@ -1,44 +1,95 @@
-import { Bell, AlertTriangle, CheckCircle2, Info, X } from "lucide-react"
+import { Bell, AlertTriangle, CheckCircle2, Info, ShieldAlert, FileCheck, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
+import { apiClient } from "@/api/api"
 
-type Notification = {
-  id: number
+interface ApiNotification {
+  id: string
+  user_id: string
   title: string
   message: string
-  type: "warning" | "success" | "info" | "destructive"
-  time: string
-  read: boolean
+  notification_type: string
+  policy_id: string | null
+  policy_type: string | null
+  is_read: boolean
+  created_at: string
 }
 
-export function NotificationPanel({ notifications: initialNotifications }: { notifications: Notification[] }) {
-  const [items, setItems] = useState(initialNotifications)
+export function NotificationPanel() {
+  const [items, setItems] = useState<ApiNotification[]>([])
   const [open, setOpen] = useState(false)
 
-  const unreadCount = items.filter((n) => !n.read).length
+  const fetchNotifications = useCallback(async () => {
+    try {
+      const res = await apiClient.get("/notifications")
+      setItems(res.data)
+    } catch {
+      // silently fail — header component
+    }
+  }, [])
 
-  const markAllRead = () => {
-    setItems(items.map((n) => ({ ...n, read: true })))
+  useEffect(() => {
+    fetchNotifications()
+    // Poll every 30 seconds
+    const interval = setInterval(fetchNotifications, 30_000)
+    return () => clearInterval(interval)
+  }, [fetchNotifications])
+
+  // Re-fetch when popover opens
+  useEffect(() => {
+    if (open) fetchNotifications()
+  }, [open, fetchNotifications])
+
+  const unreadCount = items.filter((n) => !n.is_read).length
+
+  const markAllRead = async () => {
+    try {
+      await apiClient.patch("/notifications/read-all")
+      setItems((prev) => prev.map((n) => ({ ...n, is_read: true })))
+    } catch {
+      // silent
+    }
   }
 
-  const dismiss = (id: number) => {
-    setItems(items.filter((n) => n.id !== id))
+  const markRead = async (id: string) => {
+    try {
+      await apiClient.patch(`/notifications/${id}/read`)
+      setItems((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)))
+    } catch {
+      // silent
+    }
   }
 
-  const getIcon = (type: Notification["type"]) => {
+  const getIcon = (type: string) => {
     switch (type) {
-      case "warning":
-        return <AlertTriangle className="h-4 w-4 text-warning" />
-      case "success":
+      case "policy_approval":
+        return <ShieldAlert className="h-4 w-4 text-warning" />
+      case "policy_approved":
         return <CheckCircle2 className="h-4 w-4 text-success" />
-      case "destructive":
+      case "policy_rejected":
         return <AlertTriangle className="h-4 w-4 text-destructive" />
+      case "policy_finalized":
+        return <FileCheck className="h-4 w-4 text-chart-2" />
       default:
         return <Info className="h-4 w-4 text-chart-2" />
     }
+  }
+
+  const formatTime = (iso: string) => {
+    const d = new Date(iso)
+    const now = new Date()
+    const diffMs = now.getTime() - d.getTime()
+    const diffMins = Math.floor(diffMs / 60_000)
+    if (diffMins < 1) return "Just now"
+    if (diffMins < 60) return `${diffMins}m ago`
+    const diffHrs = Math.floor(diffMins / 60)
+    if (diffHrs < 24) return `${diffHrs}h ago`
+    const diffDays = Math.floor(diffHrs / 24)
+    if (diffDays < 7) return `${diffDays}d ago`
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
   }
 
   return (
@@ -48,7 +99,7 @@ export function NotificationPanel({ notifications: initialNotifications }: { not
           <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
             <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-              {unreadCount}
+              {unreadCount > 9 ? "9+" : unreadCount}
             </span>
           )}
         </Button>
@@ -80,24 +131,19 @@ export function NotificationPanel({ notifications: initialNotifications }: { not
               {items.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`flex gap-3 px-4 py-3 transition-colors ${notification.read ? "bg-transparent" : "bg-accent/50"
+                  className={`flex gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-accent/30 ${notification.is_read ? "bg-transparent" : "bg-accent/50"
                     }`}
+                  onClick={() => !notification.is_read && markRead(notification.id)}
                 >
-                  <div className="mt-0.5 shrink-0">{getIcon(notification.type)}</div>
+                  <div className="mt-0.5 shrink-0">{getIcon(notification.notification_type)}</div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-foreground">{notification.title}</p>
                     <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{notification.message}</p>
-                    <p className="mt-1 text-[11px] text-muted-foreground/70">{notification.time}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground/70">{formatTime(notification.created_at)}</p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 hover:opacity-100 focus:opacity-100"
-                    onClick={() => dismiss(notification.id)}
-                    aria-label={`Dismiss notification: ${notification.title}`}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
+                  {!notification.is_read && (
+                    <div className="mt-2 h-2 w-2 shrink-0 rounded-full bg-primary" />
+                  )}
                 </div>
               ))}
             </div>

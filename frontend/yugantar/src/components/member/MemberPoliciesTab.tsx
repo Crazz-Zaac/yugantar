@@ -11,6 +11,11 @@ import {
     Landmark,
     CreditCard,
     Loader2,
+    ShieldCheck,
+    Info,
+    Send,
+    XCircle,
+    FileCheck,
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -40,14 +45,13 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { apiClient } from "@/api/api"
 import { useAuth } from "@/contexts/AuthContext"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type PolicyStatus = "draft" | "active" | "expired" | "void"
+type PolicyStatus = "draft" | "finalized" | "active" | "expired" | "void"
 type DepositScheduleType = "monthly_fixed_day" | "occasional"
 
 interface DepositPolicy {
@@ -99,6 +103,11 @@ const statusConfig: Record<PolicyStatus, { label: string; icon: typeof CheckCirc
         icon: Clock,
         className: "border-warning/30 bg-warning/10 text-warning",
     },
+    finalized: {
+        label: "Under Review",
+        icon: FileCheck,
+        className: "border-chart-2/30 bg-chart-2/10 text-chart-2",
+    },
     expired: {
         label: "Expired",
         icon: FileX,
@@ -149,7 +158,6 @@ const emptyDepositForm = {
     due_day_of_month: "",
     allowed_months: "",
     max_occurrences: "",
-    status: "draft" as PolicyStatus,
     effective_from: new Date().toISOString().slice(0, 16),
     effective_to: "",
 }
@@ -162,7 +170,6 @@ const emptyLoanForm = {
     max_renewals: "0",
     requires_collateral: false,
     emi_applicable: false,
-    status: "draft" as PolicyStatus,
     effective_from: new Date().toISOString().slice(0, 16),
     effective_to: "",
 }
@@ -176,6 +183,9 @@ export function MemberPoliciesTab() {
     const canManage =
         user?.cooperative_roles?.includes("treasurer") &&
         user?.access_roles?.includes("moderator")
+
+    // Role check: president can approve draft policies
+    const isPresident = user?.cooperative_roles?.includes("president")
 
     // State
     const [depositPolicies, setDepositPolicies] = useState<DepositPolicy[]>([])
@@ -233,7 +243,6 @@ export function MemberPoliciesTab() {
             due_day_of_month: p.due_day_of_month != null ? String(p.due_day_of_month) : "",
             allowed_months: p.allowed_months != null ? String(p.allowed_months) : "",
             max_occurrences: p.max_occurrences != null ? String(p.max_occurrences) : "",
-            status: p.status,
             effective_from: p.effective_from ? p.effective_from.slice(0, 16) : "",
             effective_to: p.effective_to ? p.effective_to.slice(0, 16) : "",
         })
@@ -247,7 +256,6 @@ export function MemberPoliciesTab() {
                 amount_paisa: Number(depositForm.amount_paisa),
                 late_deposit_fine: Number(depositForm.late_deposit_fine),
                 schedule_type: depositForm.schedule_type,
-                status: depositForm.status,
                 effective_from: depositForm.effective_from
                     ? new Date(depositForm.effective_from).toISOString()
                     : undefined,
@@ -297,7 +305,6 @@ export function MemberPoliciesTab() {
             max_renewals: String(p.max_renewals ?? 0),
             requires_collateral: p.requires_collateral,
             emi_applicable: p.emi_applicable,
-            status: p.status,
             effective_from: p.effective_from ? p.effective_from.slice(0, 16) : "",
             effective_to: p.effective_to ? p.effective_to.slice(0, 16) : "",
         })
@@ -315,7 +322,6 @@ export function MemberPoliciesTab() {
                 max_renewals: Number(loanForm.max_renewals),
                 requires_collateral: loanForm.requires_collateral,
                 emi_applicable: loanForm.emi_applicable,
-                status: loanForm.status,
                 effective_from: loanForm.effective_from
                     ? new Date(loanForm.effective_from).toISOString()
                     : undefined,
@@ -360,12 +366,56 @@ export function MemberPoliciesTab() {
         }
     }
 
+    // ─── Submit for Review ─────────────────────────────────────────────
+
+    const submitForReview = async (type: "deposit" | "loan", policyId: string) => {
+        setSubmitting(true)
+        try {
+            await apiClient.post(`/policies/${type}/${policyId}/submit`)
+            fetchPolicies()
+        } catch {
+            setError(`Failed to submit ${type} policy for review.`)
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
+    // ─── Approve ─────────────────────────────────────────────────────────
+
+    const approvePolicy = async (type: "deposit" | "loan", policyId: string) => {
+        setSubmitting(true)
+        try {
+            await apiClient.post(`/policies/${type}/${policyId}/approve`)
+            fetchPolicies()
+        } catch {
+            setError(`Failed to approve ${type} policy.`)
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
+    // ─── Reject ──────────────────────────────────────────────────────────
+
+    const rejectPolicy = async (type: "deposit" | "loan", policyId: string) => {
+        setSubmitting(true)
+        try {
+            await apiClient.post(`/policies/${type}/${policyId}/reject`)
+            fetchPolicies()
+        } catch {
+            setError(`Failed to reject ${type} policy.`)
+        } finally {
+            setSubmitting(false)
+        }
+    }
+
     // ─── Counts ──────────────────────────────────────────────────────────────
 
     const depositActive = depositPolicies.filter((p) => p.status === "active").length
     const depositDraft = depositPolicies.filter((p) => p.status === "draft").length
+    const depositFinalized = depositPolicies.filter((p) => p.status === "finalized").length
     const loanActive = loanPolicies.filter((p) => p.status === "active").length
     const loanDraft = loanPolicies.filter((p) => p.status === "draft").length
+    const loanFinalized = loanPolicies.filter((p) => p.status === "finalized").length
 
     // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -386,9 +436,24 @@ export function MemberPoliciesTab() {
                 <p className="text-sm text-muted-foreground">
                     {canManage
                         ? "View and manage cooperative deposit & loan policies"
-                        : "View cooperative deposit & loan policies"}
+                        : isPresident
+                            ? "Review and approve cooperative deposit & loan policies"
+                            : "View cooperative deposit & loan policies"}
                 </p>
             </div>
+
+            {(canManage || isPresident) && (
+                <Card className="border-primary/20 bg-primary/5">
+                    <CardContent className="flex items-center gap-2 py-3">
+                        <Info className="h-4 w-4 shrink-0 text-primary" />
+                        <p className="text-sm text-primary">
+                            {canManage
+                                ? "New policies are created as Draft. Edit freely, then Submit for Review when ready. The President will approve or reject."
+                                : "Policies submitted for your review will appear as \"Under Review\". You can Approve or Reject them."}
+                        </p>
+                    </CardContent>
+                </Card>
+            )}
 
             {error && (
                 <Card className="border-destructive/50 bg-destructive/5">
@@ -455,7 +520,7 @@ export function MemberPoliciesTab() {
                                 <div>
                                     <CardTitle className="text-sm font-semibold">Deposit Policies</CardTitle>
                                     <CardDescription>
-                                        {depositPolicies.length} total · {depositActive} active · {depositDraft} draft
+                                        {depositPolicies.length} total · {depositActive} active · {depositFinalized} under review · {depositDraft} draft
                                     </CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -489,13 +554,13 @@ export function MemberPoliciesTab() {
                                             <TableHead className="text-xs">Effective From</TableHead>
                                             <TableHead className="text-xs">Effective To</TableHead>
                                             <TableHead className="text-xs">Status</TableHead>
-                                            {canManage && <TableHead className="w-20 text-xs">Actions</TableHead>}
+                                            {(canManage || isPresident) && <TableHead className="w-24 text-xs">Actions</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {depositPolicies.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={canManage ? 8 : 7} className="py-8 text-center text-sm text-muted-foreground">
+                                                <TableCell colSpan={(canManage || isPresident) ? 8 : 7} className="py-8 text-center text-sm text-muted-foreground">
                                                     No deposit policies found.
                                                 </TableCell>
                                             </TableRow>
@@ -533,27 +598,75 @@ export function MemberPoliciesTab() {
                                                         <TableCell>
                                                             <StatusBadge status={p.status} />
                                                         </TableCell>
-                                                        {canManage && (
+                                                        {(canManage || isPresident) && (
                                                             <TableCell>
                                                                 <div className="flex items-center gap-1">
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8"
-                                                                        onClick={() => openDepositEdit(p)}
-                                                                        aria-label="Edit"
-                                                                    >
-                                                                        <Pencil className="h-3.5 w-3.5" />
-                                                                    </Button>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8 text-destructive hover:text-destructive"
-                                                                        onClick={() => setDeleteConfirm({ type: "deposit", id: p.policy_id })}
-                                                                        aria-label="Delete"
-                                                                    >
-                                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                                    </Button>
+                                                                    {/* Treasurer: Submit for Review (only on draft) */}
+                                                                    {canManage && p.status === "draft" && (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8 text-chart-2 hover:text-chart-2"
+                                                                            onClick={() => submitForReview("deposit", p.policy_id)}
+                                                                            disabled={submitting}
+                                                                            title="Submit for Review"
+                                                                            aria-label="Submit for Review"
+                                                                        >
+                                                                            <Send className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    )}
+                                                                    {/* President: Approve (only on finalized) */}
+                                                                    {isPresident && p.status === "finalized" && (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8 text-success hover:text-success"
+                                                                            onClick={() => approvePolicy("deposit", p.policy_id)}
+                                                                            disabled={submitting}
+                                                                            title="Approve"
+                                                                            aria-label="Approve"
+                                                                        >
+                                                                            <ShieldCheck className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    )}
+                                                                    {/* President: Reject (only on finalized) */}
+                                                                    {isPresident && p.status === "finalized" && (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8 text-destructive hover:text-destructive"
+                                                                            onClick={() => rejectPolicy("deposit", p.policy_id)}
+                                                                            disabled={submitting}
+                                                                            title="Reject"
+                                                                            aria-label="Reject"
+                                                                        >
+                                                                            <XCircle className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    )}
+                                                                    {/* Treasurer: Edit (only draft) */}
+                                                                    {canManage && p.status === "draft" && (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8"
+                                                                            onClick={() => openDepositEdit(p)}
+                                                                            aria-label="Edit"
+                                                                        >
+                                                                            <Pencil className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    )}
+                                                                    {/* Treasurer: Delete (only draft) */}
+                                                                    {canManage && p.status === "draft" && (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8 text-destructive hover:text-destructive"
+                                                                            onClick={() => setDeleteConfirm({ type: "deposit", id: p.policy_id })}
+                                                                            aria-label="Delete"
+                                                                        >
+                                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    )}
                                                                 </div>
                                                             </TableCell>
                                                         )}
@@ -575,7 +688,7 @@ export function MemberPoliciesTab() {
                                 <div>
                                     <CardTitle className="text-sm font-semibold">Loan Policies</CardTitle>
                                     <CardDescription>
-                                        {loanPolicies.length} total · {loanActive} active · {loanDraft} draft
+                                        {loanPolicies.length} total · {loanActive} active · {loanFinalized} under review · {loanDraft} draft
                                     </CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -610,13 +723,13 @@ export function MemberPoliciesTab() {
                                             <TableHead className="text-xs">EMI</TableHead>
                                             <TableHead className="text-xs">Effective</TableHead>
                                             <TableHead className="text-xs">Status</TableHead>
-                                            {canManage && <TableHead className="w-20 text-xs">Actions</TableHead>}
+                                            {(canManage || isPresident) && <TableHead className="w-24 text-xs">Actions</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {loanPolicies.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={canManage ? 9 : 8} className="py-8 text-center text-sm text-muted-foreground">
+                                                <TableCell colSpan={(canManage || isPresident) ? 9 : 8} className="py-8 text-center text-sm text-muted-foreground">
                                                     No loan policies found.
                                                 </TableCell>
                                             </TableRow>
@@ -663,27 +776,75 @@ export function MemberPoliciesTab() {
                                                         <TableCell>
                                                             <StatusBadge status={p.status} />
                                                         </TableCell>
-                                                        {canManage && (
+                                                        {(canManage || isPresident) && (
                                                             <TableCell>
                                                                 <div className="flex items-center gap-1">
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8"
-                                                                        onClick={() => openLoanEdit(p)}
-                                                                        aria-label="Edit"
-                                                                    >
-                                                                        <Pencil className="h-3.5 w-3.5" />
-                                                                    </Button>
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        className="h-8 w-8 text-destructive hover:text-destructive"
-                                                                        onClick={() => setDeleteConfirm({ type: "loan", id: p.policy_id })}
-                                                                        aria-label="Delete"
-                                                                    >
-                                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                                    </Button>
+                                                                    {/* Treasurer: Submit for Review (only on draft) */}
+                                                                    {canManage && p.status === "draft" && (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8 text-chart-2 hover:text-chart-2"
+                                                                            onClick={() => submitForReview("loan", p.policy_id)}
+                                                                            disabled={submitting}
+                                                                            title="Submit for Review"
+                                                                            aria-label="Submit for Review"
+                                                                        >
+                                                                            <Send className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    )}
+                                                                    {/* President: Approve (only on finalized) */}
+                                                                    {isPresident && p.status === "finalized" && (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8 text-success hover:text-success"
+                                                                            onClick={() => approvePolicy("loan", p.policy_id)}
+                                                                            disabled={submitting}
+                                                                            title="Approve"
+                                                                            aria-label="Approve"
+                                                                        >
+                                                                            <ShieldCheck className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    )}
+                                                                    {/* President: Reject (only on finalized) */}
+                                                                    {isPresident && p.status === "finalized" && (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8 text-destructive hover:text-destructive"
+                                                                            onClick={() => rejectPolicy("loan", p.policy_id)}
+                                                                            disabled={submitting}
+                                                                            title="Reject"
+                                                                            aria-label="Reject"
+                                                                        >
+                                                                            <XCircle className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    )}
+                                                                    {/* Treasurer: Edit (only draft) */}
+                                                                    {canManage && p.status === "draft" && (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8"
+                                                                            onClick={() => openLoanEdit(p)}
+                                                                            aria-label="Edit"
+                                                                        >
+                                                                            <Pencil className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    )}
+                                                                    {/* Treasurer: Delete (only draft) */}
+                                                                    {canManage && p.status === "draft" && (
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            className="h-8 w-8 text-destructive hover:text-destructive"
+                                                                            onClick={() => setDeleteConfirm({ type: "loan", id: p.policy_id })}
+                                                                            aria-label="Delete"
+                                                                        >
+                                                                            <Trash2 className="h-3.5 w-3.5" />
+                                                                        </Button>
+                                                                    )}
                                                                 </div>
                                                             </TableCell>
                                                         )}
@@ -786,26 +947,6 @@ export function MemberPoliciesTab() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Status</Label>
-                                <Select
-                                    value={depositForm.status}
-                                    onValueChange={(v) => setDepositForm((f) => ({ ...f, status: v as PolicyStatus }))}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="draft">Draft</SelectItem>
-                                        <SelectItem value="active">Active</SelectItem>
-                                        <SelectItem value="expired">Expired</SelectItem>
-                                        <SelectItem value="void">Void</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="flex flex-col gap-2">
                                 <Label className="text-xs font-medium">Effective From</Label>
                                 <Input
                                     type="datetime-local"
@@ -822,6 +963,13 @@ export function MemberPoliciesTab() {
                                 />
                             </div>
                         </div>
+
+                        {!editingDeposit && (
+                            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <Info className="h-3.5 w-3.5" />
+                                Policy will be created as Draft. You can edit it and submit for President review when ready.
+                            </p>
+                        )}
 
                         <Button onClick={submitDeposit} disabled={submitting}>
                             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -898,23 +1046,6 @@ export function MemberPoliciesTab() {
                                     onChange={(e) => setLoanForm((f) => ({ ...f, max_renewals: e.target.value }))}
                                 />
                             </div>
-                            <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Status</Label>
-                                <Select
-                                    value={loanForm.status}
-                                    onValueChange={(v) => setLoanForm((f) => ({ ...f, status: v as PolicyStatus }))}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="draft">Draft</SelectItem>
-                                        <SelectItem value="active">Active</SelectItem>
-                                        <SelectItem value="expired">Expired</SelectItem>
-                                        <SelectItem value="void">Void</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
                         </div>
 
                         <div className="flex items-center gap-6">
@@ -952,6 +1083,13 @@ export function MemberPoliciesTab() {
                                 />
                             </div>
                         </div>
+
+                        {!editingLoan && (
+                            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                <Info className="h-3.5 w-3.5" />
+                                Policy will be created as Draft. You can edit it and submit for President review when ready.
+                            </p>
+                        )}
 
                         <Button onClick={submitLoan} disabled={submitting}>
                             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

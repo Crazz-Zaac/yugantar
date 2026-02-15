@@ -13,15 +13,6 @@ import { Menu, LogOut } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
-interface Notification {
-  id: number
-  title: string
-  message: string
-  type: "warning" | "success" | "info" | "destructive"
-  time: string
-  read: boolean
-}
-
 export type MemberTab = "home" | "deposit" | "loans" | "policies" | "settings"
 
 const tabTitles: Record<MemberTab, string> = {
@@ -70,23 +61,6 @@ export function MemberDashboard({
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [notifications, setNotifications] = useState<Notification[]>([])
-
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const response = await fetch("/api/notifications/member")
-        if (response.ok) {
-          const data = await response.json()
-          setNotifications(data)
-        }
-      } catch (error) {
-        console.error("Failed to fetch notifications:", error)
-        setNotifications([])
-      }
-    }
-    fetchNotifications()
-  }, [])
 
   const renderContent = () => {
     switch (activeTab) {
@@ -134,7 +108,7 @@ export function MemberDashboard({
             <h2 className="text-sm font-semibold text-foreground">{tabTitles[activeTab]}</h2>
           </div>
           <div className="flex items-center gap-1">
-            <NotificationPanel notifications={notifications} />
+            <NotificationPanel />
             <ThemeToggle />
             <Separator orientation="vertical" className="mx-1 h-6" />
             <TooltipProvider delayDuration={300}>

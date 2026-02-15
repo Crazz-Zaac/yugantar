@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react"
+import { useState, useMemo } from "react"
 import { useLocation } from "wouter"
 import { AdminSidebar } from "./AdminSidebar"
 import { OverviewTab } from "./OverviewTab"
@@ -11,15 +11,6 @@ import { Button } from "@/components/ui/button"
 import { Menu, LogOut } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-
-interface Notification {
-  id: number
-  title: string
-  message: string
-  type: "warning" | "success" | "info" | "destructive"
-  time: string
-  read: boolean
-}
 
 export type AdminTab = "overview" | "members" | "activity" | "policies"
 
@@ -66,23 +57,6 @@ export function AdminDashboard({
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [notifications, setNotifications] = useState<Notification[]>([])
-
-  useEffect(() => {
-    const fetchNotifications = async () => {
-      try {
-        const response = await fetch("/api/notifications/admin")
-        if (response.ok) {
-          const data = await response.json()
-          setNotifications(data)
-        }
-      } catch (error) {
-        console.error("Failed to fetch notifications:", error)
-        setNotifications([])
-      }
-    }
-    fetchNotifications()
-  }, [])
 
   const renderContent = () => {
     switch (activeTab) {
@@ -106,9 +80,8 @@ export function AdminDashboard({
 
       {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 lg:static lg:translate-x-0 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 lg:static lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
       >
         <AdminSidebar
           activeTab={activeTab}
@@ -129,7 +102,7 @@ export function AdminDashboard({
             <h2 className="text-sm font-semibold text-foreground">{tabTitles[activeTab]}</h2>
           </div>
           <div className="flex items-center gap-1">
-            <NotificationPanel notifications={notifications} />
+            <NotificationPanel />
             <ThemeToggle />
             <Separator orientation="vertical" className="mx-1 h-6" />
             <TooltipProvider delayDuration={300}>
