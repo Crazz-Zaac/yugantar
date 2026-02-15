@@ -1,9 +1,10 @@
 import { useState } from "react"
-import { User, Lock, Bell, Globe, Save, Loader2 } from "lucide-react"
+import { User, Lock, Bell, Globe, Save, Loader2, ShieldCheck, BadgeCheck, Crown } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
@@ -101,7 +102,75 @@ export function SettingsTab() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="profile" className="mt-4">
+        <TabsContent value="profile" className="mt-4 flex flex-col gap-4">
+          {/* Account Status — separate read-only card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold">Account Status</CardTitle>
+              <CardDescription>Your verification and role information</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {/* Verification */}
+                <div className="flex flex-col gap-1.5 rounded-lg border p-3">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Verification
+                  </div>
+                  {user?.is_verified ? (
+                    <Badge variant="outline" className="w-fit gap-1 border-success/30 bg-success/10 text-success text-xs">
+                      <BadgeCheck className="h-3 w-3" />
+                      Verified
+                    </Badge>
+                  ) : (
+                    <Badge variant="outline" className="w-fit gap-1 border-warning/30 bg-warning/10 text-warning text-xs">
+                      Unverified
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Access Roles */}
+                <div className="flex flex-col gap-1.5 rounded-lg border p-3">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Access Role
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {(user?.access_roles ?? []).map((role) => (
+                      <Badge key={role} variant="secondary" className="text-xs capitalize">
+                        {role}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Cooperative Roles */}
+                <div className="flex flex-col gap-1.5 rounded-lg border p-3">
+                  <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Crown className="h-3.5 w-3.5" />
+                    Cooperative Role
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {(user?.cooperative_roles ?? []).length > 0 ? (
+                      user!.cooperative_roles.map((role) => (
+                        <Badge key={role} variant="outline" className="text-xs capitalize">
+                          {role}
+                        </Badge>
+                      ))
+                    ) : (
+                      <span className="text-xs text-muted-foreground">None assigned</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-[11px] text-muted-foreground">
+                Roles and verification status are managed by administrators and cannot be changed here.
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Personal Information — editable card */}
           <Card>
             <CardHeader>
               <CardTitle className="text-sm font-semibold">Personal Information</CardTitle>

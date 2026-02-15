@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import yugantarLogo from "@/assets/yugantar_logo.svg"
-
-type AdminTab = "overview" | "members" | "activity" | "policies"
+import type { AdminTab } from "./AdminDashboard"
 
 const navItems = [
   { id: "overview" as AdminTab, label: "Overview", icon: LayoutDashboard },

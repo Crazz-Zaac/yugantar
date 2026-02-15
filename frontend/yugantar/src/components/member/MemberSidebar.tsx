@@ -1,4 +1,4 @@
-import { Home, Landmark, CreditCard, Settings, PanelLeftClose, PanelLeft } from "lucide-react"
+import { Home, Landmark, CreditCard, ScrollText, Settings, PanelLeftClose, PanelLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -6,13 +6,15 @@ import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import yugantarLogo from "@/assets/yugantar_logo.svg"
+import type { MemberTab } from "./MemberDashboard"
 
-type Tab = "home" | "deposit" | "loans" | "settings"
+type Tab = MemberTab
 
 const navItems = [
   { id: "home" as Tab, label: "Home", icon: Home },
   { id: "deposit" as Tab, label: "Deposit", icon: Landmark },
   { id: "loans" as Tab, label: "Loans", icon: CreditCard },
+  { id: "policies" as Tab, label: "Policies", icon: ScrollText },
   { id: "settings" as Tab, label: "Settings", icon: Settings },
 ]
 

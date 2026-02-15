@@ -10,6 +10,7 @@ import { SignIn } from "./components/auth/SignIn";
 import { SignUp } from "./components/auth/SignUp";
 import { AdminDashboard } from "./components/admin/AdminDashboard";
 import { MemberDashboard } from "./components/member/MemberDashboard";
+import VerifyEmail from "./pages/VerifyEmail";
 
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
@@ -88,7 +89,10 @@ function Router() {
     <Switch>
       <Route path={"/"} component={AuthPage} />
       <Route path={"/login"} component={AuthPage} />
+      <Route path={"/verify-email"} component={VerifyEmail} />
+      <Route path={"/dashboard/:rest*"} component={ProtectedMemberDashboard} />
       <Route path={"/dashboard"} component={ProtectedMemberDashboard} />
+      <Route path={"/admin/:rest*"} component={ProtectedAdminDashboard} />
       <Route path={"/admin"} component={ProtectedAdminDashboard} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}

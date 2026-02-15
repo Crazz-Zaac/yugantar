@@ -1,5 +1,6 @@
+from typing import List
 from fastapi import APIRouter, Depends, Request, HTTPException, status
-from sqlmodel import Session
+from sqlmodel import Session, select
 from uuid import UUID
 from datetime import datetime
 
@@ -12,12 +13,31 @@ from app.schemas.policy.loan_policy_schema import (
 )
 from app.services.loan_policy_service import LoanPolicyService
 from app.api.dependencies.admin import get_current_moderator_or_admin
+from app.api.dependencies.auth import get_current_user
 from app.core.config import settings
 from app.models.user_model import User
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 
 loan_policy_service = LoanPolicyService()
+
+
+@router.get(
+    "/loan",
+    response_model=List[LoanPolicyResponse],
+    status_code=status.HTTP_200_OK,
+)
+def list_loan_policies(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """
+    List all loan policies.
+    Any authenticated user can view policies.
+    """
+    statement = select(LoanPolicy)
+    policies = session.exec(statement).all()
+    return policies
 
 
 @router.post(
@@ -46,6 +66,7 @@ def create_loan_policy(
         created_by=current_user.email,
     )
     return new_policy
+
 
 @router.delete(
     "/loan/{policy_id}",

@@ -1,5 +1,6 @@
+from typing import List
 from fastapi import APIRouter, Depends, Request, HTTPException, status
-from sqlmodel import Session
+from sqlmodel import Session, select
 from uuid import UUID
 from datetime import datetime
 
@@ -12,12 +13,31 @@ from app.schemas.policy.deposit_policy_schema import (
 )
 from app.services.deposit_policy_service import DepositPolicyService
 from app.api.dependencies.admin import get_current_moderator_or_admin
+from app.api.dependencies.auth import get_current_user
 from app.models.user_model import User
 
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 
 deposit_policy_service = DepositPolicyService()
+
+
+@router.get(
+    "/deposit",
+    response_model=List[DepositPolicyResponse],
+    status_code=status.HTTP_200_OK,
+)
+def list_deposit_policies(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """
+    List all deposit policies.
+    Any authenticated user can view policies.
+    """
+    statement = select(DepositPolicy)
+    policies = session.exec(statement).all()
+    return policies
 
 
 @router.post(
@@ -46,6 +66,7 @@ def create_deposit_policy(
         created_by=current_user.email,
     )
     return new_policy
+
 
 @router.delete(
     "/deposit/{policy_id}",

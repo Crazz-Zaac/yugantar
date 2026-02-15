@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
+import { useLocation } from "wouter"
 import { MemberSidebar } from "./MemberSidebar"
 import { HomeTab } from "./HomeTab"
 import { DepositTab } from "./DepositTab"
 import { LoansTab } from "./LoansTab"
 import { SettingsTab } from "./SettingsTab"
+import { MemberPoliciesTab } from "./MemberPoliciesTab"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { NotificationPanel } from "@/components/NotificationPanel"
 import { Button } from "@/components/ui/button"
@@ -20,13 +22,32 @@ interface Notification {
   read: boolean
 }
 
-type Tab = "home" | "deposit" | "loans" | "settings"
+export type MemberTab = "home" | "deposit" | "loans" | "policies" | "settings"
 
-const tabTitles: Record<Tab, string> = {
+const tabTitles: Record<MemberTab, string> = {
   home: "Dashboard",
   deposit: "Make Deposit",
   loans: "Loans",
+  policies: "Policies",
   settings: "Settings",
+}
+
+/** Map URL segment to tab id */
+const segmentToTab: Record<string, MemberTab> = {
+  "": "home",
+  deposit: "deposit",
+  loans: "loans",
+  policies: "policies",
+  settings: "settings",
+}
+
+/** Map tab id to URL path */
+const tabToPath: Record<MemberTab, string> = {
+  home: "/dashboard",
+  deposit: "/dashboard/deposit",
+  loans: "/dashboard/loans",
+  policies: "/dashboard/policies",
+  settings: "/dashboard/settings",
 }
 
 export function MemberDashboard({
@@ -34,7 +55,19 @@ export function MemberDashboard({
 }: {
   onLogout: () => void
 }) {
-  const [activeTab, setActiveTab] = useState<Tab>("home")
+  const [location, navigate] = useLocation()
+
+  // Derive the active tab from the current URL
+  const activeTab: MemberTab = useMemo(() => {
+    const segment = location.replace(/^\/dashboard\/?/, "").split("/")[0] || ""
+    return segmentToTab[segment] ?? "home"
+  }, [location])
+
+  const handleTabChange = (tab: MemberTab) => {
+    navigate(tabToPath[tab])
+    setSidebarOpen(false)
+  }
+
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -63,6 +96,8 @@ export function MemberDashboard({
         return <DepositTab />
       case "loans":
         return <LoansTab />
+      case "policies":
+        return <MemberPoliciesTab />
       case "settings":
         return <SettingsTab />
     }
@@ -76,14 +111,13 @@ export function MemberDashboard({
       )}
 
       {/* Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 lg:static lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}>
+      <div
+        className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 lg:static lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+      >
         <MemberSidebar
           activeTab={activeTab}
-          onTabChange={(tab) => {
-            setActiveTab(tab)
-            setSidebarOpen(false)
-          }}
+          onTabChange={handleTabChange}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
         />

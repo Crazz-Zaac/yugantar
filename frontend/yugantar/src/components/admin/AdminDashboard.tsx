@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
+import { useLocation } from "wouter"
 import { AdminSidebar } from "./AdminSidebar"
 import { OverviewTab } from "./OverviewTab"
 import { MembersTab } from "./MembersTab"
@@ -20,7 +21,7 @@ interface Notification {
   read: boolean
 }
 
-type AdminTab = "overview" | "members" | "activity" | "policies"
+export type AdminTab = "overview" | "members" | "activity" | "policies"
 
 const tabTitles: Record<AdminTab, string> = {
   overview: "Overview",
@@ -29,34 +30,59 @@ const tabTitles: Record<AdminTab, string> = {
   policies: "Policies",
 }
 
+/** Map URL segment to tab id */
+const segmentToTab: Record<string, AdminTab> = {
+  "": "overview",
+  members: "members",
+  activity: "activity",
+  policies: "policies",
+}
+
+/** Map tab id to URL path */
+const tabToPath: Record<AdminTab, string> = {
+  overview: "/admin",
+  members: "/admin/members",
+  activity: "/admin/activity",
+  policies: "/admin/policies",
+}
+
 export function AdminDashboard({
   onLogout,
 }: {
   onLogout: () => void
 }) {
-  const [activeTab, setActiveTab] = useState<AdminTab>("overview")
+  const [location, navigate] = useLocation()
+
+  // Derive the active tab from the current URL
+  const activeTab: AdminTab = useMemo(() => {
+    const segment = location.replace(/^\/admin\/?/, "").split("/")[0] || ""
+    return segmentToTab[segment] ?? "overview"
+  }, [location])
+
+  const handleTabChange = (tab: AdminTab) => {
+    navigate(tabToPath[tab])
+    setSidebarOpen(false)
+  }
+
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
 
   useEffect(() => {
+    const fetchNotifications = async () => {
+      try {
+        const response = await fetch("/api/notifications/admin")
+        if (response.ok) {
+          const data = await response.json()
+          setNotifications(data)
+        }
+      } catch (error) {
+        console.error("Failed to fetch notifications:", error)
+        setNotifications([])
+      }
+    }
     fetchNotifications()
   }, [])
-
-  const fetchNotifications = async () => {
-    try {
-      // Replace with your actual backend API endpoint
-      const response = await fetch("/api/notifications/admin")
-      if (response.ok) {
-        const data = await response.json()
-        setNotifications(data)
-      }
-    } catch (error) {
-      console.error("Failed to fetch notifications:", error)
-      // Set empty array on error to avoid breaking the UI
-      setNotifications([])
-    }
-  }
 
   const renderContent = () => {
     switch (activeTab) {
@@ -79,14 +105,14 @@ export function AdminDashboard({
       )}
 
       {/* Sidebar */}
-      <div className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 lg:static lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}>
+      <div
+        className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 lg:static lg:translate-x-0 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         <AdminSidebar
           activeTab={activeTab}
-          onTabChange={(tab) => {
-            setActiveTab(tab)
-            setSidebarOpen(false)
-          }}
+          onTabChange={handleTabChange}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
         />
