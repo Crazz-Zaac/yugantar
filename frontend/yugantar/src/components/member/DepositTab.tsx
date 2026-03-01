@@ -114,7 +114,6 @@ export function DepositTab() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="bank">Bank Transfer</SelectItem>
-                    <SelectItem value="mobile">Mobile Money</SelectItem>
                     <SelectItem value="cash">Cash</SelectItem>
                     <SelectItem value="check">Check</SelectItem>
                   </SelectContent>
@@ -179,12 +178,6 @@ export function DepositTab() {
                 )}
               </div>
             </div>
-
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="notes" className="text-xs font-medium">Notes (optional)</Label>
-              <Textarea id="notes" placeholder="Any additional notes..." className="min-h-[80px] resize-none" />
-            </div>
-
             <Button className="h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto sm:self-end">
               <Plus className="mr-2 h-4 w-4" />
               Submit Deposit
