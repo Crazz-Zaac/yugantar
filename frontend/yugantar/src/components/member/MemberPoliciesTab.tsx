@@ -16,6 +16,7 @@ import {
     Send,
     XCircle,
     FileCheck,
+    ChevronDown,
 } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -45,6 +46,12 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Switch } from "@/components/ui/switch"
 import { apiClient } from "@/api/api"
 import { useAuth } from "@/contexts/AuthContext"
@@ -141,12 +148,12 @@ function formatDate(iso: string | null | undefined): string {
 }
 
 function formatAmount(paisa: number): string {
-    const rupees = Number(paisa) / 100
-    return `Rs. ${rupees.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+    const rupees = Math.round(Number(paisa) / 100)
+    return `Rs. ${rupees.toLocaleString("en-IN")}`
 }
 
 function formatDecimalAmount(amount: number): string {
-    return `Rs. ${Number(amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+    return `Rs. ${Math.round(Number(amount)).toLocaleString("en-IN")}`
 }
 
 // ─── Deposit Policy Form Defaults ────────────────────────────────────────────
@@ -179,10 +186,8 @@ const emptyLoanForm = {
 export function MemberPoliciesTab() {
     const { user } = useAuth()
 
-    // Role check: treasurer + moderator can manage policies
-    const canManage =
-        user?.cooperative_roles?.includes("treasurer") &&
-        user?.access_roles?.includes("moderator")
+    // Role check: treasurer can manage policies
+    const canManage = user?.cooperative_roles?.includes("treasurer")
 
     // Role check: president can approve draft policies
     const isPresident = user?.cooperative_roles?.includes("president")
@@ -237,7 +242,7 @@ export function MemberPoliciesTab() {
     const openDepositEdit = (p: DepositPolicy) => {
         setEditingDeposit(p)
         setDepositForm({
-            amount_paisa: String(p.amount_paisa),
+            amount_paisa: String(Math.round(p.amount_paisa / 100)),
             late_deposit_fine: String(p.late_deposit_fine),
             schedule_type: p.schedule_type,
             due_day_of_month: p.due_day_of_month != null ? String(p.due_day_of_month) : "",
@@ -253,7 +258,7 @@ export function MemberPoliciesTab() {
         setSubmitting(true)
         try {
             const payload: Record<string, unknown> = {
-                amount_paisa: Number(depositForm.amount_paisa),
+                amount_paisa: Math.round(Number(depositForm.amount_paisa) * 100),
                 late_deposit_fine: Number(depositForm.late_deposit_fine),
                 schedule_type: depositForm.schedule_type,
                 effective_from: depositForm.effective_from
@@ -431,15 +436,38 @@ export function MemberPoliciesTab() {
     return (
         <div className="flex flex-col gap-6">
             {/* Header */}
-            <div>
-                <h2 className="text-lg font-semibold text-foreground">Policies</h2>
-                <p className="text-sm text-muted-foreground">
-                    {canManage
-                        ? "View and manage cooperative deposit & loan policies"
-                        : isPresident
-                            ? "Review and approve cooperative deposit & loan policies"
-                            : "View cooperative deposit & loan policies"}
-                </p>
+            <div className="flex items-start justify-between">
+                <div>
+                    <h2 className="text-lg font-semibold text-foreground">Policies</h2>
+                    <p className="text-sm text-muted-foreground">
+                        {canManage
+                            ? "View and manage cooperative deposit & loan policies"
+                            : isPresident
+                                ? "Review and approve cooperative deposit & loan policies"
+                                : "View cooperative deposit & loan policies"}
+                    </p>
+                </div>
+                {canManage && (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button>
+                                <Plus className="mr-2 h-4 w-4" />
+                                Create Policy
+                                <ChevronDown className="ml-2 h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={openDepositCreate}>
+                                <Landmark className="mr-2 h-4 w-4" />
+                                Deposit Policy
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={openLoanCreate}>
+                                <CreditCard className="mr-2 h-4 w-4" />
+                                Loan Policy
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                )}
             </div>
 
             {(canManage || isPresident) && (
@@ -519,8 +547,11 @@ export function MemberPoliciesTab() {
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <CardTitle className="text-sm font-semibold">Deposit Policies</CardTitle>
-                                    <CardDescription>
-                                        {depositPolicies.length} total · {depositActive} active · {depositFinalized} under review · {depositDraft} draft
+                                    <CardDescription className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                        <Badge variant="outline" className="gap-1 text-xs">{depositPolicies.length} Total</Badge>
+                                        {depositActive > 0 && <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-xs text-success"><CheckCircle2 className="h-3 w-3" />{depositActive} Active</Badge>}
+                                        {depositFinalized > 0 && <Badge variant="outline" className="gap-1 border-chart-2/30 bg-chart-2/10 text-xs text-chart-2"><FileCheck className="h-3 w-3" />{depositFinalized} Under Review</Badge>}
+                                        {depositDraft > 0 && <Badge variant="outline" className="gap-1 border-warning/30 bg-warning/10 text-xs text-warning"><Clock className="h-3 w-3" />{depositDraft} Draft</Badge>}
                                     </CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -687,8 +718,11 @@ export function MemberPoliciesTab() {
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <CardTitle className="text-sm font-semibold">Loan Policies</CardTitle>
-                                    <CardDescription>
-                                        {loanPolicies.length} total · {loanActive} active · {loanFinalized} under review · {loanDraft} draft
+                                    <CardDescription className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                        <Badge variant="outline" className="gap-1 text-xs">{loanPolicies.length} Total</Badge>
+                                        {loanActive > 0 && <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-xs text-success"><CheckCircle2 className="h-3 w-3" />{loanActive} Active</Badge>}
+                                        {loanFinalized > 0 && <Badge variant="outline" className="gap-1 border-chart-2/30 bg-chart-2/10 text-xs text-chart-2"><FileCheck className="h-3 w-3" />{loanFinalized} Under Review</Badge>}
+                                        {loanDraft > 0 && <Badge variant="outline" className="gap-1 border-warning/30 bg-warning/10 text-xs text-warning"><Clock className="h-3 w-3" />{loanDraft} Draft</Badge>}
                                     </CardDescription>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -861,7 +895,7 @@ export function MemberPoliciesTab() {
 
             {/* ═══════ DEPOSIT POLICY DIALOG ═══════ */}
             <Dialog open={depositDialogOpen} onOpenChange={setDepositDialogOpen}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>{editingDeposit ? "Edit Deposit Policy" : "Create Deposit Policy"}</DialogTitle>
                         <DialogDescription>
@@ -873,10 +907,10 @@ export function MemberPoliciesTab() {
                     <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto pt-2">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Amount (paisa)</Label>
+                                <Label className="text-xs font-medium">Amount (Rs)</Label>
                                 <Input
                                     type="number"
-                                    placeholder="e.g. 10000"
+                                    placeholder="e.g. 500"
                                     value={depositForm.amount_paisa}
                                     onChange={(e) => setDepositForm((f) => ({ ...f, amount_paisa: e.target.value }))}
                                 />
@@ -981,7 +1015,7 @@ export function MemberPoliciesTab() {
 
             {/* ═══════ LOAN POLICY DIALOG ═══════ */}
             <Dialog open={loanDialogOpen} onOpenChange={setLoanDialogOpen}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>{editingLoan ? "Edit Loan Policy" : "Create Loan Policy"}</DialogTitle>
                         <DialogDescription>
@@ -993,21 +1027,19 @@ export function MemberPoliciesTab() {
                     <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto pt-2">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Min Loan Amount</Label>
+                                <Label className="text-xs font-medium">Min Loan Amount (Rs)</Label>
                                 <Input
                                     type="number"
-                                    step="0.01"
-                                    placeholder="e.g. 1000.00"
+                                    placeholder="e.g. 1000"
                                     value={loanForm.min_loan_amount}
                                     onChange={(e) => setLoanForm((f) => ({ ...f, min_loan_amount: e.target.value }))}
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Max Loan Amount</Label>
+                                <Label className="text-xs font-medium">Max Loan Amount (Rs)</Label>
                                 <Input
                                     type="number"
-                                    step="0.01"
-                                    placeholder="e.g. 100000.00"
+                                    placeholder="e.g. 100000"
                                     value={loanForm.max_loan_amount}
                                     onChange={(e) => setLoanForm((f) => ({ ...f, max_loan_amount: e.target.value }))}
                                 />

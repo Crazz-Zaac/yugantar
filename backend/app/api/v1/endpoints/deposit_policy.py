@@ -13,7 +13,7 @@ from app.schemas.policy.deposit_policy_schema import (
     DepositPolicyResponse,
 )
 from app.services.deposit_policy_service import DepositPolicyService
-from app.api.dependencies.admin import get_current_moderator_or_admin
+from app.api.dependencies.admin import get_current_policy_manager
 from app.api.dependencies.auth import get_current_user
 from app.models.user_model import User, CooperativeRole
 from app.models.notification_model import Notification, NotificationType
@@ -145,12 +145,12 @@ def list_deposit_policies(
 def create_deposit_policy(
     policy_in: DepositPolicyCreate,
     request: Request,
-    current_user: User = Depends(get_current_moderator_or_admin),
+    current_user: User = Depends(get_current_policy_manager),
     session: Session = Depends(get_session),
 ):
     """
     Create a new deposit policy.
-    Only moderators and admins can perform this action.
+    Only Treasurer, Moderator, or Admin can perform this action.
     Policy is always created as DRAFT. Treasurer must explicitly submit it for review.
     """
     # Force draft status — Treasurer must submit separately
@@ -178,7 +178,7 @@ def create_deposit_policy(
 def submit_deposit_policy(
     policy_id: UUID,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_moderator_or_admin),
+    current_user: User = Depends(get_current_policy_manager),
     session: Session = Depends(get_session),
 ):
     """
@@ -321,12 +321,12 @@ def reject_deposit_policy(
 def delete_deposit_policy(
     policy_id: UUID,
     request: Request,
-    current_user: User = Depends(get_current_moderator_or_admin),
+    current_user: User = Depends(get_current_policy_manager),
     session: Session = Depends(get_session),
 ):
     """
     Delete an existing deposit policy.
-    Only moderators and admins can perform this action.
+    Only Treasurer, Moderator, or Admin can perform this action.
     """
 
     deposit_policy_service.delete_policy(
@@ -346,12 +346,12 @@ def update_deposit_policy(
     policy_id: UUID,
     policy_in: DepositPolicyUpdate,
     request: Request,
-    current_user: User = Depends(get_current_moderator_or_admin),
+    current_user: User = Depends(get_current_policy_manager),
     session: Session = Depends(get_session),
 ):
     """
     Update an existing deposit policy.
-    Only moderators and admins can perform this action.
+    Only Treasurer, Moderator, or Admin can perform this action.
     Only DRAFT policies can be edited.
     """
     # Verify policy is still in draft

@@ -235,8 +235,8 @@ export function MembersTab() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>View Profile</DropdownMenuItem>
-                              <DropdownMenuItem>Edit Details</DropdownMenuItem>
+                              {/* <DropdownMenuItem>View Profile</DropdownMenuItem>
+                              <DropdownMenuItem>Edit Details</DropdownMenuItem> */}
                               <DropdownMenuItem onClick={() => setRoleModalUser(member as unknown as UserForUI)}>
                                 <Shield className="mr-2 h-3.5 w-3.5" />
                                 Edit Roles

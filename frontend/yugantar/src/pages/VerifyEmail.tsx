@@ -97,7 +97,7 @@ export default function VerifyEmail() {
                                 <CheckCircle2 className="h-8 w-8 text-chart-2" />
                             </div>
                             <div>
-                                <h1 className="text-lg font-semibold text-foreground">Already Verified</h1>
+                                <h1 className="text-lg font-semibold text-foreground">Your email is now verified.</h1>
                                 <p className="mt-1 text-sm text-muted-foreground">{message}</p>
                             </div>
                             <Button className="mt-2 gap-2" onClick={() => navigate("/login")}>

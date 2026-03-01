@@ -1,5 +1,5 @@
-import { useState, useRef } from "react"
-import { Upload, FileText, CheckCircle2, Clock, X, Plus } from "lucide-react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { Upload, FileText, CheckCircle2, Clock, X, Plus, Landmark, Loader2, AlertCircle } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -7,19 +7,68 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { depositHistory } from "@/lib/data"
-// TODO: Replace mock `depositHistory` with real API call once a GET /api/v1/deposits/my endpoint is available.
-// Current backend has POST /deposits/ (create) and GET /deposits/{id} (single) but no list-my-deposits endpoint.
 import { Textarea } from "@/components/ui/textarea"
+import { apiClient } from "@/api/api"
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+type PolicyStatus = "draft" | "finalized" | "active" | "expired" | "void"
+type DepositScheduleType = "monthly_fixed_day" | "occasional"
+
+interface DepositPolicy {
+  policy_id: string
+  amount_paisa: number
+  late_deposit_fine: number
+  schedule_type: DepositScheduleType
+  due_day_of_month: number | null
+  allowed_months: number | null
+  max_occurrences: number | null
+  status: PolicyStatus
+  effective_from: string
+  effective_to: string | null
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function formatRs(paisa: number): string {
+  const rupees = Math.round(Number(paisa) / 100)
+  return `Rs. ${rupees.toLocaleString("en-IN")}`
+}
+
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return "—"
+  return new Date(iso).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  })
 }
 
 export function DepositTab() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Active policies state
+  const [activePolicies, setActivePolicies] = useState<DepositPolicy[]>([])
+  const [policiesLoading, setPoliciesLoading] = useState(true)
+
+  const fetchActivePolicies = useCallback(async () => {
+    setPoliciesLoading(true)
+    try {
+      const res = await apiClient.get("/policies/deposit")
+      const active = (res.data as DepositPolicy[]).filter((p) => p.status === "active")
+      setActivePolicies(active)
+    } catch {
+      // silently fail — policies just won't show
+    } finally {
+      setPoliciesLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchActivePolicies()
+  }, [fetchActivePolicies])
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
@@ -86,10 +135,10 @@ export function DepositTab() {
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
                 className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-6 py-10 transition-colors ${isDragging
-                    ? "border-primary bg-accent"
-                    : selectedFile
-                      ? "border-success/50 bg-success/5"
-                      : "border-border hover:border-primary/50 hover:bg-muted/30"
+                  ? "border-primary bg-accent"
+                  : selectedFile
+                    ? "border-success/50 bg-success/5"
+                    : "border-border hover:border-primary/50 hover:bg-muted/30"
                   }`}
               >
                 <input
@@ -143,36 +192,56 @@ export function DepositTab() {
           </CardContent>
         </Card>
 
-        {/* Deposit Summary */}
+        {/* Active Deposit Policies */}
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-sm font-semibold">Deposit Summary</CardTitle>
-            <CardDescription>Your recent deposit activity</CardDescription>
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+              <Landmark className="h-4 w-4 text-primary" />
+              Active Deposit Policies
+            </CardTitle>
+            <CardDescription>Current policies governing deposits</CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="rounded-lg bg-accent/50 p-4">
-              <p className="text-xs text-muted-foreground">Total Deposited (This Year)</p>
-              <p className="font-nums mt-1 text-2xl font-bold text-foreground">{formatCurrency(2750)}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-lg border p-3">
-                <p className="text-[11px] text-muted-foreground">This Month</p>
-                <p className="font-nums text-lg font-semibold text-foreground">{formatCurrency(500)}</p>
+          <CardContent className="flex flex-col gap-3">
+            {policiesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
-              <div className="rounded-lg border p-3">
-                <p className="text-[11px] text-muted-foreground">Last Month</p>
-                <p className="font-nums text-lg font-semibold text-foreground">{formatCurrency(1250)}</p>
+            ) : activePolicies.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-8 text-center">
+                <AlertCircle className="h-5 w-5 text-muted-foreground/60" />
+                <p className="text-sm text-muted-foreground">No active deposit policies</p>
               </div>
-            </div>
-            <div className="rounded-lg border p-3">
-              <p className="text-[11px] text-muted-foreground">Pending Deposits</p>
-              <div className="mt-1 flex items-center gap-2">
-                <p className="font-nums text-lg font-semibold text-foreground">{formatCurrency(500)}</p>
-                <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning text-[10px]">
-                  1 pending
-                </Badge>
-              </div>
-            </div>
+            ) : (
+              activePolicies.map((p) => (
+                <div key={p.policy_id} className="rounded-lg border p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="font-mono text-lg font-bold text-foreground">{formatRs(p.amount_paisa)}</p>
+                    <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-xs text-success">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Active
+                    </Badge>
+                  </div>
+                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    <div>
+                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70">Schedule</span>
+                      <p className="mt-0.5 font-medium capitalize text-foreground">{p.schedule_type.replace(/_/g, " ")}</p>
+                    </div>
+                    <div>
+                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70">Due Day</span>
+                      <p className="mt-0.5 font-medium text-foreground">{p.due_day_of_month ?? "—"}</p>
+                    </div>
+                    <div>
+                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70">Late Fine</span>
+                      <p className="mt-0.5 font-medium text-foreground">{p.late_deposit_fine}%</p>
+                    </div>
+                    <div>
+                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70">Effective</span>
+                      <p className="mt-0.5 font-medium text-foreground">{formatDate(p.effective_from)}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
           </CardContent>
         </Card>
       </div>
@@ -189,36 +258,18 @@ export function DepositTab() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-xs">Date</TableHead>
-                  <TableHead className="text-xs">Reference</TableHead>
-                  <TableHead className="text-xs">Voucher</TableHead>
-                  <TableHead className="text-xs">Method</TableHead>
-                  <TableHead className="text-right text-xs">Amount</TableHead>
+                  <TableHead className="text-xs">Amount</TableHead>
+                  <TableHead className="text-xs">Type</TableHead>
+                  <TableHead className="text-xs">Due Date</TableHead>
                   <TableHead className="text-xs">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {depositHistory.map((dep) => (
-                  <TableRow key={dep.id}>
-                    <TableCell className="text-sm">{dep.date}</TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">{dep.id}</TableCell>
-                    <TableCell className="font-mono text-xs">{dep.voucherRef}</TableCell>
-                    <TableCell className="text-sm">{dep.method}</TableCell>
-                    <TableCell className="font-nums text-right text-sm font-medium">{formatCurrency(dep.amount)}</TableCell>
-                    <TableCell>
-                      {dep.status === "confirmed" ? (
-                        <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-success text-xs">
-                          <CheckCircle2 className="h-3 w-3" />
-                          Confirmed
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="gap-1 border-warning/30 bg-warning/10 text-warning text-xs">
-                          <Clock className="h-3 w-3" />
-                          Pending
-                        </Badge>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                <TableRow>
+                  <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                    No deposit records yet. Submit a deposit above to get started.
+                  </TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           </div>

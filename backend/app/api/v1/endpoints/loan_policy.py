@@ -13,7 +13,7 @@ from app.schemas.policy.loan_policy_schema import (
     LoanPolicyResponse,
 )
 from app.services.loan_policy_service import LoanPolicyService
-from app.api.dependencies.admin import get_current_moderator_or_admin
+from app.api.dependencies.admin import get_current_policy_manager
 from app.api.dependencies.auth import get_current_user
 from app.core.config import settings
 from app.models.user_model import User, CooperativeRole
@@ -145,12 +145,12 @@ def list_loan_policies(
 def create_loan_policy(
     policy_in: LoanPolicyCreate,
     request: Request,
-    current_user: User = Depends(get_current_moderator_or_admin),
+    current_user: User = Depends(get_current_policy_manager),
     session: Session = Depends(get_session),
 ):
     """
     Create a new loan policy.
-    Only moderators and admins can perform this action.
+    Only Treasurer, Moderator, or Admin can perform this action.
     Policy is always created as DRAFT. Treasurer must explicitly submit it for review.
     """
     # Force draft status — Treasurer must submit separately
@@ -178,7 +178,7 @@ def create_loan_policy(
 def submit_loan_policy(
     policy_id: UUID,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_moderator_or_admin),
+    current_user: User = Depends(get_current_policy_manager),
     session: Session = Depends(get_session),
 ):
     """
@@ -321,12 +321,12 @@ def reject_loan_policy(
 def delete_loan_policy(
     policy_id: UUID,
     request: Request,
-    current_user: User = Depends(get_current_moderator_or_admin),
+    current_user: User = Depends(get_current_policy_manager),
     session: Session = Depends(get_session),
 ):
     """
     Delete an existing loan policy.
-    Only moderators and admins can perform this action.
+    Only Treasurer, Moderator, or Admin can perform this action.
     """
 
     loan_policy_service.delete_policy(
@@ -346,12 +346,12 @@ def update_loan_policy(
     policy_id: UUID,
     policy_in: LoanPolicyUpdate,
     request: Request,
-    current_user: User = Depends(get_current_moderator_or_admin),
+    current_user: User = Depends(get_current_policy_manager),
     session: Session = Depends(get_session),
 ):
     """
     Update an existing loan policy.
-    Only moderators and admins can perform this action.
+    Only Treasurer, Moderator, or Admin can perform this action.
     Only DRAFT policies can be edited.
     """
     # Verify policy is still in draft

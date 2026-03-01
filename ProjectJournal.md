@@ -16,7 +16,7 @@
 - [x] Create loan schema
 - [x] Create loan service
 - [x] Registration Successful Email Notifications
-- [ ] Implement `react-helmet-async` or `document.title` to dynamically set web page title
+- [x] Implement `react-helmet-async` or `document.title` to dynamically set web page title
 - [ ] Forgot/Reset/renew account password
 - [x] Change Password
 - [x] Account Login and Logout
@@ -493,4 +493,25 @@ echo "password" > secrets/pgadmin_password.txt"
 - Moved `alembic.ini` inside `backend/`
 - Corrected the `backend/alembic/env.py` to import package from `app/` instead of `backend/`
 - Now using a fixed version of postgres. `postgres: 18`
-- 
+
+---
+
+### 2026-02-15
+- Totally changed the frontend UI into black and green theme
+- Added a new font `JetBrains Mono`
+- Created the following endpoints to track the policy creation states properly:
+  - `/submit` - Treasurer submits the policy
+  - `/approve` - President approves the policy before coming into effect
+  - `/reject` - President rejects the policy
+  - `/delete` - Only possible when the policy is in _Draft_ state
+  - `/delete` - Only possible when the policy is in _Draft_ state
+- Added the following endpoints for notification:
+  - `/notifications` - lists all the notification
+  - `/read-all` - mark the notification as read
+
+---
+
+### 2026-03-01
+- Added `get_current_policy_manager` to get check the user's _access role_ and _cooperative role_
+  - Now the during the policy creation methods depends on `get_current_policy_manager`
+- Updated the Deposit Tab

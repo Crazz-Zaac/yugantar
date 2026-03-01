@@ -1,6 +1,6 @@
 from fastapi import Depends, HTTPException, status
 
-from app.models.user_model import User, AccessRole
+from app.models.user_model import User, AccessRole, CooperativeRole
 from app.api.dependencies.auth import get_current_user
 from typing import Set
 
@@ -39,5 +39,27 @@ async def get_current_moderator_or_admin(
     current_user: User = Depends(require_roles(AccessRole.MODERATOR, AccessRole.ADMIN)),
 ) -> User:
     """Ensure the current user is at least moderator or admin."""
-    print( current_user.access_roles)
+    return current_user
+
+
+async def get_current_policy_manager(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Ensure the current user can manage policies.
+
+    Allowed if the user is a Treasurer (cooperative role) OR has
+    moderator/admin access role.
+    """
+    is_treasurer = CooperativeRole.TREASURER.value in (
+        current_user.cooperative_roles or []
+    )
+    is_mod_or_admin = bool(
+        set(current_user.access_roles or [])
+        & {AccessRole.MODERATOR.value, AccessRole.ADMIN.value}
+    )
+    if not (is_treasurer or is_mod_or_admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient privileges — only Treasurer, Moderator, or Admin can manage policies",
+        )
     return current_user
