@@ -235,20 +235,20 @@ echo "password" > secrets/pgadmin_password.txt"
 
 - Working with loan model
 
-#### Policy Management
+### Policy Management
 
 - Policies are versioned (effective_from/effective_to)
 - Only one active policy at a time
 - Historical policies retained for auditing
 
-#### Loan Creation
+### Loan Creation
 
 1. Fetch active policy
 2. Validate loan against policy rules
 3. Snapshot policy values into loan
 4. Store reference to policy (loan_policy_id)
 
-#### Loan Modification
+### Loan Modification
 
 - Policy changes don't affect existing loans
 - Renewals may use current policy or keep original
@@ -354,14 +354,14 @@ echo "password" > secrets/pgadmin_password.txt"
 
 ---
 
-### 2025-12-13
+## 2025-12-13
 
 - Storing tokens in redis with expiry time
 - Handling tokens when user logs out
 
 ---
 
-### 2025-12-14
+## 2025-12-14
 
 - Fixed the issue with `getAllUsers()` method. `UserListResponse` schema wasn't sending the `is_verified` field due to which
   the value wasn't being properly displayed in the AdminDashboard `Verification Status` which was all being set to `Unverified`.
@@ -370,7 +370,7 @@ echo "password" > secrets/pgadmin_password.txt"
 
 ---
 
-### 2025-12-18
+## 2025-12-18
 
 - I was re-creating `refresh_token` using the `create_access_token()` method
 - Due to token expiry, the UI would silently log user out
@@ -380,7 +380,7 @@ echo "password" > secrets/pgadmin_password.txt"
 
 ---
 
-### 2025-12-24
+## 2025-12-24
 
 - Initially Deposit and Loan Policies can never be deleted. Every changes to them are logged to policy change table. The problem is,
   how to handle, when the authorized person created a policy with the wrong inputs?
@@ -397,7 +397,7 @@ echo "password" > secrets/pgadmin_password.txt"
 
 ---
 
-### 2025-12-25
+## 2025-12-25
 
 - Alembic migrations wasn't straight forward while creating `Enum`s data type for `status` column. Simply `alembic upgrade head` didn't work.
   - Therefore, the migration script needed to be edited manually to create the enum fields. For example:
@@ -423,7 +423,7 @@ echo "password" > secrets/pgadmin_password.txt"
 
 ---
 
-### 2025-12-27
+## 2025-12-27
 
 - Added newer fields to `Deposit`, `Receipt`, `Fine` and `Loan` models
 - Created a new model `loan_payment` which can better handle user's different payment situations:
@@ -441,7 +441,7 @@ echo "password" > secrets/pgadmin_password.txt"
 
 ---
 
-### 2025-12-30
+## 2025-12-30
 
 - Created `models/mixins/money.py` to convert money into rupees to avoid storing money as a float
 - Removed duplicate fields from `deposit` and `fine` models
@@ -451,7 +451,7 @@ echo "password" > secrets/pgadmin_password.txt"
 
 ---
 
-### 2026-01-01
+## 2026-01-01
 
 - I received `INTEGER NOT NULL` error as I was trying to add a NOT NULL column to an existing table that already has rows
   - The workaround was to edit the migration script in alembic and set a `server_default=` some value
@@ -461,7 +461,7 @@ echo "password" > secrets/pgadmin_password.txt"
 
 ---
 
-### 2026-01-26
+## 2026-01-26
 
 - Created `ocr_service`
   - use opencv to read image
@@ -488,7 +488,7 @@ echo "password" > secrets/pgadmin_password.txt"
   - returns JSON response with `status`, `task_id` and `message`
 
 ---
-### 2026-02-01
+## 2026-02-01
 
 - Moved `alembic.ini` inside `backend/`
 - Corrected the `backend/alembic/env.py` to import package from `app/` instead of `backend/`
@@ -496,7 +496,7 @@ echo "password" > secrets/pgadmin_password.txt"
 
 ---
 
-### 2026-02-15
+## 2026-02-15
 - Totally changed the frontend UI into black and green theme
 - Added a new font `JetBrains Mono`
 - Created the following endpoints to track the policy creation states properly:
@@ -511,7 +511,8 @@ echo "password" > secrets/pgadmin_password.txt"
 
 ---
 
-### 2026-03-01
+## 2026-03-01
 - Added `get_current_policy_manager` to get check the user's _access role_ and _cooperative role_
   - Now the during the policy creation methods depends on `get_current_policy_manager`
 - Updated the Deposit Tab
+- Created `loan-payments` endpoints able to perform all the CRUD operations
