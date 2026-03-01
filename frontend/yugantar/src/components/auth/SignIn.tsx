@@ -211,40 +211,9 @@ export function SignIn({
                 <div className="w-full border-t" />
               </div>
               <div className="relative flex justify-center">
-                <span className="bg-background px-3 text-xs text-muted-foreground">or continue with</span>
+                <span className="bg-background px-3 text-xs text-muted-foreground">Or Sign Up</span>
               </div>
             </div>
-
-            <div className="flex gap-3">
-              <Button variant="outline" className="h-11 flex-1 gap-2 text-sm font-medium" type="button" disabled={isLoading}>
-                <svg className="h-4 w-4" viewBox="0 0 24 24">
-                  <path
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
-                    fill="#4285F4"
-                  />
-                  <path
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                    fill="#34A853"
-                  />
-                  <path
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-                    fill="#FBBC05"
-                  />
-                  <path
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                    fill="#EA4335"
-                  />
-                </svg>
-                Google
-              </Button>
-              <Button variant="outline" className="h-11 flex-1 gap-2 text-sm font-medium" type="button" disabled={isLoading}>
-                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.18 0-.36-.02-.53-.06-.01-.18-.04-.56-.04-.95 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.22.05.45.05.69zm3.838 17.18c-.02.04-.35.12-.35.12s-1.828 3.05-3.65 3.05c-.96 0-1.56-.57-2.49-.57-.96 0-1.78.59-2.49.59-1.72 0-3.89-3.46-3.89-6.24 0-2.81 1.94-4.37 3.68-4.37 1.08 0 1.95.65 2.49.65.54 0 1.56-.72 2.75-.65.78.02 2.95.3 3.64 2.44-.07.04-2.17 1.23-2.17 3.74 0 2.98 2.63 4.06 2.63 4.06l-.14.18z" />
-                </svg>
-                Apple
-              </Button>
-            </div>
-
             <p className="mt-8 text-center text-sm text-muted-foreground">
               {"Don't have an account? "}
               <button
@@ -254,10 +223,6 @@ export function SignIn({
               >
                 Create one
               </button>
-            </p>
-
-            <p className="mt-4 text-center text-xs text-muted-foreground/60">
-              Use <span className="font-mono text-xs text-muted-foreground">admin@yugantar.com</span> to sign in as Admin
             </p>
           </div>
         </div>

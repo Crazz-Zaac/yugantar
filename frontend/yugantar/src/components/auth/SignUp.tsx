@@ -348,9 +348,7 @@ export function SignUp({
                   disabled={isLoading}
                 />
                 <Label htmlFor="terms" className="text-xs leading-relaxed text-muted-foreground">
-                  I agree to the{" "}
-                  <span className="font-medium text-primary">Terms of Service</span> and{" "}
-                  <span className="font-medium text-primary">Privacy Policy</span>, and
+                  I agree to the{" "} Terms of Service and{" "} Privacy Policy, and
                   acknowledge the cooperative membership guidelines.
                 </Label>
               </div>
