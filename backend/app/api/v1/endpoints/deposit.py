@@ -11,12 +11,20 @@ from app.schemas.deposit_schema import (
     DepositVerificationStatus,
 )
 from app.services.deposit_service import DepositService
+from app.services.smart_deposit_service import SmartDepositService
+from app.schemas.smart_deposit_schema import (
+    DepositPreviewRequest,
+    DepositPreviewResponse,
+    SmartDepositCreate,
+    SmartDepositResponse,
+)
 from app.api.dependencies.auth import get_current_active_user
 from app.models.user_model import User
 
 
 router = APIRouter(prefix="/deposits", tags=["deposits"])
 deposit_service = DepositService()
+smart_deposit_service = SmartDepositService()
 
 
 @router.post(
@@ -137,3 +145,51 @@ def delete_deposit_by_moderator(
         current_user=current_user,
     )
     return None
+
+
+# ──────────────────────────────────────────────
+# Smart Deposit endpoints
+# ──────────────────────────────────────────────
+
+
+@router.post(
+    "/preview",
+    response_model=DepositPreviewResponse,
+)
+def preview_deposit(
+    req: DepositPreviewRequest,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session),
+):
+    """
+    Compute the deposit breakdown: charge deduction, late fine,
+    excess amount, and suggested split allocations.
+    No database writes — purely a preview.
+    """
+    return smart_deposit_service.preview(
+        session=session,
+        req=req,
+        user_id=current_user.id,
+    )
+
+
+@router.post(
+    "/smart",
+    response_model=SmartDepositResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_smart_deposit(
+    req: SmartDepositCreate,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session),
+):
+    """
+    Create a deposit with smart-split allocations.
+    Creates the deposit, fine (if late), and loan payments (if allocated)
+    in a single transaction.
+    """
+    return smart_deposit_service.execute(
+        session=session,
+        req=req,
+        user_id=current_user.id,
+    )
