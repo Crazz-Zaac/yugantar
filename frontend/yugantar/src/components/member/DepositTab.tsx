@@ -300,8 +300,32 @@ export function DepositTab() {
         ocr_reference: ocrResult.reference,
       })
       const data = res.data as PreviewResponse
-      setPreview(data)
-      setAllocations(data.allocations)
+      setPreview({
+        ...data,
+        ocr_amount: Number(data.ocr_amount),
+        ocr_charge: Number(data.ocr_charge),
+        net_amount: Number(data.net_amount),
+        required_deposit: Number(data.required_deposit),
+        fine_amount: Number(data.fine_amount),
+        fine_percentage: Number(data.fine_percentage),
+        excess_amount: Number(data.excess_amount),
+        active_loans: data.active_loans.map((ln: LoanSummary) => ({
+          ...ln,
+          principal_paisa: Number(ln.principal_paisa),
+          accrued_interest_paisa: Number(ln.accrued_interest_paisa),
+          total_paid_paisa: Number(ln.total_paid_paisa),
+          outstanding_principal_paisa: Number(ln.outstanding_principal_paisa),
+          outstanding_interest_paisa: Number(ln.outstanding_interest_paisa),
+          interest_rate: Number(ln.interest_rate),
+        })),
+      })
+      // Ensure allocation amounts are numbers (backend sends Decimal as string)
+      setAllocations(
+        data.allocations.map((a: SplitAllocation) => ({
+          ...a,
+          amount_rupees: Number(a.amount_rupees),
+        }))
+      )
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to compute deposit preview"
       setPreviewError(msg)
@@ -574,7 +598,7 @@ export function DepositTab() {
                 <Loader2 className="h-4 w-4 animate-spin text-primary" />
                 <div>
                   <p className="text-sm font-medium text-primary">Processing voucher…</p>
-                  <p className="text-xs text-muted-foreground">OCR is extracting deposit details from your image</p>
+                  <p className="text-xs text-muted-foreground">Extracting deposit details from the Voucher</p>
                 </div>
               </div>
             )}
@@ -591,7 +615,7 @@ export function DepositTab() {
               <div className="rounded-lg border p-4">
                 <div className="mb-3 flex items-center gap-2">
                   <ScanLine className="h-4 w-4 text-primary" />
-                  <p className="text-xs font-semibold uppercase tracking-wider text-primary">Voucher Details (OCR)</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-primary">Voucher Details </p>
                 </div>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                   <div className="flex flex-col gap-1">
@@ -603,7 +627,7 @@ export function DepositTab() {
                       </span>
                     </div>
                   </div>
-                  {ocrResult.charge != null && ocrResult.charge > 0 && (
+                  {/* {ocrResult.charge != null && ocrResult.charge > 0 && (
                     <div className="flex flex-col gap-1">
                       <Label className="text-xs font-medium text-muted-foreground">Bank Charge</Label>
                       <div className="flex h-10 items-center gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 dark:border-orange-800/40 dark:bg-orange-950/20">
@@ -613,7 +637,7 @@ export function DepositTab() {
                         </span>
                       </div>
                     </div>
-                  )}
+                  )} */}
                   <div className="flex flex-col gap-1">
                     <Label className="text-xs font-medium text-muted-foreground">Deposited Date</Label>
                     <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/30 px-3">
