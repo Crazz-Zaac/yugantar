@@ -52,22 +52,23 @@ async def login_for_access_token(
     # store refresh token in Redis with expiration
     redis_client.setex(
         f"refresh_token:{refresh_token}",  # Redis key
-        timedelta(days=7),  # Token valid for 7 days
+        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         str(user.id),
     )
-    # send refresh token in response
+    # send refresh token as httpOnly cookie (not in response body)
+    is_production = settings.ENVIRONMENT == "production"
     response.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        max_age=7 * 24 * 60 * 60,  # 7 days
-        secure=True,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        secure=is_production,
         samesite="lax",
     )
 
     return TokenResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
+        refresh_token="",  # Don't leak refresh token in response body
         token_type="bearer",
     )
 
@@ -75,10 +76,12 @@ async def login_for_access_token(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_access_token(
     request: Request,
+    response: Response,
     session: Session = Depends(get_session),
 ):
     """
     Refresh access token using refresh token.
+    Implements refresh token rotation (OWASP best practice).
     """
 
     refresh_token = request.cookies.get("refresh_token")
@@ -90,7 +93,8 @@ async def refresh_access_token(
         )
 
     # Validate refresh token from Redis
-    user_id = redis_client.get(f"refresh_token:{refresh_token}")
+    old_key = f"refresh_token:{refresh_token}"
+    user_id = redis_client.get(old_key)
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -111,6 +115,29 @@ async def refresh_access_token(
             detail="User not found",
         )
 
+    # Refresh token rotation 
+    # Invalidate the old refresh token
+    redis_client.delete(old_key)
+
+    # Issue a new refresh token
+    new_refresh_token = str(uuid4())
+    redis_client.setex(
+        f"refresh_token:{new_refresh_token}",
+        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+        str(user.id),
+    )
+
+    # Set new refresh token cookie
+    is_production = settings.ENVIRONMENT == "production"
+    response.set_cookie(
+        key="refresh_token",
+        value=new_refresh_token,
+        httponly=True,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        secure=is_production,
+        samesite="lax",
+    )
+
     # Create new access token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = await create_access_token(
@@ -119,12 +146,12 @@ async def refresh_access_token(
 
     return TokenResponse(
         access_token=access_token,
-        refresh_token=refresh_token,  # Return the same refresh token
+        refresh_token="",  # Delivered via cookie only
         token_type="bearer",
     )
 
 
-# route to verify email token only — redirects to frontend
+# route to verify email token only - redirects to frontend
 @router.get("/verify-email")
 async def verify_email_redirect(token: str):
     """

@@ -46,10 +46,11 @@ class Settings(BaseSettings):
     # ---------------------------
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = ""
-    # Expire duration: 60 minutes * 24 hours * 8 days = 8 days
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
+    # Expire duration: 30 minutes (short-lived; refresh token handles longevity)
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     FRONTEND_HOST: str = "http://localhost:3000"
-    BACKEND_HOST: str = "http://localhost:8001" 
+    BACKEND_HOST: str = "http://localhost:8001"
     ENVIRONMENT: Literal["local", "production", "staging"] = "local"
 
     BACKEND_CORS_ORIGINS: Annotated[List[AnyUrl] | str, BeforeValidator(parse_cors)] = (
@@ -79,7 +80,6 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = "yugantar_db"
-    
 
     @computed_field  # type: ignore[prop-decorator]
     @property
@@ -149,9 +149,7 @@ class Settings(BaseSettings):
     def _enforce_non_default_secrets(self) -> Self:
         self._check_default_secret("SECRET_KEY", self.SECRET_KEY)
         self._check_default_secret("POSTGRES_PASSWORD", self.POSTGRES_PASSWORD)
-        self._check_default_secret(
-            "ADMIN_PASSWORD", self.ADMIN_PASSWORD
-        )
+        self._check_default_secret("ADMIN_PASSWORD", self.ADMIN_PASSWORD)
         return self
 
     # ---------------------------

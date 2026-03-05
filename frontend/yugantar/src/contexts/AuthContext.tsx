@@ -1,6 +1,5 @@
-import { createContext, useContext, useState, useEffect } from "react";
-import { User } from "@/types/user";
-import { apiClient } from "@/api/api";
+import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { apiClient, SESSION_EXPIRED_EVENT } from "@/api/api";
 import { ENV } from "@/config/env";
 import {
   normalizeUser,
@@ -29,6 +28,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserForUI | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Handle session-expired event fired by the 401 interceptor
+  const handleSessionExpired = useCallback(() => {
+    setUser(null);
+    // Token is already removed by the interceptor
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => {
+      window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
+    };
+  }, [handleSessionExpired]);
+
   useEffect(() => {
     const initAuth = async () => {
       const token = localStorage.getItem("access_token");
@@ -40,9 +52,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       apiClient.defaults.headers.common.Authorization = `Bearer ${token}`;
 
       try {
+        // If the access token is expired, the 401 interceptor will
+        // automatically call /auth/refresh and retry this request.
+        // We only land in catch if refresh also fails.
         const res = await apiClient.get("/users/me");
         setUser(normalizeUser(res.data));
       } catch {
+        // Refresh failed too - clear everything
         localStorage.removeItem("access_token");
         setUser(null);
       } finally {
@@ -89,10 +105,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       console.log("Signup success response:", data);
 
-      if (data.access_token && data.refresh_token) {
+      if (data.access_token) {
         localStorage.setItem("access_token", data.access_token);
-        localStorage.setItem("refresh_token", data.refresh_token);
-        setUser(normalizeUser(data.user));
+        // Refresh token is delivered via httpOnly cookie — never store in localStorage
+        setUser(normalizeUser(data.user ?? data));
       } else if (data.user) {
         setUser(normalizeUser(data.user));
       } else {
@@ -143,58 +159,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const updateProfile = async (data: EditableUserFields) => {
-    const token = localStorage.getItem("access_token");
-
-    if (!token) {
-      throw new Error("No authentication token found");
-    }
-
-    // Debug: Log the token (first/last 10 chars only for security)
-    console.log("Token exists, length:", token.length);
-    console.log(
-      "Token preview:",
-      `${token.substring(0, 10)}...${token.substring(token.length - 10)}`
-    );
-
     const apiData = denormalizeUser(data);
-    console.log("Update profile request data:", apiData);
 
     try {
-      const res = await fetch(`${API_BASE}/users/me`, {
-        method: "PATCH",
-        credentials: "include", // Include credentials for cookie-based auth
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(apiData),
-      });
-
-      // Log response status
-      console.log("Update profile response status:", res.status);
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        console.error("Update profile error response:", errorData);
-
-        // If unauthorized, token might be expired
-        if (res.status === 401) {
-          console.error("Token might be expired or invalid");
-          // Optionally: trigger re-login
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("refresh_token");
-          setUser(null);
-          throw new Error("Session expired. Please log in again.");
-        }
-
-        throw new Error(errorData.detail || "Failed to update profile");
-      }
-
-      const updated: User = await res.json();
-      console.log("Update profile success:", updated);
-      setUser(normalizeUser(updated));
+      const res = await apiClient.patch("/users/me", apiData);
+      setUser(normalizeUser(res.data));
     } catch (err) {
-      console.error("Update profile caught error:", err);
+      console.error("Update profile error:", err);
       throw err;
     }
   };
@@ -203,32 +174,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     currentPassword: string,
     newPassword: string
   ) => {
-    const token = localStorage.getItem("access_token");
-
-    if (!token) {
-      throw new Error("No authentication token found");
-    }
-
-    const res = await fetch(`${API_BASE}/users/me/change-password`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
+    try {
+      await apiClient.post("/users/me/change-password", {
         current_password: currentPassword,
         new_password: newPassword,
-      }),
-    });
-
-    if (!res.ok) {
-      const errorData = await res.json();
-      console.error("Change password error:", errorData);
-      throw new Error(errorData.detail || "Failed to change password");
+      });
+    } catch (err) {
+      console.error("Change password error:", err);
+      throw err;
     }
-
-    const data = await res.json();
-    console.log("Password changed successfully:", data);
   };
 
   return (
