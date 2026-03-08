@@ -47,7 +47,7 @@ class Loan(BaseModel, table=True):
         default=0.0,
         description="Total penalties incurred on the loan",
     )
-    
+
     accrued_interest_paisa: int = Field(
         default=0.0,
         description="Total interest amount accrued on the loan",
@@ -71,7 +71,7 @@ class Loan(BaseModel, table=True):
 
     # approval and rejection details
     approved_by: Optional[str] = Field(max_length=100, nullable=True)
-    approved_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
+    approved_at: Optional[datetime] = Field(default=None, nullable=True)
     rejected_by: Optional[str] = Field(max_length=100, nullable=True)
     rejected_at: Optional[datetime] = Field(nullable=True)
     rejection_reason: Optional[str] = Field(max_length=255, nullable=True)
@@ -82,6 +82,25 @@ class Loan(BaseModel, table=True):
         description="Timestamp when the loan funds were disbursed to the user",
     )
     collateral_details: Optional[str] = Field(max_length=255, nullable=True)
+    purpose: Optional[str] = Field(
+        default=None,
+        max_length=255,
+        nullable=True,
+        description="Purpose of the loan (e.g. Business, Agriculture, Education)",
+    )
+
+    # Treasurer fund verification
+    fund_verified_by: Optional[str] = Field(
+        default=None,
+        max_length=100,
+        nullable=True,
+        description="Email of the treasurer who verified funds availability",
+    )
+    fund_verified_at: Optional[datetime] = Field(
+        default=None,
+        nullable=True,
+        description="When the treasurer verified fund availability",
+    )
 
     # renewal tracking fields
     renewal_count: int = Field(

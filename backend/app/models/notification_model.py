@@ -11,6 +11,11 @@ class NotificationType(str, Enum):
     POLICY_APPROVED = "policy_approved"
     POLICY_REJECTED = "policy_rejected"
     POLICY_FINALIZED = "policy_finalized"
+    # Loan application workflow
+    LOAN_APPLICATION = "loan_application"  # new loan submitted → notify treasurers
+    LOAN_FUND_VERIFIED = "loan_fund_verified"  # treasurer verified → notify presidents
+    LOAN_APPROVED = "loan_approved"  # president approved → notify applicant
+    LOAN_REJECTED = "loan_rejected"  # president rejected → notify applicant
     GENERAL = "general"
 
 
@@ -37,6 +42,9 @@ class Notification(SQLModel, table=True):
     # For policy approval notifications, link to the policy
     policy_id: Optional[uuid.UUID] = Field(default=None, nullable=True)
     policy_type: Optional[str] = Field(default=None, max_length=50, nullable=True)
+
+    # For loan workflow notifications, link to the loan
+    loan_id: Optional[uuid.UUID] = Field(default=None, nullable=True)
 
     is_read: bool = Field(default=False)
 
