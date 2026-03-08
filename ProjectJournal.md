@@ -17,20 +17,20 @@
 - [x] Create loan service
 - [x] Registration Successful Email Notifications
 - [x] Implement `react-helmet-async` or `document.title` to dynamically set web page title
-- [ ] Forgot/Reset/renew account password
+- [x] Forgot/Reset/renew account password
 - [x] Change Password
 - [x] Account Login and Logout
 - [x] Account verification (send link using `itsdangerous` package)
 - [x] Update user profile
 - [ ] Log every user's activity
 - [x] Create Deposit policy
-- [ ] Edit and Delete policy (must be either admin/moderator)
-- [ ] Create Deposit api
-- [ ] Make deposits based on the active policy
-- [ ] Create celery docker service with proper configs
-- [ ] Upload receipts to make deposit
-- [ ] Use OCR to read voucher data
-- [ ] Assign Celery OCR task in background
+- [x] Edit and Delete policy (must be either admin/moderator)
+- [x] Create Deposit api
+- [x] Make deposits based on the active policy
+- [x] Create celery docker service with proper configs
+- [x] Upload receipts to make deposit
+- [x] Use OCR to read voucher data
+- [x] Assign Celery OCR task in background
 
 ---
 
@@ -488,6 +488,7 @@ echo "password" > secrets/pgadmin_password.txt"
   - returns JSON response with `status`, `task_id` and `message`
 
 ---
+
 ## 2026-02-01
 
 - Moved `alembic.ini` inside `backend/`
@@ -516,3 +517,43 @@ echo "password" > secrets/pgadmin_password.txt"
   - Now the during the policy creation methods depends on `get_current_policy_manager`
 - Updated the Deposit Tab
 - Created `loan-payments` endpoints able to perform all the CRUD operations
+
+---
+
+## 2026-03-08
+- Loan application -> Verification -> Approval / Rejection
+  - User applies for loan -> Notifies Treasurer
+  - Treasurer verifies fund availability -> Notifies President after verification
+  - President Approves/Rejects -> Notifies the user to collect the check
+
+- Added additional fields (_purpose_, _fund verified by_ and _fund verified at_) to the `loan_model`
+
+- Changed the `loan_schema` to include loan application
+  - Methods redefined: `LoanFundVerification`, `LoanApprovalAction`, `LoanRejectAction`, `LoanResponse`, `LoanList`, `LoanCalculatorRequest` and `LoanCalculator`
+  
+- Updated `LoanService` 
+  - Checks active loan policy
+  - Verifies the loan amount follows the policy
+  - Checks for collateral requirement
+  - `get_my_loans` returns user's personal loans
+  - `get_loan` return single loan 
+  - `get_pending_loans` used only for _Treasurer_ and _President_
+  - `get_community_loans` returns loans of all the members
+  - `verify_funds` is called only by the _Treasurer_
+  - `approve_loan` and `reject_loan` is called only by the _President_
+  - `calculate_loan` a method that helps user to do some basic Simple Interest calculations while applying for loan
+
+- Updated `notification_model`
+  - Added Notification Type fields and loan id
+
+- Updated the `notification_schema` to include the `loan_id` as well
+
+- Updated the `api/dependencies/admin.py` to get the current loan reviewer. This basically fetches current _Treasurer_ and _President_ 
+
+- Added `api/v1/endpoints/loan.py` 
+  - loan apply endpoint: `loans/apply`
+  - my own loans: `loans/me`
+  - community loans: `loans/community`
+  - pending loans: `loans/pending`
+  - loan calculator: `loans/calculator`
+  - And other dynamic routes for loan verification and loan approval
