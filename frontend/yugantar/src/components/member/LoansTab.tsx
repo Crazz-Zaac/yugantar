@@ -95,20 +95,11 @@ function LoanApplicationDialog() {
               <SelectContent>
                 <SelectItem value="business">Business Expansion</SelectItem>
                 <SelectItem value="agriculture">Agriculture</SelectItem>
-                <SelectItem value="education">Education</SelectItem>
                 <SelectItem value="housing">Housing</SelectItem>
                 <SelectItem value="emergency">Emergency</SelectItem>
                 <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="loan-description" className="text-xs font-medium">Description</Label>
-            <Textarea
-              id="loan-description"
-              placeholder="Describe how you plan to use the loan..."
-              className="min-h-[80px] resize-none"
-            />
           </div>
           <div className="rounded-lg bg-muted/50 p-3">
             <p className="text-xs text-muted-foreground">

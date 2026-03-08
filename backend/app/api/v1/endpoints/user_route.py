@@ -101,22 +101,23 @@ async def login_user(
     refresh_token = str(uuid4())
     redis_key = f"refresh_token:{refresh_token}"
     redis_client.set(
-        redis_key, str(user.id), ex=timedelta(days=7)
+        redis_key, str(user.id), ex=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     )  # Store refresh token
 
-    # set resfresh token in httpOnly cookie
+    # set refresh token in httpOnly cookie
+    is_production = settings.ENVIRONMENT == "production"
     reponse.set_cookie(
         key="refresh_token",
         value=refresh_token,
         httponly=True,
-        max_age=7 * 24 * 60 * 60,  # 7 days
-        secure=True,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        secure=is_production,
         samesite="lax",
     )
 
     login_token = TokenResponse(
         access_token=access_token,
-        refresh_token=refresh_token,
+        refresh_token="",  # Don't leak refresh token in response body
         token_type="bearer",
     )
 

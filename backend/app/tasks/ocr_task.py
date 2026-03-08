@@ -1,7 +1,6 @@
 from ..celery_app import celery_app
 from celery.utils.log import get_task_logger
 import os
-import numpy as np
 from pathlib import Path
 import logging
 

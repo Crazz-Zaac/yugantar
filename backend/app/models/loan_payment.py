@@ -20,17 +20,16 @@ class LoanPaymentType(str, Enum):
     PENALTY = "penalty"  # optional, future-proof
 
 
-class LoanPayment(BaseModel, table=True):
+class LoanPayment(BaseModel, MoneyMixin, table=True):
 
     __table_args__ = {"extend_existing": True}
 
     loan_id: uuid.UUID = Field(foreign_key="loan.id", index=True)
     receipt_id: Optional[uuid.UUID] = Field(foreign_key="receipt.id", nullable=True)
 
-    # payment_amount is now inherited from MoneyMixin
-    # the amount will be stored in the 'amount_paisa' field of MoneyMixin
-    # amount: float = Field(gt=0)
-    
+    # amount_paisa is inherited from MoneyMixin
+    # also provides: amount_rupees property, rupees_to_paisa() static method
+
     payment_type: LoanPaymentType
 
     date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

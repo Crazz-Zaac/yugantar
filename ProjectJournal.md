@@ -235,20 +235,20 @@ echo "password" > secrets/pgadmin_password.txt"
 
 - Working with loan model
 
-#### Policy Management
+### Policy Management
 
 - Policies are versioned (effective_from/effective_to)
 - Only one active policy at a time
 - Historical policies retained for auditing
 
-#### Loan Creation
+### Loan Creation
 
 1. Fetch active policy
 2. Validate loan against policy rules
 3. Snapshot policy values into loan
 4. Store reference to policy (loan_policy_id)
 
-#### Loan Modification
+### Loan Modification
 
 - Policy changes don't affect existing loans
 - Renewals may use current policy or keep original
@@ -488,7 +488,6 @@ echo "password" > secrets/pgadmin_password.txt"
   - returns JSON response with `status`, `task_id` and `message`
 
 ---
-
 ## 2026-02-01
 
 - Moved `alembic.ini` inside `backend/`
@@ -516,3 +515,4 @@ echo "password" > secrets/pgadmin_password.txt"
 - Added `get_current_policy_manager` to get check the user's _access role_ and _cooperative role_
   - Now the during the policy creation methods depends on `get_current_policy_manager`
 - Updated the Deposit Tab
+- Created `loan-payments` endpoints able to perform all the CRUD operations
