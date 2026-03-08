@@ -591,10 +591,6 @@ export function DepositTab() {
                 )}
               </div>
             </div>
-<<<<<<< HEAD
-            <Button className="h-10 w-full bg-primary text-primary-foreground hover:bg-primary/90 sm:w-auto sm:self-end">
-              <Plus className="mr-2 h-4 w-4" />
-=======
 
             {/* ── OCR Status ── */}
             {ocrLoading && (
@@ -964,7 +960,6 @@ export function DepositTab() {
               ) : (
                 <ArrowRight className="mr-2 h-4 w-4" />
               )}
->>>>>>> feature/ocr-docker-service
               Submit Deposit
             </Button>
           </CardContent>
