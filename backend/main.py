@@ -7,6 +7,7 @@ from app.api.v1.endpoints import (
     deposit_policy,
     loan_policy,
     deposit,
+    loan,
     loan_payment,
     ocr,
     notification,
@@ -31,6 +32,7 @@ app.include_router(user_route.router, prefix="/api/v1")
 app.include_router(deposit_policy.router, prefix="/api/v1")
 app.include_router(loan_policy.router, prefix="/api/v1")
 app.include_router(deposit.router, prefix="/api/v1")
+app.include_router(loan.router, prefix="/api/v1")
 app.include_router(loan_payment.router, prefix="/api/v1")
 app.include_router(ocr.router, prefix="/api/v1")
 app.include_router(notification.router, prefix="/api/v1")
