@@ -12,6 +12,7 @@ class NotificationResponse(SQLModel):
     notification_type: str
     policy_id: Optional[uuid.UUID] = None
     policy_type: Optional[str] = None
+    loan_id: Optional[uuid.UUID] = None
     is_read: bool
     created_at: datetime
 
