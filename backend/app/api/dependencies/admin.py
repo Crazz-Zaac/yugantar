@@ -63,3 +63,29 @@ async def get_current_policy_manager(
             detail="Insufficient privileges — only Treasurer, Moderator, or Admin can manage policies",
         )
     return current_user
+
+
+async def get_current_loan_reviewer(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Ensure the current user can review loan applications.
+
+    Allowed if the user is a Treasurer or President (cooperative role)
+    OR has moderator/admin access role.
+    """
+    is_treasurer = CooperativeRole.TREASURER.value in (
+        current_user.cooperative_roles or []
+    )
+    is_president = CooperativeRole.PRESIDENT.value in (
+        current_user.cooperative_roles or []
+    )
+    is_mod_or_admin = bool(
+        set(current_user.access_roles or [])
+        & {AccessRole.MODERATOR.value, AccessRole.ADMIN.value}
+    )
+    if not (is_treasurer or is_president or is_mod_or_admin):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient privileges — only Treasurer, President, Moderator, or Admin can review loans",
+        )
+    return current_user
