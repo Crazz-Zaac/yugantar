@@ -1,11 +1,3 @@
-"""
-Smart-deposit service.
-
-Handles the two-step workflow:
-  preview()  →  compute breakdown (no DB writes)
-  execute()  →  create deposit + fine + loan-payment rows in one transaction
-"""
-
 from __future__ import annotations
 
 import uuid
@@ -53,7 +45,7 @@ class SmartDepositService:
         if not policy:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Deposit policy not found")
 
-        net_amount = req.ocr_amount  # - req.ocr_charge
+        net_amount = req.ocr_amount
         required_deposit = policy.amount_rupees  # Decimal in rupees
         now = req.ocr_date or datetime.now(timezone.utc)
         due_date = calculate_due_date(policy=policy, reference_date=now)
@@ -69,61 +61,12 @@ class SmartDepositService:
                 amount_to_be_deposited=required_deposit,
             )
 
-        # ── excess / insufficient ────────────────────────────────────────
+        #  excess / insufficient
         mandatory = required_deposit + fine_amount
         excess = net_amount - mandatory
         is_insufficient = excess < 0
 
-        # ── build default allocations ────────────────────────────────────
         allocations: list[SplitAllocation] = []
-
-        if is_insufficient:
-            # Not enough: show what they have vs what's needed
-            allocations.append(
-                SplitAllocation(
-                    category=SplitCategory.DEPOSIT,
-                    label="Deposit Amount (insufficient)",
-                    amount_rupees=net_amount if net_amount > 0 else Decimal(0),
-                    editable=False,
-                )
-            )
-            if late and fine_amount > 0:
-                allocations.append(
-                    SplitAllocation(
-                        category=SplitCategory.FINE,
-                        label=f"Late Deposit Fine ({fine_pct}%)",
-                        amount_rupees=fine_amount,
-                        editable=False,
-                    )
-                )
-        else:
-            # Enough: deposit + fine are fixed; excess is editable
-            allocations.append(
-                SplitAllocation(
-                    category=SplitCategory.DEPOSIT,
-                    label="Regular Deposit",
-                    amount_rupees=required_deposit,
-                    editable=False,
-                )
-            )
-            if late and fine_amount > 0:
-                allocations.append(
-                    SplitAllocation(
-                        category=SplitCategory.FINE,
-                        label=f"Late Deposit Fine ({fine_pct}%)",
-                        amount_rupees=fine_amount,
-                        editable=False,
-                    )
-                )
-            if excess > 0:
-                allocations.append(
-                    SplitAllocation(
-                        category=SplitCategory.ADVANCE_DEPOSIT,
-                        label="Advance Deposit",
-                        amount_rupees=excess,
-                        editable=True,
-                    )
-                )
         stmt = select(Loan).where(
             Loan.user_id == user_id,
             Loan.status.in_([LoanStatus.ACTIVE, LoanStatus.APPROVED]),
@@ -168,21 +111,17 @@ class SmartDepositService:
         req: SmartDepositCreate,
         user_id: uuid.UUID,
     ) -> SmartDepositResponse:
-        policy = session.get(DepositPolicy, req.policy_id)
-        if not policy:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Deposit policy not found")
-
         now = req.ocr_date or datetime.now(timezone.utc)
-        due_date = calculate_due_date(policy=policy, reference_date=now)
-        net_amount = req.ocr_amount - req.ocr_charge
-
         alloc_total = sum(a.amount_rupees for a in req.allocations)
-        # Allow tiny rounding differences (< 1 rupee)
-        if abs(alloc_total - net_amount) > Decimal("1"):
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"Allocation total ({alloc_total}) does not match net amount ({net_amount})",
-            )
+
+        net_amount = alloc_total
+        if req.ocr_amount is not None:
+            net_amount = req.ocr_amount
+            if abs(alloc_total - net_amount) > Decimal("1"):
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Allocation total ({alloc_total}) does not match net amount ({net_amount})",
+                )
 
         deposit_amount = Decimal(0)
         advance_amount = Decimal(0)
@@ -203,22 +142,42 @@ class SmartDepositService:
             ):
                 loan_allocs.append(a)
 
+        if alloc_total <= 0:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "At least one allocation with a positive amount is required",
+            )
+
+        if not req.policy_id:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "policy_id is required for smart deposit submission",
+            )
+
+        policy = session.get(DepositPolicy, req.policy_id)
+        if not policy:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND,
+                "Deposit policy not found",
+            )
+
         total_deposit = deposit_amount + advance_amount
-        deposit_type = (
+        due_date = calculate_due_date(policy=policy, reference_date=now)
+        deposit_type: Optional[DepositType] = (
             DepositType.ADVANCE if advance_amount > 0 else DepositType.CURRENT
         )
 
-        # Create Deposit
-        deposit = Deposit(
+        deposit: Optional[Deposit] = Deposit(
             policy_id=req.policy_id,
             user_id=user_id,
             deposit_type=deposit_type,
             deposited_date=now,
             due_deposit_date=due_date,
-            amount_paisa=MoneyMixin.rupees_to_paisa(total_deposit),
+            amount_paisa=MoneyMixin.rupees_to_paisa(alloc_total),
             verification_status=DepositVerificationStatus.PENDING,
         )
         session.add(deposit)
+        session.flush()
 
         # Create Fine (if late)
         fine_id = None
@@ -307,14 +266,15 @@ class SmartDepositService:
 
         # Commit everything
         session.commit()
-        session.refresh(deposit)
+        if deposit:
+            session.refresh(deposit)
 
         total_allocated = sum(a.amount_rupees for a in req.allocations)
 
         return SmartDepositResponse(
-            deposit_id=deposit.id,
-            deposit_amount_paisa=deposit.amount_paisa,
-            deposit_type=deposit_type.value,
+            deposit_id=deposit.id if deposit else None,
+            deposit_amount_paisa=deposit.amount_paisa if deposit else 0,
+            deposit_type=deposit_type.value if deposit_type else None,
             fine_id=fine_id,
             fine_amount_paisa=fine_amount_paisa,
             loan_payment_ids=loan_payment_ids,

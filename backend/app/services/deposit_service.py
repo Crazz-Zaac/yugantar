@@ -12,7 +12,7 @@ from app.schemas.deposit_schema import (
     DepositModeratorUpdate,
 )
 from app.services.receipt_service import ReceiptService
-from app.models.user_model import User, CooperativeRole
+from app.models.user_model import User, CooperativeRole, AccessRole
 from app.utils.deposit_date_utils import (
     calculate_due_date,
     calculate_late_fine,
@@ -27,6 +27,22 @@ class DepositService:
     """
     Service class for managing deposits.
     """
+
+    @staticmethod
+    def _is_deposit_reviewer(current_user: User) -> bool:
+        cooperative_roles = {
+            str(getattr(role, "value", role)).lower()
+            for role in (current_user.cooperative_roles or [])
+        }
+        access_roles = {
+            str(getattr(role, "value", role)).lower()
+            for role in (current_user.access_roles or [])
+        }
+        return (
+            CooperativeRole.TREASURER.value in cooperative_roles
+            or AccessRole.MODERATOR.value in access_roles
+            or AccessRole.ADMIN.value in access_roles
+        )
 
     def create_deposit(
         self,
@@ -61,6 +77,7 @@ class DepositService:
             due_deposit_date=due_date,
             deposited_date=now,
             amount_paisa=MoneyMixin.rupees_to_paisa(deposit_in.deposited_amount),
+            verification_status=DepositVerificationStatus.PENDING,
         )
 
         # Check for late deposit and apply fine if necessary
@@ -109,6 +126,12 @@ class DepositService:
                 detail="Deposit not found",
             )
 
+        if db_deposit.verification_status != DepositVerificationStatus.PENDING:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only pending deposits can be edited",
+            )
+
         deposit_data = deposit_in.model_dump(exclude_unset=True)
         for key, value in deposit_data.items():
             setattr(db_deposit, key, value)
@@ -130,7 +153,7 @@ class DepositService:
         Moderator update for an existing deposit.
         """
 
-        if CooperativeRole.SECRETARY not in current_user.access_roles:
+        if not self._is_deposit_reviewer(current_user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient privileges",
@@ -142,10 +165,13 @@ class DepositService:
                 detail="Deposit not found",
             )
 
-        if deposit.verification_status == DepositVerificationStatus.VERIFIED:
+        if deposit.verification_status != DepositVerificationStatus.PENDING:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Deposit already verified",
+                detail=(
+                    "Only pending deposits can be reviewed. "
+                    f"Current status: {deposit.verification_status.value}"
+                ),
             )
 
         deposit.verification_status = deposit_in.verification_status
@@ -226,10 +252,10 @@ class DepositService:
                 detail="Deposit not found",
             )
 
-        if deposit.verification_status == DepositVerificationStatus.VERIFIED:
+        if deposit.verification_status != DepositVerificationStatus.PENDING:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot delete a verified deposit",
+                detail="Only pending deposits can be withdrawn",
             )
         session.delete(deposit)
         session.commit()
@@ -244,7 +270,7 @@ class DepositService:
         Delete a deposit by its ID.
         """
 
-        if CooperativeRole.SECRETARY not in current_user.access_roles:
+        if not self._is_deposit_reviewer(current_user):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient privileges",
@@ -259,3 +285,80 @@ class DepositService:
 
         session.delete(deposit)
         session.commit()
+
+    def list_my_deposits(
+        self,
+        session: Session,
+        user_id: uuid.UUID,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> list[Deposit]:
+        statement = (
+            select(Deposit)
+            .where(Deposit.user_id == user_id)
+            .order_by(Deposit.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(session.exec(statement).all())
+
+    def list_community_deposits(
+        self,
+        session: Session,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> list[Deposit]:
+        statement = (
+            select(Deposit)
+            .where(Deposit.verification_status == DepositVerificationStatus.VERIFIED)
+            .order_by(Deposit.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(session.exec(statement).all())
+
+    def list_deposit_history(
+        self,
+        session: Session,
+        user_id: uuid.UUID,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> list[Deposit]:
+        statement = (
+            select(Deposit)
+            .where(
+                Deposit.user_id == user_id,
+                Deposit.verification_status.in_(
+                    [
+                        DepositVerificationStatus.VERIFIED,
+                        DepositVerificationStatus.REJECTED,
+                    ]
+                ),
+            )
+            .order_by(Deposit.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(session.exec(statement).all())
+
+    def list_pending_review_deposits(
+        self,
+        session: Session,
+        current_user: User,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> list[Deposit]:
+        if not self._is_deposit_reviewer(current_user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient privileges",
+            )
+
+        statement = (
+            select(Deposit)
+            .where(Deposit.verification_status == DepositVerificationStatus.PENDING)
+            .order_by(Deposit.created_at.desc())
+            .offset(skip)
+            .limit(limit)
+        )
+        return list(session.exec(statement).all())
