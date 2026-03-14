@@ -5,6 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useState, useEffect, useCallback } from "react"
 import { apiClient } from "@/api/api"
+import { useLocation } from "wouter"
 
 interface ApiNotification {
   id: string
@@ -14,6 +15,7 @@ interface ApiNotification {
   notification_type: string
   policy_id: string | null
   policy_type: string | null
+  loan_id: string | null
   is_read: boolean
   created_at: string
 }
@@ -21,6 +23,7 @@ interface ApiNotification {
 export function NotificationPanel() {
   const [items, setItems] = useState<ApiNotification[]>([])
   const [open, setOpen] = useState(false)
+  const [, navigate] = useLocation()
 
   const fetchNotifications = useCallback(async () => {
     try {
@@ -61,6 +64,39 @@ export function NotificationPanel() {
     } catch {
       // silent
     }
+  }
+
+  const getNotificationTarget = (notification: ApiNotification): string => {
+    const isAdminArea = window.location.pathname.startsWith("/admin")
+
+    switch (notification.notification_type) {
+      case "loan_application":
+      case "loan_fund_verified":
+        return "/dashboard/loans?subtab=review"
+      case "loan_approved":
+      case "loan_rejected":
+        return "/dashboard/loans?subtab=my-loans"
+      case "deposit_submitted":
+        return "/dashboard/deposit?subtab=review"
+      case "deposit_verified":
+      case "deposit_rejected":
+        return "/dashboard/deposit?subtab=my"
+      case "policy_approval":
+      case "policy_approved":
+      case "policy_rejected":
+      case "policy_finalized":
+        return isAdminArea ? "/admin/policies" : "/dashboard/policies"
+      default:
+        return isAdminArea ? "/admin" : "/dashboard"
+    }
+  }
+
+  const handleNotificationClick = async (notification: ApiNotification) => {
+    if (!notification.is_read) {
+      await markRead(notification.id)
+    }
+    setOpen(false)
+    navigate(getNotificationTarget(notification))
   }
 
   const getIcon = (type: string) => {
@@ -133,7 +169,7 @@ export function NotificationPanel() {
                   key={notification.id}
                   className={`flex gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-accent/30 ${notification.is_read ? "bg-transparent" : "bg-accent/50"
                     }`}
-                  onClick={() => !notification.is_read && markRead(notification.id)}
+                  onClick={() => handleNotificationClick(notification)}
                 >
                   <div className="mt-0.5 shrink-0">{getIcon(notification.notification_type)}</div>
                   <div className="min-w-0 flex-1">

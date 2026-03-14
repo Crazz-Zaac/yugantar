@@ -38,6 +38,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { apiClient } from "@/api/api"
+import { useLocation } from "wouter"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -152,14 +153,31 @@ function StatusBadge({ status }: { status: LoanItem["status"] }) {
 
 export function LoansTab() {
   const { user } = useAuth()
+  const [location] = useLocation()
 
   // ── Role checks ──────────────────────────────────────────────────────────
-  const isTreasurer = user?.cooperative_roles?.includes("treasurer") ?? false
-  const isPresident = user?.cooperative_roles?.includes("president") ?? false
+  const normalizedRoles = (user?.cooperative_roles ?? []).map((role) => String(role).toLowerCase())
+  const isTreasurer = normalizedRoles.includes("treasurer")
+  const isPresident = normalizedRoles.includes("president")
   const isReviewer = isTreasurer || isPresident
 
   // ── State ────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState("apply")
+
+  useEffect(() => {
+    const query = location.split("?")[1] ?? ""
+    const params = new URLSearchParams(query)
+    const subtab = params.get("subtab")
+    if (!subtab) return
+
+    const allowedTabs = isReviewer
+      ? ["apply", "my-loans", "community", "history", "review"]
+      : ["apply", "my-loans", "community", "history"]
+
+    if (allowedTabs.includes(subtab)) {
+      setActiveTab(subtab)
+    }
+  }, [location, isReviewer])
 
   // Policies
   const [policies, setPolicies] = useState<LoanPolicy[]>([])

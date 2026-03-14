@@ -4,11 +4,9 @@ import {
   FileText,
   CheckCircle2,
   X,
-  Plus,
   Landmark,
   Loader2,
   AlertCircle,
-  Info,
   ScanLine,
   CalendarClock,
   IndianRupee,
@@ -16,8 +14,16 @@ import {
   ArrowRight,
   Banknote,
   Receipt,
-  Minus,
+  Plus,
+  ShieldCheck,
+  Clock,
+  Users,
+  History,
+  ListChecks,
+  BadgeCheck,
+  Ban,
 } from "lucide-react"
+import { useAuth } from "@/contexts/AuthContext"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -26,12 +32,13 @@ import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { apiClient } from "@/api/api"
-
-// ─── Types ───────────────────────────────────────────────────────────────────
+import { useLocation } from "wouter"
 
 type PolicyStatus = "draft" | "finalized" | "active" | "expired" | "void"
 type DepositScheduleType = "monthly_fixed_day" | "occasional"
+type SplitCategory = "deposit" | "fine" | "advance" | "loan_principal" | "loan_interest" | "loan_renewal"
 
 interface DepositPolicy {
   policy_id: string
@@ -39,11 +46,8 @@ interface DepositPolicy {
   late_deposit_fine: number
   schedule_type: DepositScheduleType
   due_day_of_month: number | null
-  allowed_months: number | null
-  max_occurrences: number | null
   status: PolicyStatus
   effective_from: string
-  effective_to: string | null
 }
 
 interface OcrResult {
@@ -51,16 +55,6 @@ interface OcrResult {
   charge: number | null
   date: string | null
   reference: string | null
-}
-
-type SplitCategory = "deposit" | "fine" | "advance" | "loan_principal" | "loan_interest" | "loan_renewal"
-
-interface SplitAllocation {
-  category: SplitCategory
-  label: string
-  amount_rupees: number
-  loan_id: string | null
-  editable: boolean
 }
 
 interface LoanSummary {
@@ -71,6 +65,13 @@ interface LoanSummary {
   outstanding_principal_paisa: number
   outstanding_interest_paisa: number
   interest_rate: number
+}
+
+interface SplitAllocation {
+  category: SplitCategory
+  label: string
+  amount_rupees: number
+  loan_id: string | null
 }
 
 interface PreviewResponse {
@@ -84,11 +85,20 @@ interface PreviewResponse {
   fine_percentage: number
   excess_amount: number
   is_insufficient: boolean
-  allocations: SplitAllocation[]
   active_loans: LoanSummary[]
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+interface DepositItem {
+  id: string
+  user_id: string
+  deposited_amount: string | number
+  deposit_type: "current" | "advance"
+  deposited_date: string
+  due_deposit_date: string
+  verification_status: "pending" | "verified" | "rejected"
+  verified_by: string | null
+  created_at: string
+}
 
 function formatRs(paisa: number): string {
   const rupees = Math.round(Number(paisa) / 100)
@@ -96,7 +106,7 @@ function formatRs(paisa: number): string {
 }
 
 function formatRsFromRupees(rupees: number): string {
-  return `Rs. ${Math.round(rupees).toLocaleString("en-IN")}`
+  return `Rs. ${Number(rupees || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
 }
 
 function formatDate(iso: string | null | undefined): string {
@@ -119,68 +129,108 @@ function formatDateTime(iso: string | null | undefined): string {
   })
 }
 
-/** Calculate the next due date based on a policy's due_day_of_month */
-function calculateDueDate(policy: DepositPolicy): string {
-  if (!policy.due_day_of_month) return "—"
-  const now = new Date()
-  let year = now.getFullYear()
-  let month = now.getMonth()
-
-  if (now.getDate() > policy.due_day_of_month) {
-    month += 1
-    if (month > 11) {
-      month = 0
-      year += 1
-    }
+function depositStatusBadge(status: DepositItem["verification_status"]) {
+  if (status === "verified") {
+    return (
+      <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-success text-xs">
+        <CheckCircle2 className="h-3 w-3" />
+        Verified
+      </Badge>
+    )
   }
-
-  const lastDay = new Date(year, month + 1, 0).getDate()
-  const day = Math.min(policy.due_day_of_month, lastDay)
-
-  return new Date(year, month, day).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  })
+  if (status === "rejected") {
+    return (
+      <Badge variant="outline" className="gap-1 border-destructive/30 bg-destructive/10 text-destructive text-xs">
+        <AlertCircle className="h-3 w-3" />
+        Rejected
+      </Badge>
+    )
+  }
+  return (
+    <Badge variant="outline" className="gap-1 border-amber-500/30 bg-amber-500/10 text-amber-600 text-xs">
+      <Clock className="h-3 w-3" />
+      Pending
+    </Badge>
+  )
 }
 
-// Polling interval for OCR task status
+function categoryLabel(category: SplitCategory): string {
+  const map: Record<SplitCategory, string> = {
+    deposit: "Regular Deposit",
+    fine: "Late Fine",
+    advance: "Advance Deposit",
+    loan_principal: "Loan Principal",
+    loan_interest: "Loan Interest",
+    loan_renewal: "Loan Renewal",
+  }
+  return map[category]
+}
+
 const OCR_POLL_INTERVAL = 2000
 
 export function DepositTab() {
+  const { user } = useAuth()
+  const [location] = useLocation()
+  const normalizedRoles = (user?.cooperative_roles ?? []).map((role) =>
+    String(role).toLowerCase()
+  )
+  const isTreasurer = normalizedRoles.includes("treasurer")
+
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Active policies state
+  const [activeTab, setActiveTab] = useState("make")
+
+  useEffect(() => {
+    const query = location.split("?")[1] ?? ""
+    const params = new URLSearchParams(query)
+    const subtab = params.get("subtab")
+    if (!subtab) return
+
+    const allowedTabs = isTreasurer
+      ? ["make", "my", "community", "history", "review"]
+      : ["make", "my", "community", "history"]
+
+    if (allowedTabs.includes(subtab)) {
+      setActiveTab(subtab)
+    }
+  }, [location, isTreasurer])
+
   const [activePolicies, setActivePolicies] = useState<DepositPolicy[]>([])
   const [policiesLoading, setPoliciesLoading] = useState(true)
-
-  // Form state
   const [selectedPolicyId, setSelectedPolicyId] = useState<string>("")
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
 
-  // OCR state
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrResult, setOcrResult] = useState<OcrResult | null>(null)
   const [ocrError, setOcrError] = useState<string | null>(null)
 
-  // Preview state
   const [previewLoading, setPreviewLoading] = useState(false)
   const [preview, setPreview] = useState<PreviewResponse | null>(null)
   const [previewError, setPreviewError] = useState<string | null>(null)
 
-  // Editable allocations (user can adjust the split)
   const [allocations, setAllocations] = useState<SplitAllocation[]>([])
+  const [newCategory, setNewCategory] = useState<SplitCategory>("deposit")
+  const [selectedLoanId, setSelectedLoanId] = useState<string>("")
 
-  // Submit state
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
 
-  // Derived
-  const selectedPolicy = activePolicies.find((p) => p.policy_id === selectedPolicyId) ?? null
+  const [myDeposits, setMyDeposits] = useState<DepositItem[]>([])
+  const [communityDeposits, setCommunityDeposits] = useState<DepositItem[]>([])
+  const [historyDeposits, setHistoryDeposits] = useState<DepositItem[]>([])
+  const [reviewDeposits, setReviewDeposits] = useState<DepositItem[]>([])
 
-  // ─── Fetch active policies ──────────────────────────────────────────────
+  const [myLoading, setMyLoading] = useState(false)
+  const [communityLoading, setCommunityLoading] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [reviewLoading, setReviewLoading] = useState(false)
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
+  const [actionType, setActionType] = useState<"verified" | "rejected" | null>(null)
+
+  const selectedPolicy = activePolicies.find((p) => p.policy_id === selectedPolicyId) ?? null
 
   const fetchActivePolicies = useCallback(async () => {
     setPoliciesLoading(true)
@@ -188,38 +238,24 @@ export function DepositTab() {
       const res = await apiClient.get("/policies/deposit")
       const active = (res.data as DepositPolicy[]).filter((p) => p.status === "active")
       setActivePolicies(active)
-      if (active.length === 1) {
-        setSelectedPolicyId(active[0].policy_id)
-      }
+      if (active.length > 0 && !selectedPolicyId) setSelectedPolicyId(active[0].policy_id)
     } catch {
-      // silently fail
+      setActivePolicies([])
     } finally {
       setPoliciesLoading(false)
     }
-  }, [])
+  }, [selectedPolicyId])
 
   useEffect(() => {
     fetchActivePolicies()
   }, [fetchActivePolicies])
 
-  // ─── File upload & OCR ──────────────────────────────────────────────────
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-  }
-
-  const handleDragLeave = () => {
-    setIsDragging(false)
-  }
-
   const processOcr = async (file: File) => {
     setOcrLoading(true)
     setOcrError(null)
-    setOcrResult(null)
     setPreview(null)
+    setPreviewError(null)
     setAllocations([])
-    setSubmitSuccess(false)
 
     try {
       const formData = new FormData()
@@ -230,7 +266,6 @@ export function DepositTab() {
       })
 
       const taskId = uploadRes.data.task_id
-
       const poll = async (): Promise<OcrResult> => {
         const statusRes = await apiClient.get(`/v1/ocr/task-status/${taskId}`)
         const data = statusRes.data
@@ -238,52 +273,22 @@ export function DepositTab() {
         if (data.status === "completed") {
           const taskResult = data.result
           return (taskResult?.data ?? taskResult) as OcrResult
-        } else if (data.status === "failed") {
-          throw new Error(data.message || "OCR processing failed")
-        } else {
-          await new Promise((r) => setTimeout(r, OCR_POLL_INTERVAL))
-          return poll()
         }
+        if (data.status === "failed") {
+          throw new Error(data.message || "OCR processing failed")
+        }
+        await new Promise((r) => setTimeout(r, OCR_POLL_INTERVAL))
+        return poll()
       }
 
       const result = await poll()
       setOcrResult(result)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "OCR processing failed"
-      setOcrError(msg)
+      setOcrError(err instanceof Error ? err.message : "OCR processing failed")
     } finally {
       setOcrLoading(false)
     }
   }
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault()
-    setIsDragging(false)
-    const file = e.dataTransfer.files[0]
-    if (file) {
-      setSelectedFile(file)
-      processOcr(file)
-    }
-  }
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setSelectedFile(file)
-      processOcr(file)
-    }
-  }
-
-  const clearFile = () => {
-    setSelectedFile(null)
-    setOcrResult(null)
-    setOcrError(null)
-    setPreview(null)
-    setAllocations([])
-    setSubmitSuccess(false)
-  }
-
-  // ─── Preview (after OCR completes + policy is selected) ─────────────────
 
   const fetchPreview = useCallback(async () => {
     if (!ocrResult || !selectedPolicyId || ocrResult.amount == null) return
@@ -309,7 +314,7 @@ export function DepositTab() {
         fine_amount: Number(data.fine_amount),
         fine_percentage: Number(data.fine_percentage),
         excess_amount: Number(data.excess_amount),
-        active_loans: data.active_loans.map((ln: LoanSummary) => ({
+        active_loans: (data.active_loans || []).map((ln) => ({
           ...ln,
           principal_paisa: Number(ln.principal_paisa),
           accrued_interest_paisa: Number(ln.accrued_interest_paisa),
@@ -319,118 +324,135 @@ export function DepositTab() {
           interest_rate: Number(ln.interest_rate),
         })),
       })
-      // Ensure allocation amounts are numbers (backend sends Decimal as string)
-      setAllocations(
-        data.allocations.map((a: SplitAllocation) => ({
-          ...a,
-          amount_rupees: Number(a.amount_rupees),
-        }))
-      )
+      setAllocations([])
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to compute deposit preview"
-      setPreviewError(msg)
+      setPreviewError(err instanceof Error ? err.message : "Failed to compute deposit preview")
     } finally {
       setPreviewLoading(false)
     }
   }, [ocrResult, selectedPolicyId])
 
-  // Auto-fetch preview when OCR completes and policy is selected
   useEffect(() => {
-    if (ocrResult && ocrResult.amount != null && selectedPolicyId) {
-      fetchPreview()
-    }
+    if (ocrResult && ocrResult.amount != null && selectedPolicyId) fetchPreview()
   }, [ocrResult, selectedPolicyId, fetchPreview])
 
-  // ─── Allocation editing ─────────────────────────────────────────────────
+  const mapDepositItem = (raw: DepositItem): DepositItem => ({
+    ...raw,
+    deposited_amount: Number(raw.deposited_amount),
+  })
 
-  const updateAllocation = (index: number, newAmount: number) => {
+  const fetchMyDeposits = useCallback(async () => {
+    setMyLoading(true)
+    try {
+      const res = await apiClient.get("/deposits/me")
+      setMyDeposits((res.data as DepositItem[]).map(mapDepositItem))
+    } catch {
+      setMyDeposits([])
+    } finally {
+      setMyLoading(false)
+    }
+  }, [])
+
+  const fetchCommunityDeposits = useCallback(async () => {
+    setCommunityLoading(true)
+    try {
+      const res = await apiClient.get("/deposits/community")
+      setCommunityDeposits((res.data as DepositItem[]).map(mapDepositItem))
+    } catch {
+      setCommunityDeposits([])
+    } finally {
+      setCommunityLoading(false)
+    }
+  }, [])
+
+  const fetchHistoryDeposits = useCallback(async () => {
+    setHistoryLoading(true)
+    try {
+      const res = await apiClient.get("/deposits/history")
+      setHistoryDeposits((res.data as DepositItem[]).map(mapDepositItem))
+    } catch {
+      setHistoryDeposits([])
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [])
+
+  const fetchReviewDeposits = useCallback(async () => {
+    if (!isTreasurer) return
+    setReviewLoading(true)
+    try {
+      const res = await apiClient.get("/deposits/review/pending")
+      setReviewDeposits((res.data as DepositItem[]).map(mapDepositItem))
+    } catch {
+      setReviewDeposits([])
+    } finally {
+      setReviewLoading(false)
+    }
+  }, [isTreasurer])
+
+  useEffect(() => {
+    if (activeTab === "my") fetchMyDeposits()
+    if (activeTab === "community") fetchCommunityDeposits()
+    if (activeTab === "history") fetchHistoryDeposits()
+    if (activeTab === "review") fetchReviewDeposits()
+  }, [activeTab, fetchMyDeposits, fetchCommunityDeposits, fetchHistoryDeposits, fetchReviewDeposits])
+
+  const addAllocation = () => {
+    if (!preview) return
+    const isLoanCategory =
+      newCategory === "loan_principal" ||
+      newCategory === "loan_interest" ||
+      newCategory === "loan_renewal"
+
+    if (isLoanCategory && !selectedLoanId) return
+
+    const duplicate = allocations.some(
+      (a) => a.category === newCategory && (a.loan_id || null) === (isLoanCategory ? selectedLoanId : null)
+    )
+    if (duplicate) return
+
+    setAllocations((prev) => [
+      ...prev,
+      {
+        category: newCategory,
+        label: categoryLabel(newCategory),
+        amount_rupees: 0,
+        loan_id: isLoanCategory ? selectedLoanId : null,
+      },
+    ])
+  }
+
+  const updateAllocationAmount = (index: number, value: number) => {
     setAllocations((prev) => {
       const next = [...prev]
-      next[index] = { ...next[index], amount_rupees: newAmount }
+      next[index] = { ...next[index], amount_rupees: Math.max(0, value || 0) }
       return next
     })
   }
 
-  const addLoanAllocation = (category: SplitCategory, loan: LoanSummary) => {
-    setAllocations((prev) => {
-      // Check if this allocation already exists
-      const existingIdx = prev.findIndex(
-        (a) => a.category === category && a.loan_id === loan.loan_id
-      )
-      if (existingIdx >= 0) return prev
-
-      let label = ""
-      let defaultAmount = 0
-      switch (category) {
-        case "loan_principal":
-          label = `Loan Principal (${formatRs(loan.principal_paisa)})`
-          break
-        case "loan_interest":
-          label = `Loan Interest (${formatRs(loan.accrued_interest_paisa)})`
-          break
-        case "loan_renewal":
-          label = `Loan Renewal — Pay Off (${formatRs(loan.outstanding_principal_paisa)})`
-          defaultAmount = Math.round(loan.outstanding_principal_paisa / 100)
-          break
-        default:
-          label = category
-      }
-
-      const next = [...prev]
-      // If adding loan_renewal, reduce advance by the default amount
-      if (category === "loan_renewal" && defaultAmount > 0) {
-        const advIdx = next.findIndex((a) => a.category === "advance")
-        if (advIdx >= 0) {
-          const available = next[advIdx].amount_rupees
-          const transferAmt = Math.min(available, defaultAmount)
-          next[advIdx] = { ...next[advIdx], amount_rupees: available - transferAmt }
-          defaultAmount = transferAmt
-        }
-      }
-
-      next.push({
-        category,
-        label,
-        amount_rupees: defaultAmount,
-        loan_id: loan.loan_id,
-        editable: true,
-      })
-      return next
-    })
+  const removeAllocation = (index: number) => {
+    setAllocations((prev) => prev.filter((_, i) => i !== index))
   }
 
-  const removeLoanAllocation = (index: number) => {
-    setAllocations((prev) => {
-      const removed = prev[index]
-      const next = prev.filter((_, i) => i !== index)
-      // Add the removed amount back to advance
-      const advIdx = next.findIndex((a) => a.category === "advance")
-      if (advIdx >= 0 && removed.amount_rupees > 0) {
-        next[advIdx] = {
-          ...next[advIdx],
-          amount_rupees: next[advIdx].amount_rupees + removed.amount_rupees,
-        }
-      }
-      return next
-    })
+  const clearFile = () => {
+    setSelectedFile(null)
+    setOcrResult(null)
+    setOcrError(null)
+    setPreview(null)
+    setAllocations([])
+    setSubmitError(null)
+    setSubmitSuccess(false)
   }
-
-  // Compute allocation totals
-  const allocTotal = allocations.reduce((sum, a) => sum + a.amount_rupees, 0)
-  const netAmount = preview ? preview.net_amount : 0
-  const allocationDiff = netAmount - allocTotal
-
-  // ─── Submit ─────────────────────────────────────────────────────────────
 
   const handleSubmit = async () => {
-    if (!preview || !ocrResult || !selectedPolicyId) return
+    if (!preview || !ocrResult) return
 
     setSubmitting(true)
     setSubmitError(null)
 
     try {
       const payload = {
-        policy_id: selectedPolicyId,
+        policy_id: selectedPolicyId || null,
         ocr_amount: ocrResult.amount,
         ocr_charge: ocrResult.charge ?? 0,
         ocr_date: ocrResult.date ?? new Date().toISOString(),
@@ -444,610 +466,639 @@ export function DepositTab() {
 
       await apiClient.post("/deposits/smart", payload)
       setSubmitSuccess(true)
+      fetchMyDeposits()
+      fetchHistoryDeposits()
+      if (isTreasurer) fetchReviewDeposits()
 
-      // Reset form after success
       setTimeout(() => {
         clearFile()
-        setSubmitSuccess(false)
-      }, 3000)
+      }, 2500)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Failed to submit deposit"
-      setSubmitError(msg)
+      setSubmitError(err instanceof Error ? err.message : "Failed to submit deposit")
     } finally {
       setSubmitting(false)
     }
   }
 
-  // ─── Can submit? ────────────────────────────────────────────────────────
+  const handleReviewAction = async (depositId: string, status: "verified" | "rejected") => {
+    setActionLoadingId(depositId)
+    setActionType(status)
+    try {
+      await apiClient.put(`/deposits/deposit/${depositId}/moderator`, {
+        verification_status: status,
+      })
+      fetchReviewDeposits()
+      fetchMyDeposits()
+      fetchCommunityDeposits()
+      fetchHistoryDeposits()
+    } finally {
+      setActionLoadingId(null)
+      setActionType(null)
+    }
+  }
+
+  const handleWithdrawDeposit = async (depositId: string) => {
+    setActionLoadingId(depositId)
+    setActionType(null)
+    try {
+      await apiClient.delete(`/deposits/deposit/${depositId}/me`)
+      fetchMyDeposits()
+      fetchHistoryDeposits()
+      setActiveTab("make")
+      setSubmitSuccess(false)
+      setSubmitError("Deposit withdrawn. You can edit details and submit again.")
+    } catch (err: any) {
+      setSubmitError(err?.response?.data?.detail ?? "Failed to withdraw deposit")
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
+  const allocTotal = allocations.reduce((sum, a) => sum + a.amount_rupees, 0)
+  const netAmount = preview?.net_amount ?? 0
+  const allocationDiff = netAmount - allocTotal
 
   const canSubmit =
     !!preview &&
-    !preview.is_insufficient &&
     !submitting &&
-    !previewLoading &&
+    allocations.length > 0 &&
     Math.abs(allocationDiff) < 1
+
+  const renderDepositTable = (
+    rows: DepositItem[],
+    loading: boolean,
+    showUser = false,
+    showWithdrawAction = false
+  ) => (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="text-xs">Date</TableHead>
+            {showUser && <TableHead className="text-xs">User</TableHead>}
+            <TableHead className="text-xs">Amount</TableHead>
+            <TableHead className="text-xs">Type</TableHead>
+            <TableHead className="text-xs">Due Date</TableHead>
+            <TableHead className="text-xs">Status</TableHead>
+            {showWithdrawAction && <TableHead className="text-xs text-right">Action</TableHead>}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {loading ? (
+            <TableRow>
+              <TableCell colSpan={showWithdrawAction ? (showUser ? 7 : 6) : (showUser ? 6 : 5)} className="py-8 text-center text-sm text-muted-foreground">
+                <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+              </TableCell>
+            </TableRow>
+          ) : rows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={showWithdrawAction ? (showUser ? 7 : 6) : (showUser ? 6 : 5)} className="py-8 text-center text-sm text-muted-foreground">
+                No records found.
+              </TableCell>
+            </TableRow>
+          ) : (
+            rows.map((dep) => (
+              <TableRow key={dep.id}>
+                <TableCell className="text-xs">{formatDateTime(dep.deposited_date || dep.created_at)}</TableCell>
+                {showUser && <TableCell className="text-xs font-mono">{dep.user_id.slice(0, 8)}…</TableCell>}
+                <TableCell className="text-xs font-medium">{formatRsFromRupees(Number(dep.deposited_amount))}</TableCell>
+                <TableCell className="text-xs capitalize">{dep.deposit_type.replace("_", " ")}</TableCell>
+                <TableCell className="text-xs">{formatDate(dep.due_deposit_date)}</TableCell>
+                <TableCell>{depositStatusBadge(dep.verification_status)}</TableCell>
+                {showWithdrawAction && (
+                  <TableCell className="text-right">
+                    {dep.verification_status === "pending" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs"
+                        onClick={() => handleWithdrawDeposit(dep.id)}
+                        disabled={actionLoadingId === dep.id}
+                      >
+                        {actionLoadingId === dep.id ? (
+                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Ban className="mr-1 h-3.5 w-3.5" />
+                        )}
+                        Withdraw & Edit
+                      </Button>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                )}
+              </TableRow>
+            ))
+          )}
+        </TableBody>
+      </Table>
+    </div>
+  )
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        {/* ═══════ Deposit Form ═══════ */}
-        <Card className="lg:col-span-3">
-          <CardHeader>
-            <CardTitle className="text-sm font-semibold">Make a Deposit</CardTitle>
-            <CardDescription>Select a policy, upload your payment voucher, review the breakdown, and submit</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5">
-            {/* ── Step 1: Select Policy ── */}
-            <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium">Select Deposit Policy</Label>
-              {policiesLoading ? (
-                <div className="flex h-10 items-center gap-2 rounded-md border px-3">
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Loading policies...</span>
-                </div>
-              ) : activePolicies.length === 0 ? (
-                <div className="flex h-10 items-center gap-2 rounded-md border border-dashed px-3">
-                  <AlertCircle className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">No active deposit policies available</span>
-                </div>
-              ) : activePolicies.length === 1 ? (
-                <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/30 px-3">
-                  <Landmark className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-medium">{formatRs(activePolicies[0].amount_paisa)}</span>
-                  <span className="text-xs text-muted-foreground">
-                    · {activePolicies[0].schedule_type.replace(/_/g, " ")}
-                    {activePolicies[0].due_day_of_month ? ` · Due day ${activePolicies[0].due_day_of_month}` : ""}
-                  </span>
-                </div>
-              ) : (
-                <Select value={selectedPolicyId} onValueChange={setSelectedPolicyId}>
-                  <SelectTrigger className="h-10">
-                    <SelectValue placeholder="Choose a deposit policy" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activePolicies.map((p) => (
-                      <SelectItem key={p.policy_id} value={p.policy_id}>
-                        {formatRs(p.amount_paisa)} · {p.schedule_type.replace(/_/g, " ")}
-                        {p.due_day_of_month ? ` · Due day ${p.due_day_of_month}` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
-            </div>
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">Deposits</h2>
+        <p className="text-sm text-muted-foreground">
+          Submit deposits, track verification status, and manage pending submissions
+        </p>
+      </div>
 
-            {/* ── Policy-derived read-only fields ── */}
-            {selectedPolicy && (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className={`grid w-full ${isTreasurer ? "max-w-2xl grid-cols-5" : "max-w-xl grid-cols-4"}`}>
+          <TabsTrigger value="make" className="gap-1">
+            <Banknote className="h-4 w-4" />
+            Make Deposit
+          </TabsTrigger>
+          <TabsTrigger value="my" className="gap-1">
+            <ListChecks className="h-4 w-4" />
+            My Deposits
+          </TabsTrigger>
+          <TabsTrigger value="community" className="gap-1">
+            <Users className="h-4 w-4" />
+            Community
+          </TabsTrigger>
+          <TabsTrigger value="history" className="gap-1">
+            <History className="h-4 w-4" />
+            History
+          </TabsTrigger>
+          {isTreasurer && (
+            <TabsTrigger value="review" className="gap-1">
+              <ShieldCheck className="h-4 w-4" />
+              Review
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        <TabsContent value="make" className="mt-4 flex flex-col gap-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
+            <Card className="lg:col-span-3">
+              <CardHeader>
+                <CardTitle className="text-sm font-semibold">Make Deposit</CardTitle>
+                <CardDescription>
+                  Upload voucher, review summary, then manually add split categories before submitting.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-5">
                 <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium">Amount to be Deposited</Label>
-                  <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/30 px-3">
-                    <IndianRupee className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="font-mono text-sm font-semibold">{formatRs(selectedPolicy.amount_paisa)}</span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">Set by the deposit policy — cannot be changed</p>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium">Due Deposit Date</Label>
-                  <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/30 px-3">
-                    <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
-                    <span className="text-sm font-medium">{calculateDueDate(selectedPolicy)}</span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">Next due date based on policy schedule</p>
-                </div>
-              </div>
-            )}
-
-            {/* ── Step 2: Upload Voucher ── */}
-            <div className="flex flex-col gap-2">
-              <Label className="text-xs font-medium">Upload Payment Voucher</Label>
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-                className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-6 py-8 transition-colors ${isDragging
-                  ? "border-primary bg-accent"
-                  : selectedFile
-                    ? "border-success/50 bg-success/5"
-                    : "border-border hover:border-primary/50 hover:bg-muted/30"
-                  }`}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  className="hidden"
-                  accept=".jpg,.jpeg,.png"
-                  onChange={handleFileSelect}
-                />
-                {selectedFile ? (
-                  <div className="flex flex-col items-center gap-2">
-                    <FileText className="h-8 w-8 text-success" />
-                    <p className="text-sm font-medium text-foreground">{selectedFile.name}</p>
-                    <p className="font-nums text-xs text-muted-foreground">
-                      {(selectedFile.size / 1024).toFixed(1)} KB
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="mt-1 h-7 text-xs text-destructive"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        clearFile()
-                      }}
-                    >
-                      <X className="mr-1 h-3 w-3" />
-                      Remove
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-2">
-                    <Upload className="h-8 w-8 text-muted-foreground/60" />
-                    <p className="text-sm font-medium text-foreground">
-                      Drop your voucher here or click to browse
-                    </p>
-                    <p className="text-xs text-muted-foreground">JPG, PNG up to 10MB — OCR will extract details automatically</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* ── OCR Status ── */}
-            {ocrLoading && (
-              <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <div>
-                  <p className="text-sm font-medium text-primary">Processing voucher…</p>
-                  <p className="text-xs text-muted-foreground">Extracting deposit details from the Voucher</p>
-                </div>
-              </div>
-            )}
-
-            {ocrError && (
-              <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-                <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
-                <p className="text-sm text-destructive">{ocrError}</p>
-              </div>
-            )}
-
-            {/* ── OCR-extracted fields ── */}
-            {ocrResult && (
-              <div className="rounded-lg border p-4">
-                <div className="mb-3 flex items-center gap-2">
-                  <ScanLine className="h-4 w-4 text-primary" />
-                  <p className="text-xs font-semibold uppercase tracking-wider text-primary">Voucher Details </p>
-                </div>
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Deposited Amount</Label>
-                    <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/30 px-3">
-                      <IndianRupee className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="font-mono text-sm font-semibold">
-                        {ocrResult.amount != null ? formatRsFromRupees(ocrResult.amount) : "Not detected"}
-                      </span>
+                  <Label className="text-xs font-medium">Select Deposit Policy</Label>
+                  {policiesLoading ? (
+                    <div className="flex h-10 items-center gap-2 rounded-md border px-3">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">Loading policies...</span>
                     </div>
-                  </div>
-                  {/* {ocrResult.charge != null && ocrResult.charge > 0 && (
-                    <div className="flex flex-col gap-1">
-                      <Label className="text-xs font-medium text-muted-foreground">Bank Charge</Label>
-                      <div className="flex h-10 items-center gap-2 rounded-md border border-orange-200 bg-orange-50 px-3 dark:border-orange-800/40 dark:bg-orange-950/20">
-                        <Minus className="h-3.5 w-3.5 text-orange-600" />
-                        <span className="font-mono text-sm font-semibold text-orange-700 dark:text-orange-400">
-                          {formatRsFromRupees(ocrResult.charge)}
-                        </span>
+                  ) : (
+                    <Select value={selectedPolicyId} onValueChange={setSelectedPolicyId}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="Choose a deposit policy" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {activePolicies.map((p) => (
+                          <SelectItem key={p.policy_id} value={p.policy_id}>
+                            {formatRs(p.amount_paisa)} · {p.schedule_type.replace(/_/g, " ")}
+                            {p.due_day_of_month ? ` · Due day ${p.due_day_of_month}` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+
+                {selectedPolicy && (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="flex flex-col gap-2">
+                      <Label className="text-xs font-medium">Policy Amount</Label>
+                      <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/30 px-3">
+                        <IndianRupee className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="font-mono text-sm font-semibold">{formatRs(selectedPolicy.amount_paisa)}</span>
                       </div>
                     </div>
-                  )} */}
-                  <div className="flex flex-col gap-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Deposited Date</Label>
-                    <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/30 px-3">
-                      <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-sm font-medium">
-                        {ocrResult.date ? formatDateTime(ocrResult.date) : "Not detected"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                {ocrResult.reference && (
-                  <div className="mt-3 flex flex-col gap-1">
-                    <Label className="text-xs font-medium text-muted-foreground">Voucher Reference</Label>
-                    <div className="flex h-10 items-center rounded-md border bg-muted/30 px-3">
-                      <Receipt className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="font-mono text-sm">{ocrResult.reference}</span>
-                    </div>
-                  </div>
-                )}
-                <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
-                  <Info className="h-3 w-3" />
-                  Extracted from the voucher image — cannot be edited
-                </p>
-              </div>
-            )}
-
-            {/* ── Preview loading ── */}
-            {previewLoading && (
-              <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                <p className="text-sm font-medium text-primary">Computing deposit breakdown…</p>
-              </div>
-            )}
-
-            {previewError && (
-              <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-                <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
-                <p className="text-sm text-destructive">{previewError}</p>
-              </div>
-            )}
-
-            {/* ═══════ Step 3: Deposit Breakdown & Smart Split ═══════ */}
-            {preview && (
-              <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-                <div className="mb-3 flex items-center gap-2">
-                  <Banknote className="h-4 w-4 text-primary" />
-                  <p className="text-xs font-semibold uppercase tracking-wider text-primary">Deposit Breakdown</p>
-                </div>
-
-                {/* Summary row */}
-                <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <div className="rounded-md border bg-background p-2 text-center">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Net Amount</p>
-                    <p className="font-mono text-sm font-bold">{formatRsFromRupees(preview.net_amount)}</p>
-                  </div>
-                  <div className="rounded-md border bg-background p-2 text-center">
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Required</p>
-                    <p className="font-mono text-sm font-bold">{formatRsFromRupees(preview.required_deposit)}</p>
-                  </div>
-                  {preview.is_late && (
-                    <div className="rounded-md border border-orange-200 bg-orange-50 p-2 text-center dark:border-orange-800/40 dark:bg-orange-950/30">
-                      <p className="text-[10px] uppercase tracking-wider text-orange-600">Fine ({preview.fine_percentage}%)</p>
-                      <p className="font-mono text-sm font-bold text-orange-700 dark:text-orange-400">{formatRsFromRupees(preview.fine_amount)}</p>
-                    </div>
-                  )}
-                  <div className={`rounded-md border p-2 text-center ${preview.excess_amount > 0
-                    ? "border-emerald-200 bg-emerald-50 dark:border-emerald-800/40 dark:bg-emerald-950/30"
-                    : preview.is_insufficient
-                      ? "border-destructive/30 bg-destructive/5"
-                      : "bg-background"
-                    }`}>
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      {preview.is_insufficient ? "Shortfall" : "Excess"}
-                    </p>
-                    <p className={`font-mono text-sm font-bold ${preview.is_insufficient ? "text-destructive" : "text-emerald-700 dark:text-emerald-400"}`}>
-                      {preview.is_insufficient
-                        ? `- ${formatRsFromRupees(Math.abs(preview.net_amount - preview.required_deposit - preview.fine_amount))}`
-                        : formatRsFromRupees(preview.excess_amount)}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Late warning */}
-                {preview.is_late && (
-                  <div className="mb-4 flex items-start gap-2 rounded-md border border-orange-200 bg-orange-50 p-3 dark:border-orange-800/40 dark:bg-orange-950/20">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-orange-600" />
-                    <div>
-                      <p className="text-sm font-medium text-orange-800 dark:text-orange-300">Late Deposit</p>
-                      <p className="text-xs text-orange-700/80 dark:text-orange-400/80">
-                        The deposit date is past the due date ({formatDateTime(preview.due_date)}).
-                        A fine of {formatRsFromRupees(preview.fine_amount)} ({preview.fine_percentage}%) will be deducted.
-                      </p>
+                    <div className="flex flex-col gap-2">
+                      <Label className="text-xs font-medium">Late Fine</Label>
+                      <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/30 px-3">
+                        <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+                        <span className="text-sm font-medium">{selectedPolicy.late_deposit_fine}%</span>
+                      </div>
                     </div>
                   </div>
                 )}
 
-                {/* Insufficient warning */}
-                {preview.is_insufficient && (
-                  <div className="mb-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                    <div>
-                      <p className="text-sm font-medium text-destructive">Insufficient Amount</p>
-                      <p className="text-xs text-destructive/80">
-                        The deposited amount (after bank charge deduction) is not enough to cover
-                        the required deposit{preview.is_late ? " and late fine" : ""}.
-                        Please deposit more to proceed.
-                      </p>
-                    </div>
+                <div className="flex flex-col gap-2">
+                  <Label className="text-xs font-medium">Upload Payment Voucher</Label>
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setIsDragging(true)
+                    }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      setIsDragging(false)
+                      const file = e.dataTransfer.files[0]
+                      if (!file) return
+                      setSelectedFile(file)
+                      processOcr(file)
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-6 py-8 transition-colors ${isDragging
+                      ? "border-primary bg-accent"
+                      : selectedFile
+                        ? "border-success/50 bg-success/5"
+                        : "border-border hover:border-primary/50 hover:bg-muted/30"
+                      }`}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      className="hidden"
+                      accept=".jpg,.jpeg,.png"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        setSelectedFile(file)
+                        processOcr(file)
+                      }}
+                    />
+                    {selectedFile ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <FileText className="h-8 w-8 text-success" />
+                        <p className="text-sm font-medium">{selectedFile.name}</p>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="mt-1 h-7 text-xs text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            clearFile()
+                          }}
+                        >
+                          <X className="mr-1 h-3 w-3" />
+                          Remove
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <Upload className="h-8 w-8 text-muted-foreground/60" />
+                        <p className="text-sm font-medium">Drop voucher here or click to browse</p>
+                        <p className="text-xs text-muted-foreground">JPG/PNG up to 10MB</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {ocrLoading && (
+                  <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <p className="text-sm font-medium text-primary">Processing voucher...</p>
                   </div>
                 )}
 
-                {/* Allocations */}
-                {!preview.is_insufficient && (
-                  <>
+                {ocrError && (
+                  <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+                    <p className="text-sm text-destructive">{ocrError}</p>
+                  </div>
+                )}
+
+                {ocrResult && (
+                  <div className="rounded-lg border p-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <ScanLine className="h-4 w-4 text-primary" />
+                      <p className="text-xs font-semibold uppercase tracking-wider text-primary">Voucher Details</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                      <div className="flex flex-col gap-1">
+                        <Label className="text-xs font-medium text-muted-foreground">Deposited Amount</Label>
+                        <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/30 px-3">
+                          <IndianRupee className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="font-mono text-sm font-semibold">
+                            {ocrResult.amount != null ? formatRsFromRupees(ocrResult.amount) : "Not detected"}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <Label className="text-xs font-medium text-muted-foreground">Deposited Date</Label>
+                        <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/30 px-3">
+                          <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-sm font-medium">
+                            {ocrResult.date ? formatDateTime(ocrResult.date) : "Not detected"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {ocrResult.reference && (
+                      <div className="mt-3 flex flex-col gap-1">
+                        <Label className="text-xs font-medium text-muted-foreground">Voucher Reference</Label>
+                        <div className="flex h-10 items-center rounded-md border bg-muted/30 px-3">
+                          <Receipt className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="font-mono text-sm">{ocrResult.reference}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {previewLoading && (
+                  <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <p className="text-sm font-medium text-primary">Computing summary...</p>
+                  </div>
+                )}
+
+                {previewError && (
+                  <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+                    <p className="text-sm text-destructive">{previewError}</p>
+                  </div>
+                )}
+
+                {preview && (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                    <div className="mb-3 flex items-center gap-2">
+                      <Banknote className="h-4 w-4 text-primary" />
+                      <p className="text-xs font-semibold uppercase tracking-wider text-primary">Summary</p>
+                    </div>
+
+                    <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <div className="rounded-md border bg-background p-2 text-center">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Net Amount</p>
+                        <p className="font-mono text-sm font-bold">{formatRsFromRupees(preview.net_amount)}</p>
+                      </div>
+                      <div className="rounded-md border bg-background p-2 text-center">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Policy Amount</p>
+                        <p className="font-mono text-sm font-bold">{formatRsFromRupees(preview.required_deposit)}</p>
+                      </div>
+                      <div className="rounded-md border bg-background p-2 text-center">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Late Fine</p>
+                        <p className="font-mono text-sm font-bold">{formatRsFromRupees(preview.fine_amount)}</p>
+                      </div>
+                      <div className="rounded-md border bg-background p-2 text-center">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Due Date</p>
+                        <p className="text-sm font-medium">{formatDate(preview.due_date)}</p>
+                      </div>
+                    </div>
+
+                    {preview.is_insufficient && (
+                      <div className="mb-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
+                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+                        <p className="text-xs text-destructive/90">
+                          Net amount is lower than policy amount + fine. You can still allocate categories manually,
+                          but ensure your allocation total matches net amount.
+                        </p>
+                      </div>
+                    )}
+
                     <Separator className="my-3" />
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Allocations
+                      Manually Allocate Your Deposit
                     </p>
+
+                    <div className="mb-3 flex flex-wrap items-center gap-2">
+                      <Select value={newCategory} onValueChange={(v) => setNewCategory(v as SplitCategory)}>
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="Select category" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="deposit">Regular Deposit</SelectItem>
+                          <SelectItem value="fine">Late Fine</SelectItem>
+                          <SelectItem value="advance">Advance Deposit</SelectItem>
+                          <SelectItem value="loan_principal">Loan Principal</SelectItem>
+                          <SelectItem value="loan_interest">Loan Interest</SelectItem>
+                          <SelectItem value="loan_renewal">Loan Renewal</SelectItem>
+                        </SelectContent>
+                      </Select>
+
+                      {(newCategory === "loan_principal" || newCategory === "loan_interest" || newCategory === "loan_renewal") && (
+                        <Select value={selectedLoanId} onValueChange={setSelectedLoanId}>
+                          <SelectTrigger className="w-56">
+                            <SelectValue placeholder="Select loan" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {preview.active_loans.map((ln) => (
+                              <SelectItem key={ln.loan_id} value={ln.loan_id}>
+                                Loan {ln.loan_id.slice(0, 8)} · Principal {formatRs(ln.principal_paisa)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+
+                      <Button variant="outline" className="gap-1" onClick={addAllocation}>
+                        <Plus className="h-4 w-4" />
+                        Add Category
+                      </Button>
+                    </div>
+
                     <div className="flex flex-col gap-2">
-                      {allocations.map((alloc, idx) => (
-                        <div
-                          key={`${alloc.category}-${alloc.loan_id ?? idx}`}
-                          className="flex items-center gap-3 rounded-md border bg-background p-2.5"
-                        >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2">
-                              <Badge
-                                variant="outline"
-                                className={`text-[10px] ${alloc.category === "deposit"
-                                  ? "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800/40 dark:bg-blue-950/30 dark:text-blue-300"
-                                  : alloc.category === "fine"
-                                    ? "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-800/40 dark:bg-orange-950/30 dark:text-orange-300"
-                                    : alloc.category === "advance"
-                                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-950/30 dark:text-emerald-300"
-                                      : alloc.category === "loan_renewal"
-                                        ? "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800/40 dark:bg-rose-950/30 dark:text-rose-300"
-                                        : "border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-800/40 dark:bg-purple-950/30 dark:text-purple-300"
-                                  }`}
-                              >
-                                {alloc.category === "deposit" && "Deposit"}
-                                {alloc.category === "fine" && "Fine"}
-                                {alloc.category === "advance" && "Advance"}
-                                {alloc.category === "loan_principal" && "Loan Principal"}
-                                {alloc.category === "loan_interest" && "Loan Interest"}
-                                {alloc.category === "loan_renewal" && "Loan Renewal"}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground">{alloc.label}</span>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {alloc.editable ? (
-                              <div className="flex items-center gap-1">
-                                <span className="text-xs text-muted-foreground">Rs.</span>
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  step={1}
-                                  className="h-8 w-24 font-mono text-sm"
-                                  value={alloc.amount_rupees}
-                                  onChange={(e) => {
-                                    const val = parseFloat(e.target.value) || 0
-                                    updateAllocation(idx, val)
-                                  }}
-                                />
-                              </div>
-                            ) : (
-                              <span className="font-mono text-sm font-semibold">
-                                {formatRsFromRupees(alloc.amount_rupees)}
-                              </span>
+                      {allocations.length === 0 ? (
+                        <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                          No allocations yet. Add categories manually.
+                        </div>
+                      ) : (
+                        allocations.map((alloc, idx) => (
+                          <div key={`${alloc.category}-${alloc.loan_id ?? idx}`} className="flex items-center gap-2 rounded-md border bg-background p-2.5">
+                            <Badge variant="outline" className="text-[10px]">
+                              {categoryLabel(alloc.category)}
+                            </Badge>
+                            {alloc.loan_id && (
+                              <span className="text-[11px] text-muted-foreground font-mono">Loan {alloc.loan_id.slice(0, 8)}…</span>
                             )}
-                            {/* Remove button for loan allocations */}
-                            {(alloc.category === "loan_principal" || alloc.category === "loan_interest" || alloc.category === "loan_renewal") && (
+                            <div className="ml-auto flex items-center gap-1">
+                              <span className="text-xs text-muted-foreground">Rs.</span>
+                              <Input
+                                type="number"
+                                min={0}
+                                step={1}
+                                className="h-8 w-28 font-mono text-sm"
+                                value={alloc.amount_rupees === 0 ? "" : String(alloc.amount_rupees)}
+                                placeholder="0"
+                                onChange={(e) => updateAllocationAmount(idx, Number(e.target.value || 0))}
+                              />
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 className="h-7 w-7 p-0 text-destructive"
-                                onClick={() => removeLoanAllocation(idx)}
+                                onClick={() => removeAllocation(idx)}
                               >
                                 <X className="h-3 w-3" />
                               </Button>
-                            )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-
-                      {/* Allocation total check */}
-                      {Math.abs(allocationDiff) >= 1 && (
-                        <div className="flex items-center gap-2 rounded-md border border-orange-200 bg-orange-50 p-2 dark:border-orange-800/40 dark:bg-orange-950/20">
-                          <AlertTriangle className="h-3.5 w-3.5 text-orange-600" />
-                          <span className="text-xs text-orange-700 dark:text-orange-400">
-                            Allocations {allocationDiff > 0 ? `are short by ${formatRsFromRupees(allocationDiff)}` : `exceed net amount by ${formatRsFromRupees(Math.abs(allocationDiff))}`}
-                          </span>
-                        </div>
+                        ))
                       )}
                     </div>
 
-                    {/* Loan split options */}
-                    {preview.active_loans.length > 0 && preview.excess_amount > 0 && (
-                      <>
-                        <Separator className="my-3" />
-                        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                          Allocate Excess to Loan Payments
-                        </p>
-                        <p className="mb-2 text-[11px] text-muted-foreground">
-                          You have active loans. Reduce the advance deposit and allocate towards loan repayment.
-                        </p>
-                        <div className="flex flex-col gap-2">
-                          {preview.active_loans.map((loan) => (
-                            <div key={loan.loan_id} className="rounded-md border bg-background p-3">
-                              <div className="flex items-center justify-between">
-                                <div>
-                                  <p className="text-xs font-medium">
-                                    Loan · {formatRs(loan.principal_paisa)}
-                                    <span className="ml-2 text-muted-foreground">@ {loan.interest_rate}%</span>
-                                  </p>
-                                  <p className="mt-0.5 text-[11px] text-muted-foreground">
-                                    Outstanding: {formatRs(loan.outstanding_principal_paisa)} principal
-                                    {loan.outstanding_interest_paisa > 0 && ` · ${formatRs(loan.outstanding_interest_paisa)} interest`}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {loan.outstanding_principal_paisa > 0 && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 gap-1 text-xs"
-                                    onClick={() => addLoanAllocation("loan_principal", loan)}
-                                    disabled={allocations.some(
-                                      (a) => a.category === "loan_principal" && a.loan_id === loan.loan_id
-                                    )}
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                    Only Loan Payment
-                                  </Button>
-                                )}
-                                {loan.outstanding_interest_paisa > 0 && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 gap-1 text-xs"
-                                    onClick={() => addLoanAllocation("loan_interest", loan)}
-                                    disabled={allocations.some(
-                                      (a) => a.category === "loan_interest" && a.loan_id === loan.loan_id
-                                    )}
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                    Only Interest
-                                  </Button>
-                                )}
-                                {loan.outstanding_principal_paisa > 0 && loan.outstanding_interest_paisa > 0 && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 gap-1 text-xs"
-                                    onClick={() => {
-                                      addLoanAllocation("loan_principal", loan)
-                                      // Small delay so state updates before adding the second
-                                      setTimeout(() => addLoanAllocation("loan_interest", loan), 0)
-                                    }}
-                                    disabled={
-                                      allocations.some((a) => a.category === "loan_principal" && a.loan_id === loan.loan_id) &&
-                                      allocations.some((a) => a.category === "loan_interest" && a.loan_id === loan.loan_id)
-                                    }
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                    Loan + Interest
-                                  </Button>
-                                )}
-                                {loan.outstanding_principal_paisa > 0 && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 gap-1 text-xs border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-800/40 dark:text-rose-400 dark:hover:bg-rose-950/30"
-                                    onClick={() => addLoanAllocation("loan_renewal", loan)}
-                                    disabled={allocations.some(
-                                      (a) => a.category === "loan_renewal" && a.loan_id === loan.loan_id
-                                    )}
-                                  >
-                                    <Plus className="h-3 w-3" />
-                                    Loan Renewal
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </>
+                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      <div className="rounded-md border bg-background p-2 text-xs">
+                        <span className="text-muted-foreground">Net:</span> {formatRsFromRupees(netAmount)}
+                      </div>
+                      <div className="rounded-md border bg-background p-2 text-xs">
+                        <span className="text-muted-foreground">Allocated:</span> {formatRsFromRupees(allocTotal)}
+                      </div>
+                      <div className={`rounded-md border p-2 text-xs ${Math.abs(allocationDiff) < 1 ? "bg-emerald-50 border-emerald-200" : "bg-orange-50 border-orange-200"}`}>
+                        <span className="text-muted-foreground">Remaining:</span> {formatRsFromRupees(allocationDiff)}
+                      </div>
+                    </div>
+                  </div>
                 )}
-              </div>
-            )}
 
-            {/* ── Submit error / success ── */}
-            {submitError && (
-              <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-                <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
-                <p className="text-sm text-destructive">{submitError}</p>
-              </div>
-            )}
-
-            {submitSuccess && (
-              <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-800/40 dark:bg-emerald-950/20">
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">
-                  Deposit submitted successfully!
-                </p>
-              </div>
-            )}
-
-            {/* ── Submit button ── */}
-            <Button
-              className="h-10 w-full sm:w-auto sm:self-end"
-              disabled={!canSubmit}
-              onClick={handleSubmit}
-            >
-              {submitting ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <ArrowRight className="mr-2 h-4 w-4" />
-              )}
-              Submit Deposit
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* ═══════ Active Deposit Policies ═══════ */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-              <Landmark className="h-4 w-4 text-primary" />
-              Active Deposit Policies
-            </CardTitle>
-            <CardDescription>Current policies governing deposits</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            {policiesLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              </div>
-            ) : activePolicies.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-8 text-center">
-                <AlertCircle className="h-5 w-5 text-muted-foreground/60" />
-                <p className="text-sm text-muted-foreground">No active deposit policies</p>
-              </div>
-            ) : (
-              activePolicies.map((p) => (
-                <div key={p.policy_id} className="rounded-lg border p-3">
-                  <div className="flex items-center justify-between">
-                    <p className="font-mono text-lg font-bold text-foreground">{formatRs(p.amount_paisa)}</p>
-                    <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-xs text-success">
-                      <CheckCircle2 className="h-3 w-3" />
-                      Active
-                    </Badge>
+                {submitError && (
+                  <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />
+                    <p className="text-sm text-destructive">{submitError}</p>
                   </div>
-                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                    <div>
-                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70">Schedule</span>
-                      <p className="mt-0.5 font-medium capitalize text-foreground">{p.schedule_type.replace(/_/g, " ")}</p>
-                    </div>
-                    <div>
-                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70">Due Day</span>
-                      <p className="mt-0.5 font-medium text-foreground">{p.due_day_of_month ?? "—"}</p>
-                    </div>
-                    <div>
-                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70">Late Fine</span>
-                      <p className="mt-0.5 font-medium text-foreground">{p.late_deposit_fine}%</p>
-                    </div>
-                    <div>
-                      <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70">Effective</span>
-                      <p className="mt-0.5 font-medium text-foreground">{formatDate(p.effective_from)}</p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
-      </div>
+                )}
 
-      {/* ═══════ Deposit History Table ═══════ */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-semibold">Deposit History</CardTitle>
-          <CardDescription>All your past deposits and their statuses</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="text-xs">Date</TableHead>
-                  <TableHead className="text-xs">Amount</TableHead>
-                  <TableHead className="text-xs">Type</TableHead>
-                  <TableHead className="text-xs">Due Date</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                    No deposit records yet. Submit a deposit above to get started.
-                  </TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+                {submitSuccess && (
+                  <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                    <p className="text-sm font-medium text-emerald-700">
+                      Deposit submitted in pending status. Treasurer has been notified for verification.
+                    </p>
+                  </div>
+                )}
+
+                <Button className="h-10 w-full sm:w-auto sm:self-end" disabled={!canSubmit} onClick={handleSubmit}>
+                  {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
+                  Submit
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card className="lg:col-span-2 lg:self-start">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                  <Landmark className="h-4 w-4 text-primary" />
+                  Active Deposit Policies
+                </CardTitle>
+                <CardDescription>Current deposit policies</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                {policiesLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : activePolicies.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No active deposit policies</p>
+                ) : (
+                  activePolicies.map((p) => (
+                    <div key={p.policy_id} className="rounded-lg border p-3">
+                      <div className="flex items-center justify-between">
+                        <p className="font-mono text-lg font-bold">{formatRs(p.amount_paisa)}</p>
+                        <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-xs text-success">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Active
+                        </Badge>
+                      </div>
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        <p>Schedule: {p.schedule_type.replace(/_/g, " ")}</p>
+                        <p>Due day: {p.due_day_of_month ?? "—"}</p>
+                        <p>Late fine: {p.late_deposit_fine}%</p>
+                        <p>Effective: {formatDate(p.effective_from)}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+        </TabsContent>
+
+        <TabsContent value="my" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold">My Deposits</CardTitle>
+              <CardDescription>
+                Your submitted deposits. Pending deposits can be withdrawn for editing and resubmission.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>{renderDepositTable(myDeposits, myLoading, false, true)}</CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="community" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold">Community Deposits</CardTitle>
+              <CardDescription>Verified deposits across the cooperative</CardDescription>
+            </CardHeader>
+            <CardContent>{renderDepositTable(communityDeposits, communityLoading, true)}</CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="history" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm font-semibold">History</CardTitle>
+              <CardDescription>Your verified/rejected deposit history</CardDescription>
+            </CardHeader>
+            <CardContent>{renderDepositTable(historyDeposits, historyLoading)}</CardContent>
+          </Card>
+        </TabsContent>
+
+        {isTreasurer && (
+          <TabsContent value="review" className="mt-4 flex flex-col gap-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-semibold">Review Deposits</CardTitle>
+                <CardDescription>Treasurer verification queue</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                {reviewLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : reviewDeposits.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No pending deposits to review.</p>
+                ) : (
+                  reviewDeposits.map((dep) => {
+                    const isThisLoading = actionLoadingId === dep.id
+                    return (
+                      <div key={dep.id} className="rounded-lg border p-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="space-y-1">
+                            <p className="text-sm font-semibold">{formatRsFromRupees(Number(dep.deposited_amount))}</p>
+                            <p className="text-xs text-muted-foreground">Deposited: {formatDateTime(dep.deposited_date)}</p>
+                            <p className="text-xs text-muted-foreground">User: {dep.user_id}</p>
+                            {depositStatusBadge(dep.verification_status)}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              onClick={() => handleReviewAction(dep.id, "verified")}
+                              disabled={isThisLoading}
+                            >
+                              {isThisLoading && actionType === "verified" ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <BadgeCheck className="mr-2 h-4 w-4" />
+                              )}
+                              Verify
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleReviewAction(dep.id, "rejected")}
+                              disabled={isThisLoading}
+                            >
+                              {isThisLoading && actionType === "rejected" ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                              ) : (
+                                <Ban className="mr-2 h-4 w-4" />
+                              )}
+                              Reject
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   )
 }
