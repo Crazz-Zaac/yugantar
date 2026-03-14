@@ -1,12 +1,3 @@
-"""
-Schemas for the smart-deposit workflow.
-
-Flow:
-  1. POST /deposits/preview  → DepositPreviewResponse   (read-only breakdown)
-  2. User reviews / adjusts split allocations on the frontend
-  3. POST /deposits/smart    → SmartDepositResponse      (creates all records)
-"""
-
 from __future__ import annotations
 
 from sqlmodel import SQLModel, Field
@@ -17,9 +8,7 @@ from enum import Enum
 import uuid
 
 
-# ── Split-allocation categories ───────────────────────────────────────────────
-
-
+# Split-allocation categories
 class SplitCategory(str, Enum):
     """How excess amount can be allocated."""
 
@@ -29,9 +18,6 @@ class SplitCategory(str, Enum):
     LOAN_PRINCIPAL = "loan_principal"  # pay loan principal only
     LOAN_INTEREST = "loan_interest"  # pay loan interest only
     LOAN_RENEWAL = "loan_renewal"  # pay off remaining principal to close/renew loan
-
-
-# ── Preview (step 1) ─────────────────────────────────────────────────────────
 
 
 class DepositPreviewRequest(SQLModel):
@@ -77,7 +63,7 @@ class DepositPreviewResponse(SQLModel):
     # OCR inputs (echoed back)
     ocr_amount: Decimal
     ocr_charge: Decimal
-    net_amount: Decimal  # ocr_amount - ocr_charge
+    net_amount: Decimal  # currently equals ocr_amount (charge is not deducted)
 
     # Policy info
     required_deposit: Decimal  # policy amount in rupees
@@ -99,9 +85,8 @@ class DepositPreviewResponse(SQLModel):
     active_loans: List[LoanSummary]
 
 
-# ── Submit (step 2) ──────────────────────────────────────────────────────────
-
-
+# Submit schema is same as preview, but with user-edited amounts for the editable categories 
+# (e.g. advance deposit, loan principal/interest)
 class SmartDepositAllocation(SQLModel):
     """One allocation row submitted by the user."""
 
@@ -113,10 +98,10 @@ class SmartDepositAllocation(SQLModel):
 class SmartDepositCreate(SQLModel):
     """Submitted by the frontend to finalise the deposit."""
 
-    policy_id: uuid.UUID
-    ocr_amount: Decimal = Field(gt=0)
+    policy_id: Optional[uuid.UUID] = None
+    ocr_amount: Optional[Decimal] = Field(default=None, gt=0)
     ocr_charge: Decimal = Field(default=Decimal(0), ge=0)
-    ocr_date: datetime
+    ocr_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     ocr_reference: Optional[str] = None
     receipt_screenshot: Optional[str] = None
 
@@ -126,11 +111,11 @@ class SmartDepositCreate(SQLModel):
 class SmartDepositResponse(SQLModel):
     """Returned after a successful smart deposit."""
 
-    deposit_id: uuid.UUID
-    deposit_amount_paisa: int
-    deposit_type: str
+    deposit_id: Optional[uuid.UUID] = None
+    deposit_amount_paisa: int = 0
+    deposit_type: Optional[str] = None
     fine_id: Optional[uuid.UUID] = None
     fine_amount_paisa: int = 0
-    loan_payment_ids: List[uuid.UUID] = []
+    loan_payment_ids: List[uuid.UUID] = Field(default_factory=list)
     total_allocated_rupees: Decimal
     message: str

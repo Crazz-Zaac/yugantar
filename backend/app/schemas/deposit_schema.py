@@ -12,8 +12,6 @@ from app.models.deposit_model import DepositVerificationStatus
 # ----------------------------
 # Deposit Schemas
 # ----------------------------
-
-
 class DepositBase(SQLModel):
     policy_id: Optional[uuid.UUID] = None
 
@@ -47,16 +45,31 @@ class DepositBase(SQLModel):
     @model_validator(mode="before")
     def set_policy_values(cls, values):
         """Set deposit_frequency_days and late_deposit_fine from policy if policy_id is provided."""
-        policy = values.get("deposit_policy")
+        if isinstance(values, dict):
+            policy = values.get("deposit_policy")
+            if policy:
+                values["late_deposit_fine"] = policy.late_deposit_fine
+                values["amount_to_be_deposited"] = policy.amount_rupees
+            return values
+
+        policy = getattr(values, "deposit_policy", None)
+        payload = dict(getattr(values, "__dict__", {}))
+
+        if "deposited_amount" not in payload and hasattr(values, "amount_rupees"):
+            payload["deposited_amount"] = (
+                values.amount_rupees if values.amount_rupees is not None else Decimal(0)
+            )
+
         if policy:
-            values["late_deposit_fine"] = policy.late_deposit_fine
-            values["amount_to_be_deposited"] = policy.amount_rupees
-        return values
+            payload["late_deposit_fine"] = policy.late_deposit_fine
+            payload["amount_to_be_deposited"] = policy.amount_rupees
+
+        return payload
 
     @field_validator("receipt_screenshot", mode="before")
     def validate_receipt_screenshot(cls, value):
         if value is None:
-            raise ValueError("Please upload receipt screenshot.")
+            return value
         if value and not value.lower().endswith((".png", ".jpg", ".jpeg")):
             raise ValueError(
                 "Invalid file type. Only .png, .jpg, and .jpeg are allowed."
@@ -87,8 +100,8 @@ class DepositResponse(DepositBase):
 
     user_id: uuid.UUID
     loan_id: Optional[uuid.UUID]
-    receipt_id: uuid.UUID
-    receipt_screenshot: Optional[str]
+    receipt_id: Optional[uuid.UUID]
+    receipt_screenshot: Optional[str] = None
 
     deposited_amount: Decimal
 
@@ -98,9 +111,9 @@ class DepositResponse(DepositBase):
     deposit_type: DepositType
 
     verified_by: Optional[str]
-    verifcation_status: DepositVerificationStatus
+    verification_status: DepositVerificationStatus
 
-    fine_amount: Optional[int]
+    fine_amount: Optional[int] = None
 
     created_at: datetime
     updated_at: datetime
