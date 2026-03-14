@@ -10,6 +10,7 @@ from .base import BaseModel
 class ExpenseType(str, Enum):
     GIFT = "gift"
     AGM = "agm"
+    MEETING = "meeting"
     OTHER = "other"
 
 

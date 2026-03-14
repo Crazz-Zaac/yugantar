@@ -16,6 +16,9 @@ class NotificationType(str, Enum):
     LOAN_FUND_VERIFIED = "loan_fund_verified"  # treasurer verified → notify presidents
     LOAN_APPROVED = "loan_approved"  # president approved → notify applicant
     LOAN_REJECTED = "loan_rejected"  # president rejected → notify applicant
+    DEPOSIT_SUBMITTED = "deposit_submitted"  # new deposit submitted → notify treasurers
+    DEPOSIT_VERIFIED = "deposit_verified"  # treasurer verified deposit → notify member
+    DEPOSIT_REJECTED = "deposit_rejected"  # treasurer rejected deposit → notify member
     GENERAL = "general"
 
 
