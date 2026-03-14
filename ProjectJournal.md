@@ -557,3 +557,35 @@ echo "password" > secrets/pgadmin_password.txt"
   - pending loans: `loans/pending`
   - loan calculator: `loans/calculator`
   - And other dynamic routes for loan verification and loan approval
+  
+---
+
+## 2026-03-13
+ 
+- Updated `deposit_schema.py`:
+  - the `set_policy_values()` fetches the values of the respective deposit policy from the payload
+- Updated `smart_deposit_schema.py`:
+  - `SplitCategory` - enum defining the possible splits
+  - `DepositPreview` - deposit preview read from the OCR
+  - `LoanSummary` - defines what to read from the loan
+  - `SplitAllocation` - defines splitting preview 
+  - `DepositPreviewResponse` - defines the values to include in the deposit response
+  - `SmartDepositAllocation` - a preview of the submit schema
+  - `SmartDepositCreate` - values to be submitted from the frontend
+  - `SmartDepositResponse` - values sent to the API
+- Updated `deposit_service.py`
+  - a method to check cooperative and access role
+  - check deposit verification status 
+  - methods to list my deposits, community deposits, deposit history
+  - method to list the pending deposits for review
+- Updated `smart_deposit_service.py`
+  - conditions to check total allocation, policy id and policy before during submission
+- Updated `notification_model.py`:
+  - added notification types for deposit submitted, verified and rejected
+- Updated the deposit endpoint `/api/v1/endpoints/deposit.py`:
+  - `_notify_treasurers_new_deposit`: check cooperative role -> write notification -> add to background task
+  - `_notify_depositor_review_outcome`: get deposit verification status -> write notification -> update the table -> add to background task
+  - `create_deposit`: for any new deposit calls the `_notify_treasurers_new_deposit` private method
+  - `moderator_update_deposit`: calls the `_notify_depositor_review_outcome` method
+  - added `get_my_deposits()`, `get_community_deposits()`, `get_my_deposit_history()`, `get_pending_review_deposits()` 
+  - updated `create_smart_deposit()`: for deposit with smart split allocations
