@@ -630,8 +630,8 @@ export function LoansTab() {
                     >
                       {calcLoading ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <IndianRupee className="mr-2 h-4 w-4" />
+                      ): (
+                        <Calculator className="mr-2 h-4 w-4" />
                       )}
                       Calculate
                     </Button>

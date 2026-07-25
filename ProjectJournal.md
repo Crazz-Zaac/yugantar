@@ -31,7 +31,17 @@
 - [x] Upload receipts to make deposit
 - [x] Use OCR to read voucher data
 - [x] Assign Celery OCR task in background
-
+  
+- [ ] Only one deposit policy can be active at a time. If a new policy is created, the previous policy should be set to `EXPIRED` and the new policy should be set to `ACTIVE`.
+- [ ] Apart from the main deposit policy, only one occasional deposit policy can be active at a time. If a new occasional deposit policy is created, the previous occasional deposit policy should be set to `EXPIRED` and the new occasional deposit policy should be set to `ACTIVE`.
+- [ ] There should be a separate policy for `Fine` and `Interest`. These policies should also be versioned and only one active policy at a time.
+- [ ] Similarly, only one loan policy can be active at a time. If a new loan policy is created, the previous loan policy should be set to `EXPIRED` and the new loan policy should be set to `ACTIVE`.
+- [ ] Apart from the main loan policy, exceptional loan policies can be created for specific users. These policies should also be versioned and only one active policy at a time for that user.
+- [ ] There should be a separate policy for `Collateral` and `Loan Repayment`. These policies should also be versioned and only one active policy at a time.
+- [ ] Create fine and interest policy endpoints to manage the policies. These endpoints should be accessible only by the treasurer and require president's approval.
+- [ ] Notify all the user once a new policy is approved and active in the app's notification system as well as email notifications.
+- [ ] Create a notification system to notify the user about the new policy, policy changes, and policy expiry. The notification should be sent to the user via email and in-app notifications.
+- [ ] Allow `SECRETARY` to call for a meeting and notify all the users about the meeting. The notification should be sent to the user via email and in-app notifications.
 ---
 
 # Important commands
@@ -589,3 +599,5 @@ echo "password" > secrets/pgadmin_password.txt"
   - `moderator_update_deposit`: calls the `_notify_depositor_review_outcome` method
   - added `get_my_deposits()`, `get_community_deposits()`, `get_my_deposit_history()`, `get_pending_review_deposits()` 
   - updated `create_smart_deposit()`: for deposit with smart split allocations
+
+---
