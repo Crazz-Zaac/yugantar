@@ -8,6 +8,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { useAuth } from "@/contexts/AuthContext"
 import yugantarLogo from "@/assets/yugantar_logo.svg"
+import { toast } from "sonner"
+import { apiError } from "@/components/policies/signing"
 
 function PasswordStrength({ password }: { password: string }) {
   const checks = [
@@ -136,8 +138,8 @@ export function SignUp({ onGoToSignIn }: { onGoToSignIn: () => void }) {
               onClick={() =>
                 apiClient
                   .post("/users/resend-verification", { email: registeredEmail })
-                  .then(() => alert("If your email isn't verified yet, a new link is on its way."))
-                  .catch(() => alert("Could not resend right now. Please try again later."))
+                  .then(() => toast.success("Verification email sent", { description: "Check your inbox (and spam folder)." }))
+                  .catch((err) => toast.error(apiError(err, "Could not resend right now. Please try again later.")))
               }
             >
               Resend verification email

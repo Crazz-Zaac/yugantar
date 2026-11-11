@@ -34,7 +34,13 @@ export function MemberSidebar({
   const initials = user
     ? `${user.first_name?.[0] ?? ""}${user.last_name?.[0] ?? ""}`.toUpperCase()
     : "M"
-  const memberId = user?.id ? `COOP-${user.id.slice(0, 8).toUpperCase()}` : ""
+  // Show the member's office (e.g. "Treasurer"), not a pseudo-ID
+  const officeRoles = (user?.cooperative_roles ?? [])
+    .map((r) => String(r).toLowerCase())
+    .filter((r) => r !== "member")
+  const memberId = officeRoles.length
+    ? officeRoles.map((r) => r[0].toUpperCase() + r.slice(1)).join(" · ")
+    : "Member"
 
   return (
     <TooltipProvider delayDuration={0}>

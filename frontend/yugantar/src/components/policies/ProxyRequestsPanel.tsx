@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { apiClient } from "@/api/api"
 import { apiError, formatDateTime, type ProxyRequest } from "./signing"
+import { toast } from "sonner"
+import { useConfirm } from "@/components/confirm/confirmContext"
 
 interface Props {
   /** "bearer": pending requests to authorise. "admin": all requests, can cancel. */
@@ -22,6 +24,7 @@ const statusClass: Record<string, string> = {
 }
 
 export default function ProxyRequestsPanel({ mode, refreshKey, onChanged }: Props) {
+  const confirm = useConfirm()
   const [requests, setRequests] = useState<ProxyRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | null>(null)
@@ -53,21 +56,41 @@ export default function ProxyRequestsPanel({ mode, refreshKey, onChanged }: Prop
       await call()
       await load()
       onChanged?.()
+      return true
     } catch (err) {
       setError(apiError(err, "Action failed."))
+      return false
     } finally {
       setBusyId(null)
     }
   }
 
-  const authorise = (req: ProxyRequest, approve: boolean) => {
-    const note = approve ? null : window.prompt("Why are you declining? (optional)") ?? null
-    return act(req.id, () => apiClient.post(`/policies/proxy-requests/${req.id}/authorise`, { approve, note }))
+  const authorise = async (req: ProxyRequest, approve: boolean) => {
+    let note: string | null = null
+    if (!approve) {
+      const answer = await confirm({
+        title: `Decline the proxy signature for ${req.signer_name}?`,
+        description: "The Admin is told, and the request is closed.",
+        confirmLabel: "Decline",
+        destructive: true,
+        note: { label: "Reason (optional, shared with the Admin)", placeholder: "e.g. Please confirm with the member again" },
+      })
+      if (!answer.confirmed) return
+      note = answer.note || null
+    }
+    const ok = await act(req.id, () => apiClient.post(`/policies/proxy-requests/${req.id}/authorise`, { approve, note }))
+    if (ok) toast.success(approve ? "Proxy signature authorised" : "Proxy signature declined")
   }
 
-  const cancel = (req: ProxyRequest) => {
-    if (!window.confirm(`Cancel the proxy request for ${req.signer_name}?`)) return
-    return act(req.id, () => apiClient.post(`/policies/proxy-requests/${req.id}/cancel`))
+  const cancel = async (req: ProxyRequest) => {
+    const answer = await confirm({
+      title: `Cancel the proxy request for ${req.signer_name}?`,
+      confirmLabel: "Cancel request",
+      cancelLabel: "Keep it",
+      destructive: true,
+    })
+    if (!answer.confirmed) return
+    await act(req.id, () => apiClient.post(`/policies/proxy-requests/${req.id}/cancel`))
   }
 
   // Office bearers only see the panel when something needs them

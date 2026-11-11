@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Search, MoreHorizontal, UserPlus, CheckCircle2, XCircle, AlertTriangle, Loader2, Shield, Clock, UserCheck } from "lucide-react"
+import { Search, MoreHorizontal, CheckCircle2, XCircle, AlertTriangle, Loader2, Shield, Clock, UserCheck } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,6 +13,8 @@ import { RoleModal } from "@/components/RoleModal"
 import { UserForUI } from "@/utils/normalizeUser"
 import type { AccessRole, CooperativeRole } from "@/constants"
 import { formatDate } from "@/lib/datetime"
+import { toast } from "sonner"
+import { useConfirm } from "@/components/confirm/confirmContext"
 
 interface MemberUser {
   id: string
@@ -90,6 +92,7 @@ export function MembersTab() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState("")
   const [roleModalUser, setRoleModalUser] = useState<UserForUI | null>(null)
+  const confirm = useConfirm()
 
   useEffect(() => {
     fetchMembers()
@@ -111,8 +114,19 @@ export function MembersTab() {
   }
 
   const handleToggleDisabled = async (memberId: string) => {
+    const member = members.find((m) => m.id === memberId)
+    if (member && !member.disabled) {
+      const answer = await confirm({
+        title: `Suspend ${getFullName(member)}?`,
+        description: "They're signed out everywhere and can't sign in until you reactivate the account.",
+        confirmLabel: "Suspend",
+        destructive: true,
+      })
+      if (!answer.confirmed) return
+    }
     try {
       await apiClient.post(`/admin/users/${memberId}/toggle-disabled`)
+      toast.success(member?.disabled ? "Account reactivated" : "Account suspended")
       fetchMembers() // Refresh the list
     } catch (err) {
       console.error("Failed to toggle member status:", err)
@@ -123,10 +137,25 @@ export function MembersTab() {
   // or reject (the account is removed and they're told by email)
   const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null)
   const handleApproval = async (member: MemberUser, approve: boolean) => {
-    if (!approve && !window.confirm(`Reject ${getFullName(member)}'s registration? Their account will be removed.`)) return
+    if (!approve) {
+      const answer = await confirm({
+        title: `Reject ${getFullName(member)}'s registration?`,
+        description: "Their account will be removed and they'll be told by email.",
+        confirmLabel: "Reject registration",
+        destructive: true,
+      })
+      if (!answer.confirmed) return
+    }
     setApprovalBusyId(member.id)
     try {
       await apiClient.post(`/admin/users/${member.id}/${approve ? "approve" : "reject"}`)
+      toast.success(approve ? `${getFullName(member)} approved` : "Registration rejected", {
+        description: approve
+          ? member.is_verified
+            ? "They can sign in now."
+            : "They can sign in once they verify their email."
+          : "They've been told by email.",
+      })
       fetchMembers()
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -136,6 +165,34 @@ export function MembersTab() {
     }
   }
   const pendingApproval = members.filter((m) => !m.is_approved && !m.disabled)
+
+  const renderActions = (member: MemberUser, status: MemberStatus) => (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Actions for ${getFullName(member)}`}>
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {/* <DropdownMenuItem>View Profile</DropdownMenuItem>
+            <DropdownMenuItem>Edit Details</DropdownMenuItem> */}
+            <DropdownMenuItem onClick={() => setRoleModalUser(member as unknown as UserForUI)}>
+              <Shield className="mr-2 h-3.5 w-3.5" />
+              Edit Roles
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {status === "suspended" ? (
+              <DropdownMenuItem className="text-success" onClick={() => handleToggleDisabled(member.id)}>
+                Reactivate
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem className="text-destructive" onClick={() => handleToggleDisabled(member.id)}>
+                Suspend
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+  )
 
   const handleRoleSave = async (accessRoles: AccessRole[], cooperativeRoles: CooperativeRole[]) => {
     if (!roleModalUser) return
@@ -162,12 +219,8 @@ export function MembersTab() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-foreground">Members</h2>
-          <p className="text-sm text-muted-foreground">Manage cooperative members and their accounts</p>
+          <p className="text-sm text-muted-foreground">New members register themselves; approve them here, and manage roles and accounts.</p>
         </div>
-        <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-          <UserPlus className="mr-2 h-4 w-4" />
-          Add Member
-        </Button>
       </div>
 
       {pendingApproval.length > 0 && (
@@ -221,18 +274,18 @@ export function MembersTab() {
               <CardTitle className="text-sm font-semibold">All Members</CardTitle>
               <CardDescription>{filtered.length} of {totalCount} members</CardDescription>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   placeholder="Search members..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-9 w-64 pl-9 text-sm"
+                  className="h-9 w-full pl-9 text-sm sm:w-64"
                 />
               </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-9 w-44">
+                <SelectTrigger className="h-9 w-full sm:w-44">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -258,7 +311,37 @@ export function MembersTab() {
               <Button variant="outline" size="sm" onClick={fetchMembers}>Retry</Button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            <ul className="flex flex-col divide-y sm:hidden">
+              {filtered.length === 0 && <li className="py-8 text-center text-sm text-muted-foreground">No members match.</li>}
+              {filtered.map((member) => {
+                const status = getMemberStatus(member)
+                return (
+                  <li key={member.id} className="flex items-start gap-3 py-3">
+                    <Avatar className="h-9 w-9">
+                      <AvatarFallback className="bg-accent text-xs font-medium text-accent-foreground">
+                        {getInitials(member.first_name, member.last_name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">{getFullName(member)}</p>
+                      <p className="truncate text-xs text-muted-foreground">{member.email}</p>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                        <MemberStatusBadge status={status} />
+                        {member.cooperative_roles.filter((r) => r !== "member").map((role) => (
+                          <Badge key={role} variant="outline" className="border-primary/30 text-[10px] capitalize text-primary">{role}</Badge>
+                        ))}
+                        {member.access_roles.filter((r) => r !== "user").map((role) => (
+                          <Badge key={role} variant="secondary" className="text-[10px] capitalize">{role}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                    {renderActions(member, status)}
+                  </li>
+                )
+              })}
+            </ul>
+            <div className="hidden overflow-x-auto sm:block">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -304,31 +387,7 @@ export function MembersTab() {
                         <TableCell className="text-sm text-muted-foreground">{member.phone || "-"}</TableCell>
                         <TableCell><MemberStatusBadge status={status} /></TableCell>
                         <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Actions for ${getFullName(member)}`}>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {/* <DropdownMenuItem>View Profile</DropdownMenuItem>
-                              <DropdownMenuItem>Edit Details</DropdownMenuItem> */}
-                              <DropdownMenuItem onClick={() => setRoleModalUser(member as unknown as UserForUI)}>
-                                <Shield className="mr-2 h-3.5 w-3.5" />
-                                Edit Roles
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {status === "suspended" ? (
-                                <DropdownMenuItem className="text-success" onClick={() => handleToggleDisabled(member.id)}>
-                                  Reactivate
-                                </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem className="text-destructive" onClick={() => handleToggleDisabled(member.id)}>
-                                  Suspend
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {renderActions(member, status)}
                         </TableCell>
                       </TableRow>
                     )
@@ -336,6 +395,7 @@ export function MembersTab() {
                 </TableBody>
               </Table>
             </div>
+            </>
           )}
         </CardContent>
       </Card>

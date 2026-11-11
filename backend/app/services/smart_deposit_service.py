@@ -15,7 +15,7 @@ from app.models.loan_model import Loan, LoanStatus
 from app.models.loan_payment import LoanPayment, LoanPaymentType, LoanPaymentStatus
 from app.models.mixins.money import MoneyMixin
 from app.services.receipt_service import ReceiptService
-from app.services.deposit_service import require_active_deposit_policy
+from app.services.policy_lifecycle import require_current_deposit_policy
 from app.utils.deposit_date_utils import (
     calculate_due_date,
     calculate_late_fine,
@@ -43,7 +43,7 @@ class SmartDepositService:
         req: DepositPreviewRequest,
         user_id: uuid.UUID,
     ) -> DepositPreviewResponse:
-        policy = require_active_deposit_policy(session, req.policy_id)
+        policy = require_current_deposit_policy(session, req.policy_id)
 
         net_amount = req.ocr_amount
         required_deposit = policy.amount_rupees  # Decimal in rupees
@@ -154,7 +154,7 @@ class SmartDepositService:
                 "policy_id is required for smart deposit submission",
             )
 
-        policy = require_active_deposit_policy(session, req.policy_id)
+        policy = require_current_deposit_policy(session, req.policy_id)
 
         receipt_id = None
         if req.receipt_id is not None:

@@ -35,7 +35,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { apiClient } from "@/api/api"
 import ReceiptReviewDialog from "./ReceiptReviewDialog"
-import { useLocation } from "wouter"
+import { useSearch } from "wouter"
 import { formatDate, formatDateTime, fromZoneInputValue, nowZoneInputValue, toZoneInputValue, TIME_ZONE_LABEL } from "@/lib/datetime"
 
 type PolicyStatus = "draft" | "finalized" | "active" | "expired" | "void"
@@ -48,8 +48,17 @@ interface DepositPolicy {
   late_deposit_fine: number
   schedule_type: DepositScheduleType
   due_day_of_month: number | null
+  allowed_months?: number | null
   status: PolicyStatus
   effective_from: string
+}
+
+/** "Due on day 10 each month" / "Within 3 months" */
+function scheduleText(p: DepositPolicy): string {
+  if (p.schedule_type === "monthly_fixed_day") {
+    return p.due_day_of_month ? `Due on day ${p.due_day_of_month} each month` : "Monthly (due day not set)"
+  }
+  return p.allowed_months ? `Within ${p.allowed_months} month${p.allowed_months === 1 ? "" : "s"}` : "Occasional (period not set)"
 }
 
 interface OcrResult {
@@ -177,7 +186,7 @@ const OCR_POLL_INTERVAL = 2000
 
 export function DepositTab() {
   const { user } = useAuth()
-  const [location] = useLocation()
+  const search = useSearch()
   const normalizedRoles = (user?.cooperative_roles ?? []).map((role) =>
     String(role).toLowerCase()
   )
@@ -191,8 +200,8 @@ export function DepositTab() {
   const [activeTab, setActiveTab] = useState("make")
 
   useEffect(() => {
-    const query = location.split("?")[1] ?? ""
-    const params = new URLSearchParams(query)
+    // wouter's useLocation() is the path only; the query comes from useSearch()
+    const params = new URLSearchParams(search)
     const subtab = params.get("subtab")
     if (!subtab) return
 
@@ -203,7 +212,7 @@ export function DepositTab() {
     if (allowedTabs.includes(subtab)) {
       setActiveTab(subtab)
     }
-  }, [location, isDepositReviewer])
+  }, [search, isDepositReviewer])
 
   const [activePolicies, setActivePolicies] = useState<DepositPolicy[]>([])
   const [policiesLoading, setPoliciesLoading] = useState(true)
@@ -231,6 +240,8 @@ export function DepositTab() {
   const [selectedLoanId, setSelectedLoanId] = useState<string>("")
 
   const [submitting, setSubmitting] = useState(false)
+  // This period's deposit: is it due, and has it been paid? (same source as Home)
+  const [thisPeriod, setThisPeriod] = useState<{ due_date: string; amount: number | string; paid: boolean; days_left: number } | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = useState(false)
 
@@ -251,20 +262,32 @@ export function DepositTab() {
   const fetchActivePolicies = useCallback(async () => {
     setPoliciesLoading(true)
     try {
-      const res = await apiClient.get("/policies/deposit")
-      const active = (res.data as DepositPolicy[]).filter((p) => p.status === "active")
-      setActivePolicies(active)
-      if (active.length > 0 && !selectedPolicyId) setSelectedPolicyId(active[0].policy_id)
+      // Deposits strictly use the single current deposit policy
+      const res = await apiClient.get("/policies/deposit/current")
+      const current = res.data as DepositPolicy | null
+      setActivePolicies(current ? [current] : [])
+      setSelectedPolicyId(current?.policy_id ?? "")
     } catch {
       setActivePolicies([])
     } finally {
       setPoliciesLoading(false)
     }
-  }, [selectedPolicyId])
+  }, [])
 
   useEffect(() => {
     fetchActivePolicies()
   }, [fetchActivePolicies])
+
+  useEffect(() => {
+    let cancelled = false
+    apiClient
+      .get("/dashboard/me")
+      .then((res) => !cancelled && setThisPeriod(res.data.next_due ?? null))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [submitSuccess])
 
   const processOcr = async (file: File) => {
     setOcrLoading(true)
@@ -569,7 +592,44 @@ export function DepositTab() {
     showUser = false,
     showWithdrawAction = false
   ) => (
-    <div className="overflow-x-auto">
+    <>
+    {/* Phones: one card per deposit instead of a cramped table */}
+    <ul className="flex flex-col divide-y sm:hidden">
+      {loading ? (
+        <li className="py-8 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-muted-foreground" /></li>
+      ) : rows.length === 0 ? (
+        <li className="py-8 text-center text-sm text-muted-foreground">No records found.</li>
+      ) : (
+        rows.map((dep) => (
+          <li key={dep.id} className="flex flex-col gap-2 py-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-nums text-sm font-semibold">{formatRsFromRupees(Number(dep.deposited_amount))}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {showUser && <>{dep.depositor_name ?? "Member"} · </>}
+                  {formatDate(dep.deposited_date || dep.created_at)} · <span className="capitalize">{dep.deposit_type.replace("_", " ")}</span>
+                </p>
+                <p className="text-xs text-muted-foreground">Due {formatDate(dep.due_deposit_date)}</p>
+              </div>
+              {depositStatusBadge(dep.verification_status)}
+            </div>
+            {showWithdrawAction && dep.verification_status === "pending" && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 self-start text-xs"
+                onClick={() => handleWithdrawDeposit(dep.id)}
+                disabled={actionLoadingId === dep.id}
+              >
+                {actionLoadingId === dep.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Ban className="mr-1 h-3.5 w-3.5" />}
+                Withdraw & Edit
+              </Button>
+            )}
+          </li>
+        ))
+      )}
+    </ul>
+    <div className="hidden overflow-x-auto sm:block">
       <Table>
         <TableHeader>
           <TableRow>
@@ -598,7 +658,7 @@ export function DepositTab() {
           ) : (
             rows.map((dep) => (
               <TableRow key={dep.id}>
-                <TableCell className="text-xs">{formatDateTime(dep.deposited_date || dep.created_at)}</TableCell>
+                <TableCell className="text-xs">{formatDate(dep.deposited_date || dep.created_at)}</TableCell>
                 {showUser && (
                   <TableCell className="text-xs">{dep.depositor_name ?? `${dep.user_id.slice(0, 8)}…`}</TableCell>
                 )}
@@ -634,6 +694,7 @@ export function DepositTab() {
         </TableBody>
       </Table>
     </div>
+    </>
   )
 
   return (
@@ -646,7 +707,7 @@ export function DepositTab() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className={`grid w-full ${isDepositReviewer ? "max-w-2xl grid-cols-5" : "max-w-xl grid-cols-4"}`}>
+        <TabsList className={`h-auto w-full justify-start overflow-x-auto [scrollbar-width:none] [&>button]:shrink-0 sm:grid ${isDepositReviewer ? "sm:max-w-2xl sm:grid-cols-5" : "sm:max-w-xl sm:grid-cols-4"}`}>
           <TabsTrigger value="make" className="gap-1">
             <Banknote className="h-4 w-4" />
             Make Deposit
@@ -672,60 +733,89 @@ export function DepositTab() {
         </TabsList>
 
         <TabsContent value="make" className="mt-4 flex flex-col gap-6">
+          {thisPeriod && (
+            <div
+              className={`flex flex-wrap items-center gap-3 rounded-xl border p-4 ${
+                thisPeriod.paid ? "border-success/30 bg-success/5" : thisPeriod.days_left <= 3 ? "border-warning/40 bg-warning/10" : "bg-card"
+              }`}
+            >
+              <span
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
+                  thisPeriod.paid ? "bg-success/15 text-success" : "bg-primary/10 text-primary"
+                }`}
+              >
+                {thisPeriod.paid ? <CheckCircle2 className="h-5 w-5" /> : <CalendarClock className="h-5 w-5" />}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">
+                  {thisPeriod.paid
+                    ? `This period's deposit is in: ${formatRsFromRupees(Number(thisPeriod.amount))} for ${formatDate(thisPeriod.due_date)}`
+                    : `${formatRsFromRupees(Number(thisPeriod.amount))} due by ${formatDate(thisPeriod.due_date)}`}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {thisPeriod.paid
+                    ? "Check its status under My Deposits. You can also pay ahead or towards your loan below."
+                    : thisPeriod.days_left <= 0
+                      ? "Due today. Deposits after the due date get the late fine."
+                      : `${thisPeriod.days_left} day${thisPeriod.days_left === 1 ? "" : "s"} left. Deposits after the due date get the late fine.`}
+                </p>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
             <Card className="lg:col-span-3">
-              <CardHeader>
-                <CardTitle className="text-sm font-semibold">Make Deposit</CardTitle>
-                <CardDescription>
-                  Upload voucher, review summary, then manually add split categories before submitting.
-                </CardDescription>
+              <CardHeader className="gap-4">
+                <div>
+                  <CardTitle className="text-sm font-semibold">Make a deposit</CardTitle>
+                  <CardDescription>Pay at the bank first, then upload the voucher here.</CardDescription>
+                </div>
+                <ol className="grid grid-cols-4 gap-2" aria-label="Steps">
+                  {["Policy", "Voucher", "Check & split", "Submit"].map((label, i) => {
+                    const step = !selectedPolicyId ? 0 : !ocrResult ? 1 : !canSubmit ? 2 : 3
+                    const state = i < step ? "done" : i === step ? "current" : "todo"
+                    return (
+                      <li key={label} className="flex flex-col gap-1.5">
+                        <span
+                          className={`h-1.5 rounded-full ${state === "todo" ? "bg-muted" : "bg-primary"} ${state === "current" ? "opacity-60" : ""}`}
+                        />
+                        <span className={`text-[11px] ${state === "todo" ? "text-muted-foreground" : "font-medium text-foreground"}`}>
+                          {i + 1}. {label}
+                        </span>
+                      </li>
+                    )
+                  })}
+                </ol>
               </CardHeader>
               <CardContent className="flex flex-col gap-5">
                 <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium">Select Deposit Policy</Label>
+                  <Label className="text-xs font-medium">Current deposit policy</Label>
                   {policiesLoading ? (
-                    <div className="flex h-10 items-center gap-2 rounded-md border px-3">
+                    <div className="flex h-14 items-center gap-2 rounded-lg border px-3">
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Loading policies...</span>
+                      <span className="text-sm text-muted-foreground">Loading the current policy…</span>
+                    </div>
+                  ) : selectedPolicy ? (
+                    <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <Landmark className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-nums text-sm font-semibold">{formatRs(selectedPolicy.amount_paisa)}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {scheduleText(selectedPolicy)} · late fine {selectedPolicy.late_deposit_fine}% · in force since {formatDate(selectedPolicy.effective_from)}
+                        </p>
+                      </div>
                     </div>
                   ) : (
-                    <Select value={selectedPolicyId} onValueChange={setSelectedPolicyId}>
-                      <SelectTrigger className="h-10">
-                        <SelectValue placeholder="Choose a deposit policy" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {activePolicies.map((p) => (
-                          <SelectItem key={p.policy_id} value={p.policy_id}>
-                            {formatRs(p.amount_paisa)} · {p.schedule_type.replace(/_/g, " ")}
-                            {p.due_day_of_month ? ` · Due day ${p.due_day_of_month}` : ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground dark:text-warning">
+                      <AlertTriangle className="h-4 w-4 shrink-0" />
+                      No deposit policy is in force right now, so deposits can't be made. Please contact the Treasurer.
+                    </div>
                   )}
                 </div>
 
-                {selectedPolicy && (
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className="flex flex-col gap-2">
-                      <Label className="text-xs font-medium">Policy Amount</Label>
-                      <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/30 px-3">
-                        <IndianRupee className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="font-mono text-sm font-semibold">{formatRs(selectedPolicy.amount_paisa)}</span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Label className="text-xs font-medium">Late Fine</Label>
-                      <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/30 px-3">
-                        <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-sm font-medium">{selectedPolicy.late_deposit_fine}%</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
                 <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium">Upload Payment Voucher</Label>
+                  <Label className="text-xs font-medium">Payment voucher</Label>
                   <div
                     onDragOver={(e) => {
                       e.preventDefault()
@@ -752,7 +842,7 @@ export function DepositTab() {
                       ref={fileInputRef}
                       type="file"
                       className="hidden"
-                      accept=".jpg,.jpeg,.png"
+                      accept="image/jpeg,image/png,image/webp"
                       onChange={(e) => {
                         const file = e.target.files?.[0]
                         if (!file) return
@@ -780,8 +870,11 @@ export function DepositTab() {
                     ) : (
                       <div className="flex flex-col items-center gap-2">
                         <Upload className="h-8 w-8 text-muted-foreground/60" />
-                        <p className="text-sm font-medium">Drop voucher here or click to browse</p>
-                        <p className="text-xs text-muted-foreground">JPG/PNG up to 10MB</p>
+                        <p className="text-sm font-medium">
+                          <span className="sm:hidden">Tap to take a photo or choose a screenshot</span>
+                          <span className="hidden sm:inline">Drop the voucher here or click to choose it</span>
+                        </p>
+                        <p className="text-xs text-muted-foreground">Bank app screenshot or photo · JPG, PNG or WEBP up to 10 MB</p>
                       </div>
                     )}
                   </div>
@@ -844,7 +937,7 @@ export function DepositTab() {
                               min={0.01}
                               step={0.01}
                               placeholder="Not detected, enter amount"
-                              className="pl-8 font-mono font-semibold"
+                              className="pl-8 font-nums font-semibold"
                               value={ocrResult.amount ?? ""}
                               onChange={(e) =>
                                 updateVoucher({ amount: e.target.value === "" ? null : Number(e.target.value) })
@@ -922,15 +1015,15 @@ export function DepositTab() {
                     <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                       <div className="rounded-md border bg-background p-2 text-center">
                         <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Net Amount</p>
-                        <p className="font-mono text-sm font-bold">{formatRsFromRupees(preview.net_amount)}</p>
+                        <p className="font-nums text-sm font-bold">{formatRsFromRupees(preview.net_amount)}</p>
                       </div>
                       <div className="rounded-md border bg-background p-2 text-center">
                         <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Policy Amount</p>
-                        <p className="font-mono text-sm font-bold">{formatRsFromRupees(preview.required_deposit)}</p>
+                        <p className="font-nums text-sm font-bold">{formatRsFromRupees(preview.required_deposit)}</p>
                       </div>
                       <div className="rounded-md border bg-background p-2 text-center">
                         <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Late Fine</p>
-                        <p className="font-mono text-sm font-bold">{formatRsFromRupees(preview.fine_amount)}</p>
+                        <p className="font-nums text-sm font-bold">{formatRsFromRupees(preview.fine_amount)}</p>
                       </div>
                       <div className="rounded-md border bg-background p-2 text-center">
                         <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Due Date</p>
@@ -976,7 +1069,7 @@ export function DepositTab() {
                           <SelectContent>
                             {preview.active_loans.map((ln) => (
                               <SelectItem key={ln.loan_id} value={ln.loan_id}>
-                                Loan {ln.loan_id.slice(0, 8)} · Principal {formatRs(ln.principal_paisa)}
+                                Loan of {formatRs(ln.principal_paisa)} · {formatRs(ln.outstanding_principal_paisa)} left
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -1000,16 +1093,21 @@ export function DepositTab() {
                             <Badge variant="outline" className="text-[10px]">
                               {categoryLabel(alloc.category)}
                             </Badge>
-                            {alloc.loan_id && (
-                              <span className="text-[11px] text-muted-foreground font-mono">Loan {alloc.loan_id.slice(0, 8)}…</span>
-                            )}
+                            {alloc.loan_id && (() => {
+                              const ln = preview?.active_loans.find((l) => l.loan_id === alloc.loan_id)
+                              return (
+                                <span className="text-[11px] text-muted-foreground">
+                                  {ln ? `Loan of ${formatRs(ln.principal_paisa)}` : "Loan"}
+                                </span>
+                              )
+                            })()}
                             <div className="ml-auto flex items-center gap-1">
                               <span className="text-xs text-muted-foreground">Rs.</span>
                               <Input
                                 type="number"
                                 min={0}
                                 step={1}
-                                className="h-8 w-28 font-mono text-sm"
+                                className="h-8 w-28 font-nums text-sm"
                                 value={alloc.amount_rupees === 0 ? "" : String(alloc.amount_rupees)}
                                 placeholder="0"
                                 onChange={(e) => updateAllocationAmount(idx, Number(e.target.value || 0))}
@@ -1069,36 +1167,28 @@ export function DepositTab() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                   <Landmark className="h-4 w-4 text-primary" />
-                  Active Deposit Policies
+                  How deposits work
                 </CardTitle>
-                <CardDescription>Current deposit policies</CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                {policiesLoading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                  </div>
-                ) : activePolicies.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No active deposit policies</p>
-                ) : (
-                  activePolicies.map((p) => (
-                    <div key={p.policy_id} className="rounded-lg border p-3">
-                      <div className="flex items-center justify-between">
-                        <p className="font-mono text-lg font-bold">{formatRs(p.amount_paisa)}</p>
-                        <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-xs text-success">
-                          <CheckCircle2 className="h-3 w-3" />
-                          Active
-                        </Badge>
-                      </div>
-                      <div className="mt-2 text-xs text-muted-foreground">
-                        <p>Schedule: {p.schedule_type.replace(/_/g, " ")}</p>
-                        <p>Due day: {p.due_day_of_month ?? "—"}</p>
-                        <p>Late fine: {p.late_deposit_fine}%</p>
-                        <p>Effective: {formatDate(p.effective_from)}</p>
-                      </div>
-                    </div>
-                  ))
-                )}
+              <CardContent>
+                <ol className="flex flex-col gap-4">
+                  {[
+                    ["Pay at the bank", "Transfer the amount to the cooperative's account, in your bank app or at the counter."],
+                    ["Upload the voucher", "We read the amount, date and reference from it. Check them and correct anything that's wrong."],
+                    ["Split the money", "Choose what it covers: this period's deposit, a late fine, an advance, or your loan."],
+                    ["Treasurer verifies", "It counts once the Treasurer has checked it against the bank. The voucher image is kept for 15 days for that."],
+                  ].map(([t, d], i) => (
+                    <li key={t} className="flex gap-3">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                        {i + 1}
+                      </span>
+                      <span>
+                        <span className="block text-sm font-medium">{t}</span>
+                        <span className="block text-xs text-muted-foreground">{d}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ol>
               </CardContent>
             </Card>
           </div>
@@ -1112,7 +1202,28 @@ export function DepositTab() {
                 Your submitted deposits. Pending deposits can be withdrawn for editing and resubmission.
               </CardDescription>
             </CardHeader>
-            <CardContent>{renderDepositTable(myDeposits, myLoading, false, true)}</CardContent>
+            <CardContent className="flex flex-col gap-4">
+              {!myLoading && myDeposits.length > 0 && (
+                <dl className="grid grid-cols-3 gap-3 rounded-lg bg-muted/40 p-3 text-sm">
+                  {[
+                    ["Verified", myDeposits.filter((d) => d.verification_status === "verified"), "text-success"],
+                    ["Awaiting verification", myDeposits.filter((d) => d.verification_status === "pending"), "text-warning-foreground dark:text-warning"],
+                    ["Rejected", myDeposits.filter((d) => d.verification_status === "rejected"), "text-destructive"],
+                  ].map(([label, list, cls]) => (
+                    <div key={label as string}>
+                      <dt className="text-xs text-muted-foreground">{label as string}</dt>
+                      <dd className={`font-nums font-semibold ${cls as string}`}>
+                        {formatRsFromRupees((list as DepositItem[]).reduce((sum, d) => sum + Number(d.deposited_amount), 0))}
+                        <span className="block text-xs font-normal text-muted-foreground">
+                          {(list as DepositItem[]).length} deposit{(list as DepositItem[]).length === 1 ? "" : "s"}
+                        </span>
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+              {renderDepositTable(myDeposits, myLoading, false, true)}
+            </CardContent>
           </Card>
         </TabsContent>
 
@@ -1156,11 +1267,26 @@ export function DepositTab() {
                     return (
                       <div key={dep.id} className="rounded-lg border p-3">
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="space-y-1">
-                            <p className="text-sm font-semibold">{formatRsFromRupees(Number(dep.deposited_amount))}</p>
-                            <p className="text-xs text-muted-foreground">Deposited: {formatDateTime(dep.deposited_date)}</p>
-                            <p className="text-xs text-muted-foreground">Member: {dep.depositor_name ?? dep.user_id}</p>
-                            {depositStatusBadge(dep.verification_status)}
+                          <div className="flex items-start gap-3">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-semibold text-accent-foreground">
+                              {(dep.depositor_name ?? "?").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
+                            </span>
+                            <div className="space-y-1">
+                              <p className="text-sm font-medium">{dep.depositor_name ?? "Member"}</p>
+                              <p className="font-nums text-lg font-semibold leading-none">{formatRsFromRupees(Number(dep.deposited_amount))}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Paid {formatDateTime(dep.deposited_date)} · due {formatDate(dep.due_deposit_date)}
+                              </p>
+                              {new Date(dep.deposited_date).getTime() > new Date(dep.due_deposit_date).getTime() ? (
+                                <Badge variant="outline" className="border-warning/40 bg-warning/10 text-[11px] text-warning-foreground dark:text-warning">
+                                  Late: after the due date
+                                </Badge>
+                              ) : (
+                                <Badge variant="outline" className="border-success/30 bg-success/10 text-[11px] text-success">
+                                  On time
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
                             {dep.receipt_id ? (

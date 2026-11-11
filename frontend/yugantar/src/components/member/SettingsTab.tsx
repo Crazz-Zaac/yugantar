@@ -5,9 +5,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { Switch } from "@/components/ui/switch"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAuth } from "@/contexts/AuthContext"
 
@@ -83,7 +80,7 @@ export function SettingsTab() {
       </div>
 
       <Tabs defaultValue="profile" className="w-full">
-        <TabsList className="grid w-full max-w-lg grid-cols-4">
+        <TabsList className="h-auto w-full justify-start overflow-x-auto [scrollbar-width:none] [&>button]:shrink-0 sm:grid sm:max-w-lg sm:grid-cols-4">
           <TabsTrigger value="profile" className="gap-1.5 text-xs">
             <User className="h-3.5 w-3.5" />
             Profile
@@ -270,24 +267,6 @@ export function SettingsTab() {
                 </div>
               </div>
 
-              <Separator />
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Two-Factor Authentication</p>
-                  <p className="text-xs text-muted-foreground">Add an extra layer of security to your account</p>
-                </div>
-                <Switch />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Login Notifications</p>
-                  <p className="text-xs text-muted-foreground">Get notified when someone logs into your account</p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-
               <Button
                 className="self-end bg-primary text-primary-foreground hover:bg-primary/90"
                 onClick={handlePasswordChange}
@@ -306,24 +285,24 @@ export function SettingsTab() {
         <TabsContent value="notifications" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-semibold">Notification Preferences</CardTitle>
-              <CardDescription>Choose what you want to be notified about</CardDescription>
+              <CardTitle className="text-sm font-semibold">Notifications</CardTitle>
+              <CardDescription>
+                You're notified in the app (the bell icon) and by email. These concern your money and your vote, so they
+                can't be switched off.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col gap-4">
+            <CardContent className="grid gap-3 sm:grid-cols-2">
               {[
-                { label: "Loan Payment Reminders", desc: "Get reminded before your payment due date", defaultChecked: true },
-                { label: "Deposit Confirmations", desc: "Notify when your deposit is confirmed", defaultChecked: true },
-                { label: "Dividend Announcements", desc: "Annual dividend payouts and updates", defaultChecked: true },
-                { label: "Policy Changes", desc: "Changes to cooperative policies and rates", defaultChecked: false },
-                { label: "Community Updates", desc: "General cooperative news and events", defaultChecked: false },
-                { label: "Investment Opportunities", desc: "New investment options available", defaultChecked: true },
+                { label: "Deposits", desc: "When the Treasurer verifies or rejects a deposit you made." },
+                { label: "Loans", desc: "Decisions on your loan applications and loan payments." },
+                { label: "Policies", desc: "New policies to sign (with the one-week deadline) and whether they were adopted." },
+                { label: "Proxy signatures", desc: "If a policy is signed on your behalf after you were consulted." },
+                { label: "Account", desc: "Email verification, approval of your membership and password changes." },
+                { label: "Office bearers", desc: "Deposits, loans and proxy requests waiting for your review (if you hold an office)." },
               ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between rounded-lg border p-4">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{item.label}</p>
-                    <p className="text-xs text-muted-foreground">{item.desc}</p>
-                  </div>
-                  <Switch defaultChecked={item.defaultChecked} />
+                <div key={item.label} className="rounded-lg border p-4">
+                  <p className="text-sm font-medium text-foreground">{item.label}</p>
+                  <p className="text-xs text-muted-foreground">{item.desc}</p>
                 </div>
               ))}
             </CardContent>
@@ -333,52 +312,23 @@ export function SettingsTab() {
         <TabsContent value="preferences" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-semibold">App Preferences</CardTitle>
-              <CardDescription>Customize your experience</CardDescription>
+              <CardTitle className="text-sm font-semibold">Regional settings</CardTitle>
+              <CardDescription>The same for every member, so everyone sees identical amounts and dates.</CardDescription>
             </CardHeader>
-            <CardContent className="flex flex-col gap-5">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="language" className="text-xs font-medium">Language</Label>
-                <Select defaultValue="en">
-                  <SelectTrigger id="language" className="max-w-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="fr">French</SelectItem>
-                    <SelectItem value="es">Spanish</SelectItem>
-                    <SelectItem value="pt">Portuguese</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="currency" className="text-xs font-medium">Display Currency</Label>
-                <Select defaultValue="usd">
-                  <SelectTrigger id="currency" className="max-w-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="usd">USD ($)</SelectItem>
-                    <SelectItem value="ghs">GHS (GH&#8373;)</SelectItem>
-                    <SelectItem value="eur">EUR (&euro;)</SelectItem>
-                    <SelectItem value="gbp">GBP (&pound;)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="timezone" className="text-xs font-medium">Timezone</Label>
-                <Input id="timezone" value="Nepal Time (NPT, UTC+5:45)" disabled className="max-w-xs bg-muted" />
-                <p className="text-xs text-muted-foreground">
-                  All dates and times are shown in Nepal Time for every member, wherever you are.
-                </p>
-              </div>
-
-              <Button className="self-end bg-primary text-primary-foreground hover:bg-primary/90">
-                <Save className="mr-2 h-4 w-4" />
-                Save Preferences
-              </Button>
+            <CardContent>
+              <dl className="grid gap-4 sm:grid-cols-3">
+                {[
+                  ["Currency", "Nepali Rupee (Rs.)", "Amounts grouped as Rs. 1,00,000"],
+                  ["Dates", "English (AD)", "e.g. 12 Nov 2026"],
+                  ["Time zone", "Nepal Time (NPT)", "UTC+5:45, wherever you are"],
+                ].map(([label, value, hint]) => (
+                  <div key={label} className="rounded-lg border p-4">
+                    <dt className="text-xs text-muted-foreground">{label}</dt>
+                    <dd className="mt-1 text-sm font-medium text-foreground">{value}</dd>
+                    <dd className="text-xs text-muted-foreground">{hint}</dd>
+                  </div>
+                ))}
+              </dl>
             </CardContent>
           </Card>
         </TabsContent>

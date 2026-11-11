@@ -1,35 +1,17 @@
 import { useState, useEffect, useCallback } from "react"
 import {
     Plus,
-    Pencil,
-    Trash2,
-    CheckCircle2,
-    Clock,
-    FileX,
     AlertCircle,
-    Search,
     Landmark,
     CreditCard,
     Loader2,
-    PenLine,
     Info,
-    Send,
-    FileCheck,
     ChevronDown,
 } from "lucide-react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Badge } from "@/components/ui/badge"
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table"
 import {
     Dialog,
     DialogContent,
@@ -44,7 +26,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -56,8 +37,11 @@ import { apiClient } from "@/api/api"
 import { useAuth } from "@/contexts/AuthContext"
 import PolicySigningDialog from "@/components/policies/PolicySigningDialog"
 import ProxyRequestsPanel from "@/components/policies/ProxyRequestsPanel"
+import { PolicyBoard } from "@/components/policies/PolicyBoard"
 import type { SigningTarget } from "@/components/policies/signing"
-import { formatDate, fromZoneInputValue, nowZoneInputValue, toZoneInputValue, TIME_ZONE_LABEL } from "@/lib/datetime"
+import { fromZoneInputValue, nowZoneInputValue, toZoneInputValue, TIME_ZONE_LABEL } from "@/lib/datetime"
+import { toast } from "sonner"
+import { useConfirm } from "@/components/confirm/confirmContext"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -102,54 +86,6 @@ interface LoanPolicy {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-const statusConfig: Record<PolicyStatus, { label: string; icon: typeof CheckCircle2; className: string }> = {
-    active: {
-        label: "Active",
-        icon: CheckCircle2,
-        className: "border-success/30 bg-success/10 text-success",
-    },
-    draft: {
-        label: "Draft",
-        icon: Clock,
-        className: "border-warning/30 bg-warning/10 text-warning",
-    },
-    finalized: {
-        label: "Open for signing",
-        icon: FileCheck,
-        className: "border-chart-2/30 bg-chart-2/10 text-chart-2",
-    },
-    expired: {
-        label: "Expired",
-        icon: FileX,
-        className: "border-muted-foreground/30 bg-muted/50 text-muted-foreground",
-    },
-    void: {
-        label: "Void",
-        icon: AlertCircle,
-        className: "border-destructive/30 bg-destructive/10 text-destructive",
-    },
-}
-
-function StatusBadge({ status }: { status: PolicyStatus }) {
-    const cfg = statusConfig[status]
-    const Icon = cfg.icon
-    return (
-        <Badge variant="outline" className={`gap-1 text-xs ${cfg.className}`}>
-            <Icon className="h-3 w-3" />
-            {cfg.label}
-        </Badge>
-    )
-}
-
-function formatAmount(paisa: number): string {
-    const rupees = Math.round(Number(paisa) / 100)
-    return `Rs. ${rupees.toLocaleString("en-IN")}`
-}
-
-function formatDecimalAmount(amount: number): string {
-    return `Rs. ${Math.round(Number(amount)).toLocaleString("en-IN")}`
-}
-
 // ─── Deposit Policy Form Defaults ────────────────────────────────────────────
 
 const emptyDepositForm = {
@@ -192,7 +128,6 @@ export function MemberPoliciesTab() {
     const [loanPolicies, setLoanPolicies] = useState<LoanPolicy[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
-    const [searchQuery, setSearchQuery] = useState("")
 
     // Dialogs
     const [depositDialogOpen, setDepositDialogOpen] = useState(false)
@@ -202,7 +137,9 @@ export function MemberPoliciesTab() {
     const [depositForm, setDepositForm] = useState(emptyDepositForm)
     const [loanForm, setLoanForm] = useState(emptyLoanForm)
     const [submitting, setSubmitting] = useState(false)
+    const confirm = useConfirm()
     const [signingTarget, setSigningTarget] = useState<SigningTarget | null>(null)
+    const [boardReloadKey, setBoardReloadKey] = useState(0)
     const [deleteConfirm, setDeleteConfirm] = useState<{ type: "deposit" | "loan"; id: string } | null>(null)
 
     // Fetch
@@ -216,6 +153,7 @@ export function MemberPoliciesTab() {
             ])
             setDepositPolicies(depRes.data)
             setLoanPolicies(loanRes.data)
+            setBoardReloadKey((k) => k + 1)
         } catch {
             setError("Failed to load policies. Please try again.")
         } finally {
@@ -370,10 +308,17 @@ export function MemberPoliciesTab() {
     // ─── Sign & open for member signatures (Treasurer) ────────────────
 
     const openForSigning = async (type: "deposit" | "loan", policyId: string) => {
-        if (!window.confirm("Sign this policy and open it for every member to sign? It can no longer be edited unless you withdraw it.")) return
+        const answer = await confirm({
+            title: "Sign and open for signing?",
+            description:
+                "Your signature is recorded and every member is asked to sign within one week. The policy can't be edited unless you withdraw it.",
+            confirmLabel: "Sign & open",
+        })
+        if (!answer.confirmed) return
         setSubmitting(true)
         try {
             await apiClient.post(`/policies/${type}/${policyId}/submit`)
+            toast.success("Policy opened for signing", { description: "Members have one week to sign." })
             fetchPolicies()
         } catch {
             setError(`Failed to open the ${type} policy for signing.`)
@@ -381,15 +326,6 @@ export function MemberPoliciesTab() {
             setSubmitting(false)
         }
     }
-
-    // ─── Counts ──────────────────────────────────────────────────────────────
-
-    const depositActive = depositPolicies.filter((p) => p.status === "active").length
-    const depositDraft = depositPolicies.filter((p) => p.status === "draft").length
-    const depositFinalized = depositPolicies.filter((p) => p.status === "finalized").length
-    const loanActive = loanPolicies.filter((p) => p.status === "active").length
-    const loanDraft = loanPolicies.filter((p) => p.status === "draft").length
-    const loanFinalized = loanPolicies.filter((p) => p.status === "finalized").length
 
     // ─── Render ──────────────────────────────────────────────────────────────
 
@@ -443,7 +379,7 @@ export function MemberPoliciesTab() {
                     <p className="text-sm text-primary">
                         {canManage
                             ? "New policies start as Draft. When ready, sign and open it for signing: members then have one week, and it takes effect only if every member has signed by the deadline. You can withdraw or revise it."
-                            : "Each new policy is open for signing for one week and takes effect only if every member has signed by then. Open \"Signatures\" to sign or reject it (you can change your decision until the deadline) and to see everyone's decisions."}
+                            : "Each new policy is open for signing for one week and takes effect only if every member has signed by then. Use \"Review & sign\" to sign or reject it (you can change your decision until the deadline) and to see everyone's decisions."}
                     </p>
                 </CardContent>
             </Card>
@@ -462,369 +398,21 @@ export function MemberPoliciesTab() {
                 </Card>
             )}
 
-            {/* Summary Cards */}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <Card>
-                    <CardContent className="flex flex-col items-center p-4">
-                        <Landmark className="mb-1 h-5 w-5 text-primary" />
-                        <p className="font-nums text-xl font-bold text-foreground">{depositPolicies.length}</p>
-                        <p className="text-xs text-muted-foreground">Deposit Policies</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="flex flex-col items-center p-4">
-                        <CheckCircle2 className="mb-1 h-5 w-5 text-success" />
-                        <p className="font-nums text-xl font-bold text-foreground">{depositActive}</p>
-                        <p className="text-xs text-muted-foreground">Active Deposit</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="flex flex-col items-center p-4">
-                        <CreditCard className="mb-1 h-5 w-5 text-primary" />
-                        <p className="font-nums text-xl font-bold text-foreground">{loanPolicies.length}</p>
-                        <p className="text-xs text-muted-foreground">Loan Policies</p>
-                    </CardContent>
-                </Card>
-                <Card>
-                    <CardContent className="flex flex-col items-center p-4">
-                        <CheckCircle2 className="mb-1 h-5 w-5 text-success" />
-                        <p className="font-nums text-xl font-bold text-foreground">{loanActive}</p>
-                        <p className="text-xs text-muted-foreground">Active Loan</p>
-                    </CardContent>
-                </Card>
-            </div>
-
-            {/* Tabs for Deposit / Loan */}
-            <Tabs defaultValue="deposit" className="w-full">
-                <TabsList>
-                    <TabsTrigger value="deposit">
-                        <Landmark className="mr-2 h-4 w-4" />
-                        Deposit Policies
-                    </TabsTrigger>
-                    <TabsTrigger value="loan">
-                        <CreditCard className="mr-2 h-4 w-4" />
-                        Loan Policies
-                    </TabsTrigger>
-                </TabsList>
-
-                {/* ═══════ DEPOSIT POLICIES TAB ═══════ */}
-                <TabsContent value="deposit" className="mt-4">
-                    <Card>
-                        <CardHeader className="pb-4">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <CardTitle className="text-sm font-semibold">Deposit Policies</CardTitle>
-                                    <CardDescription className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                        <Badge variant="outline" className="gap-1 text-xs">{depositPolicies.length} Total</Badge>
-                                        {depositActive > 0 && <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-xs text-success"><CheckCircle2 className="h-3 w-3" />{depositActive} Active</Badge>}
-                                        {depositFinalized > 0 && <Badge variant="outline" className="gap-1 border-chart-2/30 bg-chart-2/10 text-xs text-chart-2"><FileCheck className="h-3 w-3" />{depositFinalized} Under Review</Badge>}
-                                        {depositDraft > 0 && <Badge variant="outline" className="gap-1 border-warning/30 bg-warning/10 text-xs text-warning"><Clock className="h-3 w-3" />{depositDraft} Draft</Badge>}
-                                    </CardDescription>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                        <Input
-                                            placeholder="Search..."
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                            className="h-9 w-48 pl-9 text-sm"
-                                        />
-                                    </div>
-                                    {canManage && (
-                                        <Button size="sm" onClick={openDepositCreate}>
-                                            <Plus className="mr-1.5 h-4 w-4" />
-                                            Add
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="text-xs">Amount (Rs)</TableHead>
-                                            <TableHead className="text-xs">Late Fine %</TableHead>
-                                            <TableHead className="text-xs">Schedule</TableHead>
-                                            <TableHead className="text-xs">Due Day</TableHead>
-                                            <TableHead className="text-xs">Effective From</TableHead>
-                                            <TableHead className="text-xs">Effective To</TableHead>
-                                            <TableHead className="text-xs">Status</TableHead>
-                                            <TableHead className="w-24 text-xs">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {depositPolicies.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
-                                                    No deposit policies found.
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : (
-                                            depositPolicies
-                                                .filter((p) => {
-                                                    if (!searchQuery) return true
-                                                    const q = searchQuery.toLowerCase()
-                                                    return (
-                                                        p.schedule_type.toLowerCase().includes(q) ||
-                                                        p.status.toLowerCase().includes(q) ||
-                                                        formatAmount(p.amount_paisa).toLowerCase().includes(q)
-                                                    )
-                                                })
-                                                .map((p) => (
-                                                    <TableRow key={p.policy_id}>
-                                                        <TableCell className="font-mono text-sm font-semibold">
-                                                            {formatAmount(p.amount_paisa)}
-                                                        </TableCell>
-                                                        <TableCell className="text-sm">{p.late_deposit_fine}%</TableCell>
-                                                        <TableCell>
-                                                            <Badge variant="secondary" className="text-xs capitalize">
-                                                                {p.schedule_type.replace(/_/g, " ")}
-                                                            </Badge>
-                                                        </TableCell>
-                                                        <TableCell className="text-sm">
-                                                            {p.due_day_of_month ?? "—"}
-                                                        </TableCell>
-                                                        <TableCell className="text-sm text-muted-foreground">
-                                                            {formatDate(p.effective_from)}
-                                                        </TableCell>
-                                                        <TableCell className="text-sm text-muted-foreground">
-                                                            {formatDate(p.effective_to)}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <StatusBadge status={p.status} />
-                                                        </TableCell>
-                                                            <TableCell>
-                                                                <div className="flex items-center gap-1">
-                                                                    {/* Treasurer: Sign & open for member signatures (only on draft) */}
-                                                                    {canManage && p.status === "draft" && (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8 text-chart-2 hover:text-chart-2"
-                                                                            onClick={() => openForSigning("deposit", p.policy_id)}
-                                                                            disabled={submitting}
-                                                                            title="Sign & open for signing"
-                                                                            aria-label="Sign and open for signing"
-                                                                        >
-                                                                            <Send className="h-3.5 w-3.5" />
-                                                                        </Button>
-                                                                    )}
-                                                                    {/* Signatures: anyone can view; members sign or reject while open */}
-                                                                    {(p.status === "finalized" || p.status === "active" || p.status === "void") && (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8 text-chart-2 hover:text-chart-2"
-                                                                            onClick={() => setSigningTarget({ type: "deposit", id: p.policy_id, label: `Deposit policy (${formatAmount(p.amount_paisa)})` })}
-                                                                            title="Signatures"
-                                                                            aria-label="Signatures"
-                                                                        >
-                                                                            <PenLine className="h-3.5 w-3.5" />
-                                                                        </Button>
-                                                                    )}
-                                                                    {/* Treasurer: Edit (only draft) */}
-                                                                    {canManage && p.status === "draft" && (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8"
-                                                                            onClick={() => openDepositEdit(p)}
-                                                                            aria-label="Edit"
-                                                                        >
-                                                                            <Pencil className="h-3.5 w-3.5" />
-                                                                        </Button>
-                                                                    )}
-                                                                    {/* Treasurer: Delete (only draft) */}
-                                                                    {canManage && p.status === "draft" && (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8 text-destructive hover:text-destructive"
-                                                                            onClick={() => setDeleteConfirm({ type: "deposit", id: p.policy_id })}
-                                                                            aria-label="Delete"
-                                                                        >
-                                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                                        </Button>
-                                                                    )}
-                                                                </div>
-                                                            </TableCell>
-                                                    </TableRow>
-                                                ))
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* ═══════ LOAN POLICIES TAB ═══════ */}
-                <TabsContent value="loan" className="mt-4">
-                    <Card>
-                        <CardHeader className="pb-4">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <CardTitle className="text-sm font-semibold">Loan Policies</CardTitle>
-                                    <CardDescription className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                                        <Badge variant="outline" className="gap-1 text-xs">{loanPolicies.length} Total</Badge>
-                                        {loanActive > 0 && <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-xs text-success"><CheckCircle2 className="h-3 w-3" />{loanActive} Active</Badge>}
-                                        {loanFinalized > 0 && <Badge variant="outline" className="gap-1 border-chart-2/30 bg-chart-2/10 text-xs text-chart-2"><FileCheck className="h-3 w-3" />{loanFinalized} Under Review</Badge>}
-                                        {loanDraft > 0 && <Badge variant="outline" className="gap-1 border-warning/30 bg-warning/10 text-xs text-warning"><Clock className="h-3 w-3" />{loanDraft} Draft</Badge>}
-                                    </CardDescription>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                        <Input
-                                            placeholder="Search..."
-                                            value={searchQuery}
-                                            onChange={(e) => setSearchQuery(e.target.value)}
-                                            className="h-9 w-48 pl-9 text-sm"
-                                        />
-                                    </div>
-                                    {canManage && (
-                                        <Button size="sm" onClick={openLoanCreate}>
-                                            <Plus className="mr-1.5 h-4 w-4" />
-                                            Add
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="overflow-x-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead className="text-xs">Loan Range</TableHead>
-                                            <TableHead className="text-xs">Interest %</TableHead>
-                                            <TableHead className="text-xs">Grace Days</TableHead>
-                                            <TableHead className="text-xs">Max Renewals</TableHead>
-                                            <TableHead className="text-xs">Collateral</TableHead>
-                                            <TableHead className="text-xs">EMI</TableHead>
-                                            <TableHead className="text-xs">Effective</TableHead>
-                                            <TableHead className="text-xs">Status</TableHead>
-                                            <TableHead className="w-24 text-xs">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {loanPolicies.length === 0 ? (
-                                            <TableRow>
-                                                <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
-                                                    No loan policies found.
-                                                </TableCell>
-                                            </TableRow>
-                                        ) : (
-                                            loanPolicies
-                                                .filter((p) => {
-                                                    if (!searchQuery) return true
-                                                    const q = searchQuery.toLowerCase()
-                                                    return (
-                                                        p.status.toLowerCase().includes(q) ||
-                                                        formatDecimalAmount(p.min_loan_amount).toLowerCase().includes(q) ||
-                                                        formatDecimalAmount(p.max_loan_amount).toLowerCase().includes(q)
-                                                    )
-                                                })
-                                                .map((p) => (
-                                                    <TableRow key={p.policy_id}>
-                                                        <TableCell className="text-sm">
-                                                            <span className="font-mono font-semibold">
-                                                                {formatDecimalAmount(p.min_loan_amount)}
-                                                            </span>
-                                                            <span className="mx-1 text-muted-foreground">–</span>
-                                                            <span className="font-mono font-semibold">
-                                                                {formatDecimalAmount(p.max_loan_amount)}
-                                                            </span>
-                                                        </TableCell>
-                                                        <TableCell className="font-mono text-sm font-semibold">
-                                                            {Number(p.interest_rate)}%
-                                                        </TableCell>
-                                                        <TableCell className="text-sm">{p.grace_period_days ?? 0}</TableCell>
-                                                        <TableCell className="text-sm">{p.max_renewals ?? 0}</TableCell>
-                                                        <TableCell>
-                                                            <Badge variant={p.requires_collateral ? "default" : "secondary"} className="text-xs">
-                                                                {p.requires_collateral ? "Required" : "No"}
-                                                            </Badge>
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <Badge variant={p.emi_applicable ? "default" : "secondary"} className="text-xs">
-                                                                {p.emi_applicable ? "Yes" : "No"}
-                                                            </Badge>
-                                                        </TableCell>
-                                                        <TableCell className="text-sm text-muted-foreground">
-                                                            {formatDate(p.effective_from)}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            <StatusBadge status={p.status} />
-                                                        </TableCell>
-                                                            <TableCell>
-                                                                <div className="flex items-center gap-1">
-                                                                    {/* Treasurer: Sign & open for member signatures (only on draft) */}
-                                                                    {canManage && p.status === "draft" && (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8 text-chart-2 hover:text-chart-2"
-                                                                            onClick={() => openForSigning("loan", p.policy_id)}
-                                                                            disabled={submitting}
-                                                                            title="Sign & open for signing"
-                                                                            aria-label="Sign and open for signing"
-                                                                        >
-                                                                            <Send className="h-3.5 w-3.5" />
-                                                                        </Button>
-                                                                    )}
-                                                                    {/* Signatures: anyone can view; members sign or reject while open */}
-                                                                    {(p.status === "finalized" || p.status === "active" || p.status === "void") && (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8 text-chart-2 hover:text-chart-2"
-                                                                            onClick={() => setSigningTarget({ type: "loan", id: p.policy_id, label: `Loan policy (${formatDecimalAmount(p.min_loan_amount)}–${formatDecimalAmount(p.max_loan_amount)}, ${p.interest_rate}%)` })}
-                                                                            title="Signatures"
-                                                                            aria-label="Signatures"
-                                                                        >
-                                                                            <PenLine className="h-3.5 w-3.5" />
-                                                                        </Button>
-                                                                    )}
-                                                                    {/* Treasurer: Edit (only draft) */}
-                                                                    {canManage && p.status === "draft" && (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8"
-                                                                            onClick={() => openLoanEdit(p)}
-                                                                            aria-label="Edit"
-                                                                        >
-                                                                            <Pencil className="h-3.5 w-3.5" />
-                                                                        </Button>
-                                                                    )}
-                                                                    {/* Treasurer: Delete (only draft) */}
-                                                                    {canManage && p.status === "draft" && (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8 text-destructive hover:text-destructive"
-                                                                            onClick={() => setDeleteConfirm({ type: "loan", id: p.policy_id })}
-                                                                            aria-label="Delete"
-                                                                        >
-                                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                                        </Button>
-                                                                    )}
-                                                                </div>
-                                                            </TableCell>
-                                                    </TableRow>
-                                                ))
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
+            <PolicyBoard
+                deposit={depositPolicies}
+                loan={loanPolicies}
+                canManage={!!canManage}
+                reloadKey={boardReloadKey}
+                busy={submitting}
+                onOpenSignatures={setSigningTarget}
+                onOpenForSigning={openForSigning}
+                onEdit={(item) =>
+                    item.type === "deposit"
+                        ? openDepositEdit(item.policy as DepositPolicy)
+                        : openLoanEdit(item.policy as LoanPolicy)
+                }
+                onDelete={(type, id) => setDeleteConfirm({ type, id })}
+            />
 
             {/* ═══════ DEPOSIT POLICY DIALOG ═══════ */}
             <Dialog open={depositDialogOpen} onOpenChange={setDepositDialogOpen}>

@@ -838,3 +838,75 @@ echo "password" > secrets/pgadmin_password.txt"
   - New `COOPERATIVE_TIMEZONE=Asia/Kathmandu` setting and `utils/local_time.py` (`LOCAL_TZ`, `to_local`, `format_local`).
   - **Deposit due dates are now Nepal calendar days:** due "on the 10th" means until 23:59:59 NPT on the 10th (= 18:14:59 UTC). Before, it was 23:59:59 *UTC*, i.e. 05:44 NPT on the 11th, so a deposit at 00:15 NPT on the 11th used to count as on time and is now late. The month boundary and `days_until_due` follow the Nepal day too. This only affects newly calculated due dates.
   - Email/notification dates (policy signing deadline) are written in NPT. OCR uses the same shared `LOCAL_TZ` (receipts show Nepal time); accuracy unchanged at 13/13.
+
+### 20. UI/UX overhaul
+Checked visually with headless screenshots (Playwright/Chromium in a throwaway container, desktop 1440 px and phone 390 px, as member, treasurer and admin demo accounts).
+- **Real dashboards** (they showed hard-coded mock data, in **USD**):
+  - `GET /dashboard/me` gives the member Home: savings, next deposit due (NPT) and whether it's paid, loan with repayment progress, a 12-month savings and repayments history, recent activity, and a **"Needs your attention"** list. That list covers policies to sign plus, for office bearers, deposits, loans, payments and proxy requests waiting for them, using the same duty rules as the endpoints and linking straight to the task.
+  - `GET /dashboard/admin` gives the admin Overview: members (incl. pending approvals), total savings, loans outstanding, items with office bearers, open policies with signing progress, 12-month trends, recent registrations.
+  - `GET /dashboard/activity`: the **admin Activity tab was broken** (it fetched a non-existent URL and showed a JSON parse error). It now has a real log derived from existing records (registrations, approvals, deposits, loans, payments, policy signatures), filterable, searchable and grouped by Nepal day.
+- **Global look:**
+  - Tailwind v4 drew every `border` in `currentColor` (near-black) because the base layer never mapped it to `--border`; fixed once in `index.css`.
+  - Amounts use Inter with tabular figures instead of monospace.
+  - Shared `lib/money.ts` (Rs. 1,00,000 grouping; compact K/L/Cr chart axes).
+- **Feedback:**
+  - All 10 `alert`/`confirm`/`prompt` replaced by a styled `useConfirm()` dialog (destructive variant, optional note field) and Sonner toasts.
+  - Suspending a member now asks for confirmation (it signs them out everywhere).
+  - Skeleton loaders, empty states and error-with-retry on the dashboards.
+- **Fixed along the way:**
+  - `?subtab=` links never worked (wouter's `useLocation()` has no query string); now `useSearch()`.
+  - Policy cards said "Due day 31" for every schedule, including occasional ones; they now show "Due on day N each month" / "Within N months".
+  - Deposit policy creation now validates the schedule (monthly needs a due day 1–31, occasional needs months). Deposits under an existing misconfigured policy get a clear 400 instead of a crash.
+  - `DepositPolicyCreate.effective_from` defaulted to the *server start time* (evaluated at import); now per request.
+  - Admin user list lacked `joined_at` ("—" join dates).
+  - Loan and receipt-duplicate labels show the loan amount or member name instead of UUID fragments. The sidebar shows the member's office instead of a fake "COOP-xxxx" ID.
+- **Removed fake settings:** a "Two-Factor Authentication" switch (no 2FA exists), "Login notifications", per-topic notification toggles, and a language (French/Spanish/Portuguese) and currency (USD/GBP) picker with a Save button that did nothing. Replaced by an honest list of what members are notified about and read-only regional settings (Rs., English AD dates, NPT). The dead "Add Member" button is gone (members register; admins approve).
+- **Mobile:**
+  - Bottom navigation bar on phones (Home, Deposit, Loans, Policies, Settings).
+  - Tab bars scroll instead of overlapping.
+  - Deposit tables and the admin member list become stacked cards on phones; the toolbars stack.
+  - The dashboard KPIs are a 2×2 grid.
+- **Demo data:** demo accounts (`demo.*@example.com`) were seeded in the dev DB for screenshots and have since been removed, along with the screenshot container, its browser cache and the screenshots.
+
+### 21. Loan calculator redesign
+- **Before:** a small side card with two empty inputs and a "Calculate" button that called the backend, showing four numbers.
+- **Now** (`components/member/LoanCalculator.tsx`, maths in `lib/loanMath.ts`), at the top of the Apply tab:
+  - Defaults to the **most recent active loan policy** (`latestPolicy()`, also the application form's default). Other active policies are one tap away as chips ("Rs 50K–1L · 1% p.a." with a "Latest" tag).
+  - Amount: slider limited to the policy's min–max, plus an exact-amount field. Term: 1–60 month slider, quick picks (6 months, 1/2/3 years) and an exact field up to 120 months.
+  - **Live results**, no button: monthly instalment (principal + interest), monthly interest, total interest, total to repay, a principal-vs-interest bar, the payoff date if disbursed today, the grace period and a collateral note.
+  - Full month-by-month **repayment schedule** (principal, interest, payment, still owed).
+  - Policies with `emi_applicable` also offer a reducing-balance EMI option.
+  - **"Apply with these numbers"** fills the application form below (policy, amount, term), scrolls to it and confirms with a toast.
+- **Accuracy:** the simple-interest maths mirrors the backend (`POST /loans/calculator`: `amount × rate% ÷ 12` per month on the full amount). Checked identical to the paisa on 6 cases incl. 12.5% and 8.75%; EMI checked against the textbook value (Rs 1,00,000 @ 12% × 12 = Rs 8,884.88).
+- **Open question:** the policy's `interest_rate` is treated as **per year** everywhere (backend calculator, "% p.a." labels). Both current policies are "1", i.e. 1% per year, which is unusually low. If the committee means 1% **per month**, the stored rates or the interpretation need changing.
+
+### 22. Deposit and Policies tabs redesign
+- **Policies** (`components/policies/PolicyBoard.tsx`; `MemberPoliciesTab` went from 1,097 to 690 lines): the spreadsheet tables and count cards are replaced by sections that answer what members need:
+  1. **Open for signing** goes first, as spotlight cards: plain-language terms, "2 of 9 members signed · 1 rejected", a deadline countdown, *your* status ("You haven't signed yet" / "You signed" / "You rejected") and a clear **Review & sign** button. The old pencil-style "Signatures" icon looked like "edit".
+  2. **In force:** active policies as readable cards ("Rs. 500 every month · due on day 31 · late fine 2.5%", "Loans of Rs. 50,000 – Rs. 1,00,000 · 1% interest per year · 150 days' grace"). Policies adopted before member signing say so instead of showing "0 of 0 signed". **Active policies whose end date has passed are flagged** (two such: Rs. 500 ended 1 Jun 2026, Rs. 10,000 ended 25 Mar 2026). They still accept deposits; the Treasurer should review them.
+  3. **Drafts** (Treasurer only): Edit, Delete and **Sign & open** in one row.
+  4. **Not adopted or ended:** collapsed, with Revise for the Treasurer.
+  - A single All / Deposit / Loan filter. The create/edit/delete dialogs and signing/proxy dialogs are unchanged.
+- **Deposits** (`DepositTab`):
+  - A **this-period banner**: "Rs. 500 due by 30 Nov · 18 days left", or "This period's deposit is in" (from `/dashboard/me`).
+  - A **step indicator** (Policy → Voucher → Check & split → Submit) that follows progress.
+  - Policy facts on one line instead of disabled "Policy Amount"/"Late Fine" inputs.
+  - The right column now explains **how deposits work** (pay, upload, split, Treasurer verifies, voucher kept 15 days) instead of repeating the policy dropdown as cards.
+  - The upload accepts `image/*` types, so phones offer the camera; the text says "Tap to take a photo or choose a screenshot" on phones.
+  - **My Deposits** opens with a verified / awaiting / rejected summary (amounts and counts). Tables show dates, not times.
+  - **Review:** member initials and name, a large amount, paid vs due date, and an **On time / Late** badge.
+  - The page title says "Deposits" on every sub-tab (it said "Make Deposit").
+- Checked with temporary headless screenshots (desktop and phone, member and treasurer); the demo data and screenshot tooling were removed afterwards.
+
+### 23. Deposits follow the single current policy; one loan policy choice
+- **Decision:** deposits strictly use the **most current active deposit policy**.
+- **Rule** (`services/policy_lifecycle.py`): a policy is *in force* when it is ACTIVE, has started and hasn't ended. The **current deposit policy** is the in-force one with the latest `effective_from`. Other in-force deposit policies are **superseded**.
+  - `require_current_deposit_policy()` is used by the regular deposit, the smart deposit and the preview. A deposit naming any other policy is refused ("Deposits must use the current deposit policy (Rs. 5,000)").
+  - `GET /policies/deposit/current` returns it.
+  - The Home "next deposit due" uses it (it used the member's last policy).
+  - `expire_ended_policies()` marks ACTIVE policies whose `effective_to` has passed as **EXPIRED**, hourly (in the `close_policy_signings` job) and on every current-policy lookup.
+- **Effect on the dev data:** the Rs. 500 monthly (ended 1 Jun 2026) and Rs. 10,000 occasional (ended 25 Mar 2026) policies are now EXPIRED. **The current deposit policy is Rs. 5,000 monthly** (from 2 Jan 2026 NPT). Rs. 20,000 monthly (from 1 Jan 2026) is still marked active but superseded. Before this, the deposit form defaulted to the ended Rs. 500 policy.
+- **Frontend:**
+  - The Deposit tab has no policy picker any more; it shows the current policy as fixed facts, or a warning that deposits can't be made if none is in force.
+  - The Policies board marks the deposit policies **Current** / **Superseded**; expired ones move to "Not adopted or ended".
+- **Loans:** the calculator and the application form had separate policy choices (chips vs dropdown) that could disagree. There's now **one "Choose a loan policy" step** at the top of the Apply tab (cards, latest first). The calculator is based on that policy, and the form shows it instead of its own dropdown.

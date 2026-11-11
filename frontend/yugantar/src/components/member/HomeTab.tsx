@@ -1,250 +1,437 @@
-import { TrendingUp, TrendingDown, Wallet, CreditCard, PiggyBank, BarChart3 } from "lucide-react"
+import { useEffect, useState } from "react"
+import { useLocation } from "wouter"
+import {
+  AlertCircle,
+  ArrowRight,
+  BadgeCheck,
+  CalendarClock,
+  CheckCircle2,
+  Clock,
+  CreditCard,
+  FileSignature,
+  Landmark,
+  PhoneCall,
+  PiggyBank,
+  RefreshCw,
+  Wallet,
+} from "lucide-react"
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { kpiData, externalInvestments, activeLoan, savingsChartData, loanRepaymentChart } from "@/lib/data"
-// TODO: Replace mock data imports above with real API calls once backend endpoints are available:
-// - GET /api/v1/member/dashboard/kpis (kpiData)
-// - GET /api/v1/member/investments (externalInvestments)
-// - GET /api/v1/loans/active (activeLoan)
-// - GET /api/v1/member/savings-chart (savingsChartData)
-// - GET /api/v1/member/loan-repayment-chart (loanRepaymentChart)
-import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
+import { Skeleton } from "@/components/ui/skeleton"
+import { apiClient } from "@/api/api"
+import { formatDate, TIME_ZONE_LABEL } from "@/lib/datetime"
+import { formatRs, formatRsCompact, monthLabel } from "@/lib/money"
 
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(value)
+// ─── API shape (GET /dashboard/me) ───────────────────────────────────────────
+
+type Num = number | string
+
+interface ActionItem {
+  kind: "sign_policy" | "review_deposits" | "review_loans" | "review_payments" | "authorise_proxy" | "pending_deposit"
+  title: string
+  detail: string
+  count: number
+  link: string
+  urgent: boolean
 }
 
-function KpiCard({
-  title,
+interface MemberDashboard {
+  first_name: string
+  savings_total: Num
+  deposits_count: number
+  pending_amount: Num
+  pending_count: number
+  fines_total: Num
+  next_due: { due_date: string; amount: Num; policy_label: string; paid: boolean; days_left: number } | null
+  loan: {
+    status: string
+    purpose: string | null
+    principal: Num
+    principal_paid: Num
+    interest_paid: Num
+    outstanding: Num
+    progress_pct: number
+    interest_rate: Num
+    start_date: string
+    maturity_date: string
+    payments: number
+  } | null
+  loan_application_pending: boolean
+  monthly: { month: string; deposited: Num; cumulative: Num; repaid: Num }[]
+  actions: ActionItem[]
+  recent: { date: string; kind: "deposit" | "loan_payment"; description: string; amount: Num; status: string }[]
+}
+
+const ACTION_ICON: Record<ActionItem["kind"], typeof FileSignature> = {
+  sign_policy: FileSignature,
+  review_deposits: Landmark,
+  review_loans: CreditCard,
+  review_payments: Wallet,
+  authorise_proxy: PhoneCall,
+  pending_deposit: Clock,
+}
+
+const todayLabel = () =>
+  new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Kathmandu" }).format(new Date())
+
+// ─── Small building blocks ───────────────────────────────────────────────────
+
+function Kpi({
+  label,
   value,
-  change,
+  hint,
   icon: Icon,
-  subtitle,
+  tone = "primary",
+  children,
 }: {
-  title: string
+  label: string
   value: string
-  change?: number
-  icon: React.ElementType
-  subtitle?: string
+  hint?: React.ReactNode
+  icon: typeof Wallet
+  tone?: "primary" | "warning" | "success" | "muted"
+  children?: React.ReactNode
 }) {
+  const toneClass = {
+    primary: "bg-primary/10 text-primary",
+    warning: "bg-warning/15 text-warning-foreground dark:text-warning",
+    success: "bg-success/10 text-success",
+    muted: "bg-muted text-muted-foreground",
+  }[tone]
   return (
-    <Card>
-      <CardContent className="flex items-start justify-between p-5">
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-medium text-muted-foreground">{title}</p>
-          <p className="font-nums text-2xl font-bold tracking-tight text-foreground">{value}</p>
-          {change !== undefined && (
-            <div className="flex items-center gap-1">
-              {change >= 0 ? (
-                <TrendingUp className="h-3 w-3 text-success" />
-              ) : (
-                <TrendingDown className="h-3 w-3 text-destructive" />
-              )}
-              <span className={`font-nums text-xs font-medium ${change >= 0 ? "text-success" : "text-destructive"}`}>
-                {change >= 0 ? "+" : ""}{change}%
-              </span>
-            </div>
-          )}
-          {subtitle && <p className="text-[11px] text-muted-foreground">{subtitle}</p>}
+    <Card className="overflow-hidden">
+      <CardContent className="flex flex-col gap-3 p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-medium text-muted-foreground">{label}</p>
+          <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${toneClass}`}>
+            <Icon className="h-4 w-4" />
+          </span>
         </div>
-        <div className="rounded-lg bg-accent p-2.5">
-          <Icon className="h-5 w-5 text-accent-foreground" />
-        </div>
+        <p className="font-nums text-xl font-semibold tracking-tight text-foreground sm:text-2xl">{value}</p>
+        {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
+        {children}
       </CardContent>
     </Card>
   )
 }
 
+function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div className="rounded-lg border bg-popover px-3 py-2 text-xs shadow-md">
+      <p className="mb-1 font-medium">{label ? monthLabel(label, true) : ""}</p>
+      {payload.map((p) => (
+        <p key={p.name} className="flex items-center gap-2">
+          <span className="h-2 w-2 rounded-full" style={{ background: p.color }} />
+          <span className="text-muted-foreground">{p.name}</span>
+          <span className="ml-auto font-nums font-medium">{formatRs(p.value)}</span>
+        </p>
+      ))}
+    </div>
+  )
+}
+
+function HomeSkeleton() {
+  return (
+    <div className="flex flex-col gap-6">
+      <Skeleton className="h-8 w-56" />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-32 rounded-xl" />
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-5">
+        <Skeleton className="h-72 rounded-xl lg:col-span-3" />
+        <Skeleton className="h-72 rounded-xl lg:col-span-2" />
+      </div>
+    </div>
+  )
+}
+
+// ─── Home ────────────────────────────────────────────────────────────────────
+
 export function HomeTab() {
-  const loanProgress = ((activeLoan.totalPaid / activeLoan.amount) * 100)
+  const [, navigate] = useLocation()
+  const [data, setData] = useState<MemberDashboard | null>(null)
+  const [error, setError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    apiClient
+      .get("/dashboard/me")
+      .then((res) => !cancelled && setData(res.data as MemberDashboard))
+      .catch(() => !cancelled && setError(true))
+    return () => {
+      cancelled = true
+    }
+  }, [reloadKey])
+
+  const load = () => {
+    setError(false)
+    setReloadKey((k) => k + 1)
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+          <AlertCircle className="h-8 w-8 text-destructive" />
+          <p className="text-sm">Couldn't load your dashboard.</p>
+          <Button variant="outline" size="sm" onClick={load}>
+            <RefreshCw className="mr-2 h-4 w-4" />
+            Try again
+          </Button>
+        </CardContent>
+      </Card>
+    )
+  }
+  if (!data) return <HomeSkeleton />
+
+  const chart = data.monthly.map((m) => ({
+    month: m.month,
+    savings: Number(m.cumulative),
+    deposited: Number(m.deposited),
+    repaid: Number(m.repaid),
+  }))
+  const due = data.next_due
+  const loan = data.loan
 
   return (
     <div className="flex flex-col gap-6">
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          title="Total Savings"
-          value={formatCurrency(kpiData.totalSavings)}
-          change={kpiData.savingsGrowth}
-          icon={Wallet}
-        />
-        <KpiCard
-          title="Active Loan"
-          value={formatCurrency(kpiData.loanRemaining)}
-          icon={CreditCard}
-          subtitle={`${formatCurrency(kpiData.monthlyPayment)}/mo payment`}
-        />
-        <KpiCard
-          title="Dividends Earned"
-          value={formatCurrency(kpiData.dividendEarned)}
-          change={kpiData.dividendRate}
+      {/* Greeting */}
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight text-foreground">Namaste, {data.first_name}</h2>
+        <p className="text-sm text-muted-foreground">
+          {todayLabel()} · {TIME_ZONE_LABEL}
+        </p>
+      </div>
+
+      {/* Action needed */}
+      {data.actions.length > 0 && (
+        <Card className="border-primary/30 bg-gradient-to-br from-primary/[0.06] to-transparent">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              </span>
+              Needs your attention
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col divide-y">
+            {data.actions.map((a, i) => {
+              const Icon = ACTION_ICON[a.kind]
+              return (
+                <button
+                  key={`${a.kind}-${i}`}
+                  type="button"
+                  onClick={() => navigate(a.link)}
+                  className="group flex items-center gap-3 py-3 text-left first:pt-1 last:pb-1"
+                >
+                  <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${a.urgent ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                    <Icon className="h-4 w-4" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium text-foreground">{a.title}</span>
+                    <span className="block text-xs text-muted-foreground">{a.detail}</span>
+                  </span>
+                  <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+                </button>
+              )
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+        <Kpi
+          label="My savings"
+          value={formatRs(data.savings_total)}
           icon={PiggyBank}
+          hint={`${data.deposits_count} verified deposit${data.deposits_count === 1 ? "" : "s"}`}
         />
-        <KpiCard
-          title="Total Investments"
-          value={formatCurrency(kpiData.totalInvestments)}
-          change={kpiData.investmentReturn}
-          icon={BarChart3}
+        <Kpi
+          label="Next deposit"
+          value={due ? formatRs(due.amount) : "—"}
+          icon={CalendarClock}
+          tone={due && !due.paid && due.days_left <= 3 ? "warning" : due?.paid ? "success" : "primary"}
+          hint={
+            due ? (
+              due.paid ? (
+                <span className="inline-flex items-center gap-1 text-success">
+                  <CheckCircle2 className="h-3 w-3" /> Paid for {formatDate(due.due_date)}
+                </span>
+              ) : (
+                <>Due {formatDate(due.due_date)} · {due.days_left <= 0 ? "today" : `${due.days_left} day${due.days_left === 1 ? "" : "s"} left`}</>
+              )
+            ) : (
+              "No active deposit policy"
+            )
+          }
+        />
+        <Kpi
+          label="Loan outstanding"
+          value={loan ? formatRs(loan.outstanding) : "—"}
+          icon={CreditCard}
+          tone={loan ? "primary" : "muted"}
+          hint={loan ? `of ${formatRs(loan.principal)} · ${loan.progress_pct}% repaid` : data.loan_application_pending ? "Application under review" : "No active loan"}
+        >
+          {loan && <Progress value={loan.progress_pct} className="h-1.5" />}
+        </Kpi>
+        <Kpi
+          label="Awaiting verification"
+          value={formatRs(data.pending_amount)}
+          icon={Clock}
+          tone={data.pending_count ? "warning" : "muted"}
+          hint={
+            data.pending_count
+              ? `${data.pending_count} deposit${data.pending_count === 1 ? "" : "s"} with the Treasurer`
+              : Number(data.fines_total) > 0
+                ? `Fines so far: ${formatRs(data.fines_total)}`
+                : "Nothing pending"
+          }
         />
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Savings Growth Chart */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Savings Growth</CardTitle>
-            <CardDescription>Last 6 months</CardDescription>
-          </CardHeader>
-          <CardContent className="pb-4">
-            <div className="h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={savingsChartData}>
-                  <defs>
-                    <linearGradient id="savingsGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="hsl(var(--chart-1))" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                      color: "hsl(var(--foreground))",
-                    }}
-                    formatter={(value: number) => [formatCurrency(value), "Savings"]}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="amount"
-                    stroke="hsl(var(--chart-1))"
-                    strokeWidth={2}
-                    fill="url(#savingsGradient)"
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Loan Repayment Chart */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Loan Repayment</CardTitle>
-            <CardDescription>Monthly payments vs remaining balance</CardDescription>
-          </CardHeader>
-          <CardContent className="pb-4">
-            <div className="h-52">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={loanRepaymentChart}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis tick={{ fontSize: 12 }} stroke="hsl(var(--muted-foreground))" tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                      color: "hsl(var(--foreground))",
-                    }}
-                    formatter={(value: number) => [formatCurrency(value)]}
-                  />
-                  <Bar dataKey="paid" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} name="Paid" />
-                  <Bar dataKey="remaining" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} name="Remaining" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Active Loan + Investments Row */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        {/* Active Loan Details */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold">Active Loan</CardTitle>
-              <Badge variant="outline" className="border-success/30 bg-success/10 text-success text-xs">
-                Current
-              </Badge>
-            </div>
-            <CardDescription>{activeLoan.id} - {activeLoan.purpose}</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-4">
-            <div className="flex items-end justify-between">
-              <div>
-                <p className="text-xs text-muted-foreground">Loan Amount</p>
-                <p className="font-nums text-xl font-bold text-foreground">{formatCurrency(activeLoan.amount)}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-muted-foreground">Interest Rate</p>
-                <p className="font-nums text-lg font-semibold text-foreground">{activeLoan.interestRate}%</p>
-              </div>
-            </div>
-
-            <div>
-              <div className="mb-1.5 flex justify-between text-xs">
-                <span className="text-muted-foreground">Repayment Progress</span>
-                <span className="font-nums font-medium text-foreground">{loanProgress.toFixed(0)}%</span>
-              </div>
-              <Progress value={loanProgress} className="h-2" />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 rounded-lg bg-muted/50 p-3">
-              <div>
-                <p className="text-[11px] text-muted-foreground">Total Paid</p>
-                <p className="font-nums text-sm font-semibold text-foreground">{formatCurrency(activeLoan.totalPaid)}</p>
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground">Remaining</p>
-                <p className="font-nums text-sm font-semibold text-foreground">{formatCurrency(activeLoan.remaining)}</p>
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground">Monthly Payment</p>
-                <p className="font-nums text-sm font-semibold text-foreground">{formatCurrency(activeLoan.monthlyPayment)}</p>
-              </div>
-              <div>
-                <p className="text-[11px] text-muted-foreground">Next Due</p>
-                <p className="font-nums text-sm font-semibold text-foreground">{kpiData.nextPaymentDate}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* External Investments */}
+      {/* Charts */}
+      <div className="grid gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">External Investments</CardTitle>
-            <CardDescription>Cooperative investment portfolio</CardDescription>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">Savings growth</CardTitle>
+            <CardDescription>Your verified savings over the last 12 months</CardDescription>
+          </CardHeader>
+          <CardContent className="h-64 pl-0 sm:h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chart} margin={{ top: 8, right: 16, left: 4, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="savingsFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--chart-1))" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="hsl(var(--chart-1))" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
+                <XAxis dataKey="month" tickFormatter={(m) => monthLabel(m)} tickLine={false} axisLine={false} fontSize={11} interval="preserveStartEnd" />
+                <YAxis tickFormatter={formatRsCompact} tickLine={false} axisLine={false} fontSize={11} width={64} />
+                <Tooltip content={<ChartTooltip />} />
+                <Area type="monotone" dataKey="savings" name="Savings" stroke="hsl(var(--chart-1))" strokeWidth={2} fill="url(#savingsFill)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-semibold">Money in each month</CardTitle>
+            <CardDescription>Deposits and loan repayments</CardDescription>
+          </CardHeader>
+          <CardContent className="h-64 pl-0 sm:h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chart.slice(-6)} margin={{ top: 8, right: 16, left: 4, bottom: 0 }} barGap={2}>
+                <CartesianGrid vertical={false} stroke="hsl(var(--border))" />
+                <XAxis dataKey="month" tickFormatter={(m) => monthLabel(m)} tickLine={false} axisLine={false} fontSize={11} />
+                <YAxis tickFormatter={formatRsCompact} tickLine={false} axisLine={false} fontSize={11} width={64} />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: "hsl(var(--muted))" }} />
+                <Bar dataKey="deposited" name="Deposits" fill="hsl(var(--chart-1))" radius={[4, 4, 0, 0]} maxBarSize={18} />
+                <Bar dataKey="repaid" name="Loan repayments" fill="hsl(var(--chart-2))" radius={[4, 4, 0, 0]} maxBarSize={18} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Loan + recent activity */}
+      <div className="grid gap-4 lg:grid-cols-5">
+        <Card className="lg:col-span-3">
+          <CardHeader className="flex-row items-start justify-between space-y-0 pb-3">
+            <div>
+              <CardTitle className="text-sm font-semibold">My loan</CardTitle>
+              <CardDescription>{loan ? loan.purpose ?? "Loan" : "You don't have an active loan"}</CardDescription>
+            </div>
+            {loan && (
+              <Badge variant="outline" className="border-success/30 bg-success/10 capitalize text-success">
+                {loan.status}
+              </Badge>
+            )}
           </CardHeader>
           <CardContent>
-            <div className="flex flex-col gap-3">
-              {externalInvestments.map((inv) => (
-                <div key={inv.id} className="flex items-center justify-between rounded-lg border bg-card p-4 transition-colors hover:bg-muted/30">
-                  <div className="flex flex-col gap-0.5">
-                    <p className="text-sm font-medium text-foreground">{inv.name}</p>
-                    <p className="text-xs text-muted-foreground">{inv.type}</p>
+            {loan ? (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <div className="mb-1.5 flex items-baseline justify-between text-sm">
+                    <span className="text-muted-foreground">Repaid</span>
+                    <span className="font-nums font-medium">
+                      {formatRs(loan.principal_paid)} <span className="text-muted-foreground">/ {formatRs(loan.principal)}</span>
+                    </span>
                   </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <p className="font-nums text-sm font-semibold text-foreground">{formatCurrency(inv.amount)}</p>
-                      <p className="text-xs text-muted-foreground">Invested</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-nums text-sm font-semibold text-success">+{inv.returnRate}%</p>
-                      <p className="text-xs text-muted-foreground">Return</p>
-                    </div>
-                    <Badge variant="outline" className="text-xs">{inv.status}</Badge>
-                  </div>
+                  <Progress value={loan.progress_pct} className="h-2" />
                 </div>
-              ))}
-            </div>
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
+                  {[
+                    ["Outstanding", formatRs(loan.outstanding)],
+                    ["Interest paid", formatRs(loan.interest_paid)],
+                    ["Rate", `${Number(loan.interest_rate)}% p.a.`],
+                    ["Matures", formatDate(loan.maturity_date)],
+                  ].map(([k, v]) => (
+                    <div key={k}>
+                      <dt className="text-xs text-muted-foreground">{k}</dt>
+                      <dd className="font-nums font-medium">{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            ) : (
+              <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed p-4">
+                <p className="text-sm text-muted-foreground">
+                  {data.loan_application_pending
+                    ? "Your loan application is being reviewed by the Treasurer and President."
+                    : "Need funds? You can apply for a loan under the active loan policy."}
+                </p>
+                <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/loans")}>
+                  {data.loan_application_pending ? "View application" : "Apply for a loan"}
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold">Recent activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data.recent.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">No deposits or payments yet.</p>
+            ) : (
+              <ul className="flex flex-col divide-y">
+                {data.recent.map((r, i) => (
+                  <li key={i} className="flex items-center gap-3 py-2.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+                      {r.kind === "deposit" ? <Landmark className="h-3.5 w-3.5" /> : <CreditCard className="h-3.5 w-3.5" />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm">{r.description}</span>
+                      <span className="block text-xs text-muted-foreground">{formatDate(r.date)}</span>
+                    </span>
+                    <span className="text-right">
+                      <span className="block font-nums text-sm font-medium">{formatRs(r.amount)}</span>
+                      <span
+                        className={`inline-flex items-center gap-1 text-[11px] capitalize ${
+                          r.status === "verified" ? "text-success" : r.status === "rejected" ? "text-destructive" : "text-warning-foreground dark:text-warning"
+                        }`}
+                      >
+                        {r.status === "verified" && <BadgeCheck className="h-3 w-3" />}
+                        {r.status}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </CardContent>
         </Card>
       </div>

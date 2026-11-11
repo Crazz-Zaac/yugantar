@@ -1,4 +1,5 @@
-from sqlmodel import SQLModel
+from pydantic import model_validator
+from sqlmodel import Field, SQLModel
 from datetime import datetime, timezone
 from typing import Optional
 from enum import Enum
@@ -23,10 +24,23 @@ class DepositPolicyCreate(SQLModel):
 
     status: PolicyStatus = PolicyStatus.DRAFT
 
-    effective_from: datetime = datetime.now(timezone.utc)
+    # default_factory: evaluated per request (a plain default would be fixed
+    # at server start-up)
+    effective_from: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     effective_to: Optional[datetime] = None
 
     created_by: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _schedule_is_complete(self):
+        """Each schedule needs its own setting, or due dates can't be computed."""
+        if self.schedule_type == DepositScheduleType.MONTHLY_FIXED_DAY:
+            if not self.due_day_of_month or not 1 <= self.due_day_of_month <= 31:
+                raise ValueError("A monthly policy needs a due day between 1 and 31.")
+        elif self.schedule_type == DepositScheduleType.OCCASIONAL:
+            if not self.allowed_months or self.allowed_months < 1:
+                raise ValueError("An occasional policy needs the number of months allowed (at least 1).")
+        return self
 
 
 # -----------------------------

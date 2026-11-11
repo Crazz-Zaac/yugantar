@@ -165,7 +165,14 @@ class ReceiptService:
             ).all()
             for dep, _ in rows:
                 found.setdefault(
-                    dep.id, ReceiptDuplicate(deposit_id=dep.id, user_id=dep.user_id, match=match)
+                    dep.id,
+                    ReceiptDuplicate(
+                        deposit_id=dep.id,
+                        user_id=dep.user_id,
+                        depositor_name=dep.depositor_name,
+                        deposited_date=dep.deposited_date,
+                        match=match,
+                    ),
                 )
         return list(found.values())
 

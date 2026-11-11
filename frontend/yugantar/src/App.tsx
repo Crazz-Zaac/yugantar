@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Toaster } from "@components/ui/sonner";
+import { ConfirmProvider } from "@/components/confirm/ConfirmProvider";
 import { TooltipProvider } from "@components/ui/tooltip";
 import NotFound from "@pages/NotFound";
 import { Route, Switch, useLocation, Redirect } from "wouter";
@@ -105,8 +106,10 @@ function App() {
       >
         <AuthProvider>
           <TooltipProvider>
-            <Toaster />
-            <Router />
+            <ConfirmProvider>
+              <Toaster richColors closeButton position="top-right" />
+              <Router />
+            </ConfirmProvider>
           </TooltipProvider>
         </AuthProvider>
       </ThemeProvider>

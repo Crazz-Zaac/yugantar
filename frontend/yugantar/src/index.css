@@ -136,6 +136,18 @@
 }
 
 /* ── Base styles ───────────────────────────────────────── */
+/* Tailwind v4 defaults border colour to currentColor (near-black text);
+   use the design token so cards, inputs and dividers get a soft border. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: hsl(var(--border));
+  }
+}
+
 body {
   font-family: 'Inter', sans-serif;
   background-color: hsl(var(--background));
@@ -147,7 +159,8 @@ body {
   text-wrap: balance;
 }
 
+/* Amounts: same typeface as the UI, with tabular figures so columns align */
 .font-nums {
-  font-family: 'JetBrains Mono', monospace;
-  font-feature-settings: "tnum" on, "lnum" on;
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums lining-nums;
 }

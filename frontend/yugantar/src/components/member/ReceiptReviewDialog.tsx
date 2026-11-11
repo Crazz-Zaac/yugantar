@@ -7,6 +7,8 @@ import { formatDateTime } from "@/lib/datetime"
 interface ReceiptDuplicate {
   deposit_id: string
   user_id: string
+  depositor_name: string | null
+  deposited_date: string | null
   match: "same_image" | "same_reference"
 }
 
@@ -99,8 +101,8 @@ export default function ReceiptReviewDialog({ receiptId, onClose }: Props) {
     for (const dup of details.duplicates) {
       warnings.push(
         dup.match === "same_image"
-          ? `The same image was used for another deposit (${dup.deposit_id.slice(0, 8)}…).`
-          : `The same bank reference appears on another deposit (${dup.deposit_id.slice(0, 8)}…).`,
+          ? `The same image was already used for ${dup.depositor_name ?? "another member"}'s deposit of ${formatDateTime(dup.deposited_date)}.`
+          : `The same bank reference appears on ${dup.depositor_name ?? "another member"}'s deposit of ${formatDateTime(dup.deposited_date)}.`,
       )
     }
   }

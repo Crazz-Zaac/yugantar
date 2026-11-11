@@ -170,6 +170,7 @@ class UserListResponse(SQLModel):
     is_verified: bool
     is_approved: bool = False
     disabled: bool
+    joined_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:

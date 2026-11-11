@@ -18,6 +18,7 @@ import {
   type SigningSummary,
   type SigningTarget,
 } from "./signing"
+import { useConfirm } from "@/components/confirm/confirmContext"
 
 interface Props {
   target: SigningTarget | null
@@ -67,6 +68,7 @@ function SignatureRow({ sig }: { sig: Signature }) {
 }
 
 export default function PolicySigningDialog({ target, onClose, onChanged, canWithdraw, canRequestProxy }: Props) {
+  const confirm = useConfirm()
   const [summary, setSummary] = useState<SigningSummary | null>(null)
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -131,8 +133,14 @@ export default function PolicySigningDialog({ target, onClose, onChanged, canWit
       decision === "approved" ? "You signed this policy." : "Your rejection was recorded.",
     ).then((ok) => ok && setRejecting(false))
 
-  const withdraw = () => {
-    if (!window.confirm("Move this policy back to draft to revise it? All signatures collected so far will be cleared.")) return
+  const withdraw = async () => {
+    const answer = await confirm({
+      title: "Move this policy back to draft?",
+      description: "All signatures collected so far will be cleared, and members will need to sign again once you reopen it.",
+      confirmLabel: "Move to draft",
+      destructive: true,
+    })
+    if (!answer.confirmed) return
     return run(() => apiClient.post(`${base}/withdraw`), "Policy moved back to draft for revision.")
   }
 

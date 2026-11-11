@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, Request, HTTPException, status, BackgroundTasks
 from sqlmodel import Session, select
 from uuid import UUID
@@ -13,6 +13,7 @@ from app.schemas.policy.deposit_policy_schema import (
     DepositPolicyResponse,
 )
 from app.services.deposit_policy_service import DepositPolicyService
+from app.services.policy_lifecycle import current_deposit_policy
 from app.api.dependencies.admin import get_current_policy_manager
 from app.api.dependencies.auth import get_current_user
 from app.models.user_model import User, CooperativeRole
@@ -40,6 +41,20 @@ def list_deposit_policies(
     statement = select(DepositPolicy)
     policies = session.exec(statement).all()
     return policies
+
+
+@router.get(
+    "/deposit/current",
+    response_model=Optional[DepositPolicyResponse],
+    status_code=status.HTTP_200_OK,
+)
+def get_current_deposit_policy(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """The deposit policy every deposit must use right now (null if none):
+    active, started, not ended, most recent start date."""
+    return current_deposit_policy(session)
 
 
 @router.post(

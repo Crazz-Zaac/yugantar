@@ -15,6 +15,8 @@ class ReceiptDuplicate(SQLModel):
 
     deposit_id: uuid.UUID
     user_id: uuid.UUID
+    depositor_name: Optional[str] = None
+    deposited_date: Optional[datetime] = None
     match: str  # "same_image" | "same_reference"
 
 

@@ -25,20 +25,7 @@ from app.models.loan_model import Loan
 from app.models.loan_payment import LoanPayment, LoanPaymentStatus
 from app.services.loan_payment_service import LoanPaymentService
 from app.services.duties import Duty, require_duty, denial_reason, may_perform_any
-
-
-def require_active_deposit_policy(session: Session, policy_id) -> DepositPolicy:
-    """Deposits are only accepted under a policy members have adopted (ACTIVE):
-    drafts, policies still being signed, and lapsed/void ones don't apply."""
-    policy = session.get(DepositPolicy, policy_id) if policy_id else None
-    if not policy:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deposit policy not found")
-    if policy.status != PolicyStatus.ACTIVE:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Deposits can only be made under an active deposit policy.",
-        )
-    return policy
+from app.services.policy_lifecycle import require_current_deposit_policy
 
 
 class DepositService:
@@ -60,7 +47,7 @@ class DepositService:
         deposit_in: DepositCreate,
         user_id: uuid.UUID,
     ) -> Deposit:
-        policy = require_active_deposit_policy(session, deposit_in.policy_id)
+        policy = require_current_deposit_policy(session, deposit_in.policy_id)
 
         now = datetime.now(timezone.utc)
         due_date = calculate_due_date(policy=policy, reference_date=now)

@@ -1,12 +1,10 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import {
   CreditCard,
   CheckCircle2,
   Clock,
   AlertTriangle,
   Send,
-  Calculator,
-  IndianRupee,
   Loader2,
   XCircle,
   ShieldCheck,
@@ -38,8 +36,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { apiClient } from "@/api/api"
-import { useLocation } from "wouter"
+import { useSearch } from "wouter"
 import { formatDate } from "@/lib/datetime"
+import { toast } from "sonner"
+import { apiError } from "@/components/policies/signing"
+import { LoanCalculator } from "./LoanCalculator"
+import { latestPolicy } from "@/lib/loanMath"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -91,14 +93,6 @@ interface LoanItem {
   is_own_application?: boolean | null
 }
 
-interface CalculatorResult {
-  principal_rupees: string
-  interest_rate: string
-  term_months: number
-  monthly_interest_rupees: string
-  total_interest_rupees: string
-  total_repayment_rupees: string
-}
 
 // Helpers
 
@@ -149,7 +143,7 @@ function StatusBadge({ status }: { status: LoanItem["status"] }) {
 
 export function LoansTab() {
   const { user } = useAuth()
-  const [location] = useLocation()
+  const search = useSearch()
 
   // ── Role checks ──────────────────────────────────────────────────────────
   const normalizedRoles = (user?.cooperative_roles ?? []).map((role) => String(role).toLowerCase())
@@ -164,8 +158,8 @@ export function LoansTab() {
   const [activeTab, setActiveTab] = useState("apply")
 
   useEffect(() => {
-    const query = location.split("?")[1] ?? ""
-    const params = new URLSearchParams(query)
+    // wouter's useLocation() is the path only; the query comes from useSearch()
+    const params = new URLSearchParams(search)
     const subtab = params.get("subtab")
     if (!subtab) return
 
@@ -176,7 +170,7 @@ export function LoansTab() {
     if (allowedTabs.includes(subtab)) {
       setActiveTab(subtab)
     }
-  }, [location, isReviewer])
+  }, [search, isReviewer])
 
   // Policies
   const [policies, setPolicies] = useState<LoanPolicy[]>([])
@@ -193,11 +187,8 @@ export function LoansTab() {
   const [applyError, setApplyError] = useState<string | null>(null)
   const [applySuccess, setApplySuccess] = useState(false)
 
-  // Calculator
-  const [calcAmount, setCalcAmount] = useState("")
-  const [calcTerm, setCalcTerm] = useState("")
-  const [calcResult, setCalcResult] = useState<CalculatorResult | null>(null)
-  const [calcLoading, setCalcLoading] = useState(false)
+  // The application form, so "Apply with these numbers" can scroll to it
+  const applyFormRef = useRef<HTMLDivElement>(null)
 
   // My loans
   const [myLoans, setMyLoans] = useState<LoanItem[]>([])
@@ -224,7 +215,7 @@ export function LoansTab() {
       const res = await apiClient.get("/policies/loan")
       const active = (res.data as LoanPolicy[]).filter((p) => p.status === "active")
       setPolicies(active)
-      if (active.length > 0) setSelectedPolicy(active[0])
+      if (active.length > 0) setSelectedPolicy(latestPolicy(active) ?? active[0])
     } catch {
       /* silent */
     } finally {
@@ -311,21 +302,15 @@ export function LoansTab() {
     }
   }
 
-  const handleCalculate = async () => {
-    if (!selectedPolicy || !calcAmount || !calcTerm) return
-    setCalcLoading(true)
-    try {
-      const res = await apiClient.post("/loans/calculator", {
-        principal_rupees: Number(calcAmount),
-        interest_rate: Number(selectedPolicy.interest_rate),
-        term_months: Number(calcTerm),
-      })
-      setCalcResult(res.data)
-    } catch {
-      /* silent */
-    } finally {
-      setCalcLoading(false)
-    }
+  // Calculator -> application form
+  const handleUseCalculator = (policyId: string, amount: number, months: number) => {
+    const p = policies.find((x) => x.policy_id === policyId)
+    if (p) setSelectedPolicy(p)
+    setApplyAmount(String(amount))
+    setApplyTerm(String(months))
+    setApplySuccess(false)
+    applyFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    toast.success("Amount and term filled in", { description: "Choose a purpose to finish your application." })
   }
 
   // ── Review action handlers ──────────────────────────────────────────────
@@ -334,9 +319,10 @@ export function LoansTab() {
     setActionLoadingId(loanId)
     try {
       await apiClient.post(`/loans/${loanId}/verify-funds`, {})
+      toast.success("Funds verified", { description: "The President has been asked to approve the loan." })
       fetchPendingLoans()
-    } catch (err: any) {
-      alert(err?.response?.data?.detail ?? "Failed to verify funds.")
+    } catch (err: unknown) {
+      toast.error(apiError(err, "Failed to verify funds."))
     } finally {
       setActionLoadingId(null)
     }
@@ -346,9 +332,10 @@ export function LoansTab() {
     setActionLoadingId(loanId)
     try {
       await apiClient.post(`/loans/${loanId}/approve`, {})
+      toast.success("Loan approved", { description: "The applicant has been notified." })
       fetchPendingLoans()
-    } catch (err: any) {
-      alert(err?.response?.data?.detail ?? "Failed to approve loan.")
+    } catch (err: unknown) {
+      toast.error(apiError(err, "Failed to approve loan."))
     } finally {
       setActionLoadingId(null)
     }
@@ -363,9 +350,10 @@ export function LoansTab() {
       })
       setRejectDialogLoan(null)
       setRejectReason("")
+      toast.success("Loan rejected", { description: "The applicant has been told the reason." })
       fetchPendingLoans()
-    } catch (err: any) {
-      alert(err?.response?.data?.detail ?? "Failed to reject loan.")
+    } catch (err: unknown) {
+      toast.error(apiError(err, "Failed to reject loan."))
     } finally {
       setRejectLoading(false)
     }
@@ -386,7 +374,7 @@ export function LoansTab() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className={`grid w-full ${isReviewer ? "max-w-2xl grid-cols-5" : "max-w-xl grid-cols-4"}`}>
+        <TabsList className={`h-auto w-full justify-start overflow-x-auto [scrollbar-width:none] [&>button]:shrink-0 sm:grid ${isReviewer ? "sm:max-w-2xl sm:grid-cols-5" : "sm:max-w-xl sm:grid-cols-4"}`}>
           <TabsTrigger value="apply">Apply for Loan</TabsTrigger>
           <TabsTrigger value="my-loans">My Loans</TabsTrigger>
           <TabsTrigger value="community">Community</TabsTrigger>
@@ -400,10 +388,57 @@ export function LoansTab() {
         </TabsList>
 
         {/* ──────────────────── APPLY TAB ──────────────────── */}
-        <TabsContent value="apply" className="mt-4">
+        <TabsContent value="apply" className="mt-4 flex flex-col gap-6">
+          {policies.length > 0 && (
+            <>
+              {/* One policy choice, shared by the calculator and the application form */}
+              <section className="flex flex-col gap-2" aria-label="Loan policy">
+                <h3 className="text-sm font-semibold">1. Choose a loan policy</h3>
+                <div className="grid gap-3 sm:grid-cols-2" role="radiogroup">
+                  {[...policies]
+                    .sort((a, b) => new Date(b.effective_from).getTime() - new Date(a.effective_from).getTime())
+                    .map((p) => {
+                      const active = selectedPolicy?.policy_id === p.policy_id
+                      return (
+                        <button
+                          key={p.policy_id}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          onClick={() => setSelectedPolicy(p)}
+                          className={`flex items-start gap-3 rounded-xl border bg-card p-4 text-left transition-colors ${
+                            active ? "border-primary ring-1 ring-primary" : "hover:bg-muted/50"
+                          }`}
+                        >
+                          <span className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${active ? "border-primary" : ""}`}>
+                            {active && <span className="h-2 w-2 rounded-full bg-primary" />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                              {formatRs(p.min_loan_amount)} – {formatRs(p.max_loan_amount)}
+                              {p.policy_id === latestPolicy(policies)?.policy_id && (
+                                <span className="rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-medium text-primary">Latest</span>
+                              )}
+                            </span>
+                            <span className="block text-xs text-muted-foreground">
+                              {Number(p.interest_rate)}% per year · {p.grace_period_days ?? 0} days' grace ·{" "}
+                              {p.requires_collateral ? "collateral required" : "no collateral"}
+                              {p.emi_applicable ? " · EMI available" : ""}
+                            </span>
+                          </span>
+                        </button>
+                      )
+                    })}
+                </div>
+              </section>
+              {selectedPolicy && (
+                <LoanCalculator key={selectedPolicy.policy_id} policy={selectedPolicy} onApply={handleUseCalculator} />
+              )}
+            </>
+          )}
           <div className="grid gap-6 lg:grid-cols-5">
             {/* Left: Application Form */}
-            <div className="lg:col-span-3 flex flex-col gap-6">
+            <div ref={applyFormRef} className="lg:col-span-3 flex scroll-mt-4 flex-col gap-6">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-sm font-semibold">
@@ -427,27 +462,15 @@ export function LoansTab() {
                     </div>
                   ) : (
                     <>
-                      <div className="flex flex-col gap-2">
-                        <Label className="text-xs font-medium">Loan Policy</Label>
-                        <Select
-                          value={selectedPolicy?.policy_id ?? ""}
-                          onValueChange={(v) => {
-                            const p = policies.find((p) => p.policy_id === v)
-                            if (p) setSelectedPolicy(p)
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a loan policy" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {policies.map((p) => (
-                              <SelectItem key={p.policy_id} value={p.policy_id}>
-                                {formatRs(p.min_loan_amount)} – {formatRs(p.max_loan_amount)} @ {Number(p.interest_rate)}%
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {selectedPolicy && (
+                        <p className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                          Applying under the policy chosen above:{" "}
+                          <span className="font-medium text-foreground">
+                            {formatRs(selectedPolicy.min_loan_amount)} – {formatRs(selectedPolicy.max_loan_amount)} at{" "}
+                            {Number(selectedPolicy.interest_rate)}% per year
+                          </span>
+                        </p>
+                      )}
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex flex-col gap-2">
@@ -464,14 +487,14 @@ export function LoansTab() {
                         </div>
                         <div className="flex flex-col gap-2">
                           <Label htmlFor="loan-term" className="text-xs font-medium">
-                            Term (months)
+                            Term
                           </Label>
                           <Select value={applyTerm} onValueChange={setApplyTerm}>
                             <SelectTrigger id="loan-term">
                               <SelectValue placeholder="Select" />
                             </SelectTrigger>
                             <SelectContent>
-                              {[3, 6, 12, 18, 24, 36, 48, 60].map((m) => (
+                              {[...new Set([3, 6, 12, 18, 24, 36, 48, 60, ...(applyTerm ? [Number(applyTerm)] : [])])].sort((a, b) => a - b).map((m) => (
                                 <SelectItem key={m} value={String(m)}>
                                   {m} months
                                 </SelectItem>
@@ -586,73 +609,6 @@ export function LoansTab() {
                       <span className="text-muted-foreground">Effective From</span>
                       <span className="font-medium text-right">{formatDate(selectedPolicy.effective_from)}</span>
                     </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Calculator */}
-              {selectedPolicy && (
-                <Card>
-                  <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                      <Calculator className="h-4 w-4" />
-                      Loan Calculator
-                    </CardTitle>
-                    <CardDescription>
-                      Estimate repayment based on {Number(selectedPolicy.interest_rate)}% interest
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-3">
-                    <div className="flex flex-col gap-2">
-                      <Label className="text-xs font-medium">Amount (Rs.)</Label>
-                      <Input
-                        type="number"
-                        placeholder="e.g. 50000"
-                        value={calcAmount}
-                        onChange={(e) => setCalcAmount(e.target.value)}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <Label className="text-xs font-medium">Term (months)</Label>
-                      <Input
-                        type="number"
-                        placeholder="e.g. 12"
-                        value={calcTerm}
-                        onChange={(e) => setCalcTerm(e.target.value)}
-                      />
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleCalculate}
-                      disabled={calcLoading || !calcAmount || !calcTerm}
-                    >
-                      {calcLoading ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ): (
-                        <Calculator className="mr-2 h-4 w-4" />
-                      )}
-                      Calculate
-                    </Button>
-
-                    {calcResult && (
-                      <>
-                        <Separator />
-                        <div className="grid grid-cols-2 gap-y-2 text-sm">
-                          <span className="text-muted-foreground">Principal</span>
-                          <span className="font-nums font-medium text-right">{formatRs(calcResult.principal_rupees)}</span>
-                          <span className="text-muted-foreground">Monthly Interest</span>
-                          <span className="font-nums font-medium text-right">{formatRs(calcResult.monthly_interest_rupees)}</span>
-                          <span className="text-muted-foreground">Total Interest</span>
-                          <span className="font-nums font-medium text-right">{formatRs(calcResult.total_interest_rupees)}</span>
-                          <Separator className="col-span-2 my-1" />
-                          <span className="font-semibold">Total Repayment</span>
-                          <span className="font-nums font-bold text-right text-foreground">
-                            {formatRs(calcResult.total_repayment_rupees)}
-                          </span>
-                        </div>
-                      </>
-                    )}
                   </CardContent>
                 </Card>
               )}
