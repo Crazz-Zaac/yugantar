@@ -153,6 +153,15 @@ class Settings(BaseSettings):
         return self
 
     # ---------------------------
+    # Receipt image storage
+    # ---------------------------
+    # Private directory (Docker volume); images are only served through the
+    # authenticated /receipts/{id}/image endpoint, never as static files.
+    RECEIPT_STORAGE_DIR: str = "/data/receipts"
+    # Images are deleted this many days after upload (metadata is kept)
+    RECEIPT_RETENTION_DAYS: int = 15
+
+    # ---------------------------
     # Redis Settings for Caching
     # ---------------------------
     REDIS_HOST: str = "localhost"

@@ -3,7 +3,6 @@ from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
 from datetime import timedelta
-from uuid import uuid4
 
 from app.models.user_model import User
 from app.services.user_service import UserService
@@ -11,7 +10,13 @@ from app.core.security import create_access_token, decode_url_safe_token
 from app.schemas.user_schema import TokenResponse
 from app.core.config import settings
 from app.core.db import get_session
-from app.core.redis_client import redis_client
+from app.core.refresh_tokens import (
+    issue_refresh_token,
+    get_user_id_for_token,
+    revoke_refresh_token,
+    revoke_all_refresh_tokens,
+    set_refresh_cookie,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 user_service = UserService()
@@ -47,24 +52,8 @@ async def login_for_access_token(
         expires_delta=access_token_expiry,
     )
 
-    # generate refresh token
-    refresh_token = str(uuid4())
-    # store refresh token in Redis with expiration
-    redis_client.setex(
-        f"refresh_token:{refresh_token}",  # Redis key
-        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-        str(user.id),
-    )
-    # send refresh token as httpOnly cookie (not in response body)
-    is_production = settings.ENVIRONMENT == "production"
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        secure=is_production,
-        samesite="lax",
-    )
+    # refresh token: opaque, stored in Redis, sent as httpOnly cookie only
+    set_refresh_cookie(response, issue_refresh_token(user.id))
 
     return TokenResponse(
         access_token=access_token,
@@ -93,8 +82,7 @@ async def refresh_access_token(
         )
 
     # Validate refresh token from Redis
-    old_key = f"refresh_token:{refresh_token}"
-    user_id = redis_client.get(old_key)
+    user_id = get_user_id_for_token(refresh_token)
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -109,34 +97,18 @@ async def refresh_access_token(
     statement = select(User).where(User.id == UUID(str(user_id)))
     user = session.exec(statement).first()
 
-    if not user:
+    if not user or user.disabled:
+        # Deleted or disabled account: kill every session it still has
+        revoke_all_refresh_tokens(user_id)
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is disabled or no longer exists",
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Refresh token rotation 
-    # Invalidate the old refresh token
-    redis_client.delete(old_key)
-
-    # Issue a new refresh token
-    new_refresh_token = str(uuid4())
-    redis_client.setex(
-        f"refresh_token:{new_refresh_token}",
-        timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-        str(user.id),
-    )
-
-    # Set new refresh token cookie
-    is_production = settings.ENVIRONMENT == "production"
-    response.set_cookie(
-        key="refresh_token",
-        value=new_refresh_token,
-        httponly=True,
-        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        secure=is_production,
-        samesite="lax",
-    )
+    # Refresh token rotation: invalidate the old one, issue a new one
+    revoke_refresh_token(refresh_token)
+    set_refresh_cookie(response, issue_refresh_token(user.id))
 
     # Create new access token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)

@@ -3,7 +3,6 @@ from fastapi_mail import NameEmail
 from fastapi import BackgroundTasks
 from sqlmodel import Session
 from uuid import UUID
-from uuid import uuid4
 from datetime import timedelta
 
 from app.core.db import get_session
@@ -16,6 +15,8 @@ from app.schemas.user_schema import (
     TokenResponse,
     LoginRequest,
     UserPasswordChange,
+    PasswordResetRequest,
+    PasswordResetConfirm,
 )
 from app.services.user_service import UserService
 from app.api.dependencies.auth import get_current_user
@@ -23,13 +24,21 @@ from app.core.security import (
     create_access_token,
     verify_password,
     create_url_safe_token,
+    create_password_reset_token,
+    read_password_reset_token,
+    password_fingerprint_matches,
 )
 from app.services.email_notify import (
     send_password_reset_email,
     send_registration_notification,
 )
 from app.core.config import settings
-from app.core.redis_client import redis_client
+from app.core.refresh_tokens import (
+    issue_refresh_token,
+    revoke_refresh_token,
+    revoke_all_refresh_tokens,
+    set_refresh_cookie,
+)
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -97,23 +106,8 @@ async def login_user(
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
 
-    # Generate refresh token
-    refresh_token = str(uuid4())
-    redis_key = f"refresh_token:{refresh_token}"
-    redis_client.set(
-        redis_key, str(user.id), ex=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
-    )  # Store refresh token
-
-    # set refresh token in httpOnly cookie
-    is_production = settings.ENVIRONMENT == "production"
-    reponse.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        secure=is_production,
-        samesite="lax",
-    )
+    # refresh token: opaque, stored in Redis, sent as httpOnly cookie only
+    set_refresh_cookie(reponse, issue_refresh_token(user.id))
 
     login_token = TokenResponse(
         access_token=access_token,
@@ -162,47 +156,77 @@ async def delete_current_user(
     """
     Delete the current authenticated user's account.
     """
+    user_id = current_user.id
     session.delete(current_user)
     session.commit()
+    revoke_all_refresh_tokens(user_id)
     return None
 
 
 @router.post("/me/reset-password", status_code=status.HTTP_200_OK, tags=["password"])
 async def reset_password(
-    email: str,
+    payload: PasswordResetRequest,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ):
     """
-    Initiate password reset process for the user.
+    Start the password reset flow.
+
+    Always returns the same response so it can't be used to discover which
+    emails are registered. The email contains a single-purpose reset token
+    (not a login token) valid for 30 minutes.
     """
+    user = user_service.get_user_by_email(session=session, email=payload.email.lower())
+    if user:
+        token = create_password_reset_token(user.id, user.hashed_password)
+        url = f"{settings.FRONTEND_HOST}/reset-password?token={token}"
+        background_tasks.add_task(
+            send_password_reset_email,
+            email_to=[NameEmail(name=user.first_name, email=user.email)],
+            reset_link=url,
+        )
+
+    return {"msg": "If an account exists for this email, a reset link has been sent."}
+
+
+@router.post("/reset-password/confirm", status_code=status.HTTP_200_OK, tags=["password"])
+async def confirm_password_reset(
+    payload: PasswordResetConfirm,
+    session: Session = Depends(get_session),
+):
+    """
+    Complete the password reset using the token from the email.
+    The token is single-use: it stops working once the password changes.
+    All existing sessions are logged out.
+    """
+    invalid = HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Invalid or expired reset token",
+    )
     try:
-        user = user_service.get_user_by_email(session=session, email=email)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User with this email does not exist",
-            )
-        access_token = await create_access_token(
-            subject=str(user.id),
-            expires_delta=timedelta(minutes=15),  # Short-lived token for password reset
-        )
-        url = f"{settings.FRONTEND_HOST}/reset-password?token={access_token}"
-        await send_password_reset_email(
-            email_to=[NameEmail(name=user.first_name, email=user.email)], reset_link=url
-        )
+        data = read_password_reset_token(payload.token)
+        user = user_service.get_user_by_id(session=session, user_id=UUID(data["uid"]))
+    except ValueError:
+        raise invalid
 
-        return {"msg": "An email has been sent with password reset instructions."}
+    if (
+        not user
+        or user.disabled
+        or not password_fingerprint_matches(user.hashed_password, data["fp"])
+    ):
+        raise invalid
 
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred while processing the request",
-        ) from e
+    user_service.change_user_password(
+        session=session, user=user, new_password=payload.new_password
+    )
+    revoke_all_refresh_tokens(user.id)
+    return {"msg": "Password has been reset. Please log in with your new password."}
 
 
 @router.post("/me/change-password", status_code=status.HTTP_200_OK, tags=["password"])
 async def change_password(
     payload: UserPasswordChange,
+    response: Response,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
@@ -218,6 +242,9 @@ async def change_password(
     user_service.change_user_password(
         session=session, user=current_user, new_password=payload.new_password
     )
+    # Log out every other session; keep this one with a fresh refresh token
+    revoke_all_refresh_tokens(current_user.id)
+    set_refresh_cookie(response, issue_refresh_token(current_user.id))
     return {"msg": "Password changed successfully."}
 
 
@@ -231,8 +258,7 @@ async def logout_user(
     """
     refresh_token = request.cookies.get("refresh_token")
     if refresh_token:
-        redis_key = f"refresh_token:{refresh_token}"
-        redis_client.delete(redis_key)
+        revoke_refresh_token(refresh_token)
         response.delete_cookie(key="refresh_token")
     return {"msg": "Successfully logged out."}
 

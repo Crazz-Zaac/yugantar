@@ -13,6 +13,7 @@ from app.schemas.user_schema import (
 )
 from app.services.user_service import UserService
 from app.api.dependencies.admin import get_current_admin
+from app.core.refresh_tokens import revoke_all_refresh_tokens
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 user_service = UserService()
@@ -87,6 +88,8 @@ async def assign_user_roles_as_admin(
         user = user_service.admin_assign_user_roles(
             session=session, user_id=user_id, user_in=user_update
         )
+        # Roles are re-read from the DB on every request, so no session
+        # revocation is needed here; disabling is handled in toggle-disabled.
         return user
     except ValueError as e:
         raise HTTPException(
@@ -115,6 +118,7 @@ async def delete_user_as_admin(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
         )
+    revoke_all_refresh_tokens(user_id)
     return None
 
 
@@ -146,4 +150,6 @@ async def toggle_user_disabled_status(
     session.add(user)
     session.commit()
     session.refresh(user)
+    if user.disabled:
+        revoke_all_refresh_tokens(user.id)
     return user

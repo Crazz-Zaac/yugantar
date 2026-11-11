@@ -601,3 +601,93 @@ echo "password" > secrets/pgadmin_password.txt"
   - updated `create_smart_deposit()`: for deposit with smart split allocations
 
 ---
+
+## 2026-11-11 — Security fixes
+
+### 1. Committed credentials & exposed DB ports
+- **Issue:** `backend/.dev.env` and `docker/secrets/*.txt` were tracked in git, and the live `backend/.env` reused the same admin, Postgres and pgAdmin passwords. Postgres (5432) and pgAdmin (8080) were published on all host interfaces (Docker bypasses ufw).
+- **Fix:**
+  - Untracked `backend/.dev.env` and `docker/secrets/` (`git rm --cached`; files kept locally) and added them to `.gitignore`.
+  - Added `backend/.env.example` with placeholder values as the template.
+  - Bound Postgres and pgAdmin to `127.0.0.1` in `docker-compose.yml`.
+- **Manual follow-up:** rotate the admin, Postgres and pgAdmin passwords. The old values remain in git history, so treat them as public.
+
+### 2. Loan payments credited without verification
+- **Issue:** `POST /loan-payments/` and smart-deposit loan allocations added to `loan.total_paid_paisa` immediately (a renewal could even mark the loan `PAID`), while the money was unverified. Rejecting the deposit did not undo it, and owners could edit payment amounts at any time.
+- **Fix:**
+  - `LoanPayment` got `status` (`PENDING`/`VERIFIED`/`REJECTED`), `deposit_id`, `verified_by` and `verified_at`. Migration `f2d73ca04f9e` backfills existing rows as `VERIFIED`.
+  - Loan totals change only when a payment is verified (`LoanPaymentService.apply_verified_payment`). Only verified *principal* payments can mark a loan `PAID`.
+  - Owners can edit or withdraw only `PENDING` standalone payments.
+  - New reviewer endpoints (treasurer/moderator/admin): `GET /loan-payments/review/pending` and `PUT /loan-payments/{id}/review`.
+  - Smart-deposit loan allocations become `PENDING` payments linked to the deposit. Verifying or rejecting the deposit (`DepositService.verify_deposit`) does the same to them. Withdrawing a deposit removes them, and moderator deletion reverses any verified ones.
+  - Smart deposits now also reject payments on loans that aren't `ACTIVE`/`APPROVED`.
+
+### 3. Disabled users kept access
+- **Issue:** `get_current_user` never checked `disabled`, and `/auth/refresh` issued new tokens to disabled users. A disabled admin kept admin rights indefinitely. There was also no way to end all of a user's sessions.
+- **Fix:**
+  - `get_current_user` rejects disabled accounts on every request (401), so disabling takes effect immediately. Roles were already re-read from the DB on each request.
+  - New `app/core/refresh_tokens.py`: a per-user index of refresh tokens in Redis (`user_refresh_tokens:{user_id}`) with issue, rotate, revoke and revoke-all helpers. Both login endpoints, refresh and logout now use it.
+  - `/auth/refresh` refuses disabled or deleted users and revokes all their tokens.
+  - All sessions are revoked when an admin disables or deletes a user, or a user deletes their account. A password change revokes the other sessions and keeps the current one.
+- **Note:** refresh tokens issued before this change aren't in the index until their next rotation (or 7-day expiry). The disabled check on refresh still covers them.
+
+### 4. Password reset link contained a login token
+- **Issue:** `POST /users/me/reset-password` emailed a normal 15-minute JWT access token, so anyone with the link (mail logs, browser history, Referer) was logged in as that user. The endpoint revealed whether an email was registered, and no endpoint actually reset the password.
+- **Fix:**
+  - New single-purpose reset token in `core/security.py` (`create_password_reset_token` / `read_password_reset_token`): `itsdangerous` with its own salt, a 30-minute expiry, and a fingerprint of the current password hash, so it is single-use and dies after any password change.
+  - `POST /users/me/reset-password` now takes a JSON body `{email}`, always returns the same message, and sends the email in a background task.
+  - New `POST /users/reset-password/confirm` `{token, new_password}`: validates the token, sets the password, and logs out all sessions.
+  - Password strength rules moved into a shared `validate_password_strength()` (register, change, reset). Change-password now also requires an uppercase letter.
+- **TODO:** the frontend still needs a `/reset-password` page that calls the confirm endpoint.
+
+### 5. OCR endpoints unauthenticated + OCR accuracy
+- **Security issue:** `/v1/ocr/*` had no authentication: anyone could upload files, queue CPU-heavy OCR jobs, read results and revoke tasks. Uploads were read fully into memory before the 10 MB check. The type check trusted the client's `Content-Type`, and the client's filename was used in the saved path.
+- **Security fix** (`api/v1/endpoints/ocr.py`):
+  - All endpoints require login. Task ownership is stored in Redis (`ocr_task:{id}`) and only the uploader can read or delete a task (others get 404).
+  - Uploads are read in 1 MB chunks and rejected past 10 MB (413). The real image type is checked with Pillow (JPEG/PNG/WEBP only). Images over 40 MP are rejected (decompression bombs).
+  - Saved as `{uuid}.{ext}`; the client filename is never used. The worker refuses paths outside `/tmp/ocr_uploads`.
+  - Rate limit: 20 uploads per user per 10 minutes (429).
+  - `delete-task` now actually deletes the result (`forget()` instead of `revoke()`). Failure messages no longer leak internal errors.
+  - Removed the `upload-data` volume from the frontend container (it never used it).
+- **OCR bugs found** (tested against the 13 receipts in `ocr_test/receipts`):
+  - Bordered-table receipts (Sajilo eBanking) returned nothing: Tesseract skips cells inside grid lines.
+  - Times where AM/PM wrapped onto the next line were parsed as 24-hour, so 5 of 13 dates were **12 hours off**. This affects late-fine calculation.
+  - The Celery retry ran after `finally` had already deleted the image, so every retry failed.
+- **OCR fix** (`services/ocr_service.py`):
+  - Preprocessing: invert dark-mode screenshots, upscale images narrower than 1000 px, erase table grid lines (morphology).
+  - Parse the full text instead of single rows. AM/PM is looked up after the time, even across a line break.
+  - Amount priority: Txn/Transaction Amount > Amount (NPR) > "NPR x"; never "Total Amount" (it includes the bank charge).
+  - Two passes: the preprocessed image first, then the raw image fills any missing fields.
+  - Removed task retries (OCR is deterministic).
+  - Result: amount 11/13 → 13/13, date 6/13 → 13/13, reference 10/13 → 12/13 (remaining miss: O/0/Q confusion in an alphanumeric TXN ID).
+
+### 5b. Editable voucher details (OCR fallback)
+- **Issue:** the OCR results in the deposit form were read-only. A misread value couldn't be corrected, and if OCR missed the amount or failed, the preview never loaded, so the member couldn't deposit at all.
+- **Fix** (`frontend/.../member/DepositTab.tsx`):
+  - Amount, date/time and reference are now editable inputs, pre-filled from OCR. Each field shows "Edited. OCR read: …" when changed.
+  - If OCR fails, the form switches to manual entry instead of a dead end.
+  - Preview needs a positive amount and a date that isn't in the future. Preview requests are debounced by 500 ms while typing.
+- **Security note:** editing doesn't widen trust. The API already accepted any client-sent amount, and since fix #2 nothing affects balances until a treasurer verifies the deposit.
+- **Open gap:** the treasurer can't see the voucher image (deleted after OCR) or what OCR originally read, so verification relies on checking the bank statement.
+
+### 5c. Receipt images kept for treasurer review (15 days)
+- **Why:** treasurers verified deposits blind. The voucher image was deleted after OCR, and nothing recorded what OCR read versus what the member submitted.
+- **Storage:** `core/receipt_storage.py` keeps images on a private Docker volume `receipts-data` at `/data/receipts/YYYY/MM/<uuid>.jpg`, mounted in the backend and worker only.
+  - Every image is re-encoded as a plain JPEG (rotation fixed, EXIF/GPS stripped, max 1200×2600).
+  - Behind a small `save` / `path_for` / `delete` interface, so it can move to MinIO/S3/R2 later.
+  - Never served statically.
+- **Retention:** `RECEIPT_RETENTION_DAYS=15` from upload (`.env`).
+  - Celery Beat runs `purge_expired_receipts` hourly. A receipt that was never submitted is removed entirely. For submitted ones only the image is deleted; the OCR values stay for the record.
+  - It also sweeps orphaned files older than 15 days.
+  - Note: a deposit still pending after 15 days loses its image.
+- **Model:** `Receipt` reworked (migration `0f366a8f8155`). `txn_number:int` was replaced by text `reference` plus `reference_key`. New fields: `file_key`, `content_hash` (sha256), `size_bytes`, `expires_at`, `image_deleted_at`, `ocr_status`, `ocr_amount_paisa`, `ocr_charge_paisa`, `ocr_date`.
+- **Flow:**
+  - `POST /v1/ocr/process-image` stores the image, creates a `Receipt` and returns `receipt_id`. The worker writes the OCR values onto the receipt server-side, so they can't be faked by the client.
+  - `POST /deposits/smart` takes `receipt_id`. It must be the member's own receipt, not expired, and not already used.
+  - `GET /receipts/{id}` returns OCR vs submitted values, "edited" flags and duplicates. `GET /receipts/{id}/image` returns the image with `Cache-Control: private, no-store`, or 410 once purged. Both endpoints are for the uploader or treasurer/moderator/admin; everyone else gets 404.
+  - Duplicate detection: same image hash, or the same bank reference after normalising OCR look-alikes (O/Q→0, I/L→1).
+  - Loan payments can only reference the member's own receipts.
+- **Frontend:**
+  - `DepositTab` sends `receipt_id` and tells the member the image is kept for 15 days.
+  - The treasurer review tab has a "View receipt" button that opens the new `ReceiptReviewDialog`: the image, OCR vs submitted values, and warnings for edits and duplicates.
+- **Ops:** back up the `receipts-data` volume together with Postgres.

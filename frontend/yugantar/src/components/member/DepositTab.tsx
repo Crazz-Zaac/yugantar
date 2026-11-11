@@ -34,6 +34,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { apiClient } from "@/api/api"
+import ReceiptReviewDialog from "./ReceiptReviewDialog"
 import { useLocation } from "wouter"
 
 type PolicyStatus = "draft" | "finalized" | "active" | "expired" | "void"
@@ -55,6 +56,44 @@ interface OcrResult {
   charge: number | null
   date: string | null
   reference: string | null
+}
+
+const EMPTY_OCR_RESULT: OcrResult = { amount: null, charge: null, date: null, reference: null }
+
+// The worker omits fields it couldn't read; normalise them to null.
+function normalizeOcrResult(raw: Partial<OcrResult> | null | undefined): OcrResult {
+  return {
+    amount: typeof raw?.amount === "number" ? raw.amount : null,
+    charge: typeof raw?.charge === "number" ? raw.charge : null,
+    date: raw?.date ?? null,
+    reference: raw?.reference ?? null,
+  }
+}
+
+// ISO (UTC) <-> value for <input type="datetime-local"> in the browser's timezone
+function isoToLocalInput(iso: string | null): string {
+  if (!iso) return ""
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ""
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 16)
+}
+
+function localInputToIso(value: string): string | null {
+  if (!value) return null
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString()
+}
+
+// A voucher needs a positive amount and a date that isn't in the future
+// (the date decides whether a late fine applies).
+function voucherIsComplete(v: OcrResult): boolean {
+  return (
+    v.amount != null &&
+    v.amount > 0 &&
+    !!v.date &&
+    new Date(v.date).getTime() <= Date.now() + 60_000
+  )
 }
 
 interface LoanSummary {
@@ -97,6 +136,7 @@ interface DepositItem {
   due_deposit_date: string
   verification_status: "pending" | "verified" | "rejected"
   verified_by: string | null
+  receipt_id: string | null
   created_at: string
 }
 
@@ -203,7 +243,13 @@ export function DepositTab() {
   const [isDragging, setIsDragging] = useState(false)
 
   const [ocrLoading, setOcrLoading] = useState(false)
+  // ocrResult holds the (user-editable) voucher values; ocrDetected keeps what
+  // OCR originally read so edits can be highlighted. null = manual entry.
   const [ocrResult, setOcrResult] = useState<OcrResult | null>(null)
+  const [ocrDetected, setOcrDetected] = useState<OcrResult | null>(null)
+  // Stored voucher image (kept 15 days for treasurer review)
+  const [receiptId, setReceiptId] = useState<string | null>(null)
+  const [reviewReceiptId, setReviewReceiptId] = useState<string | null>(null)
   const [ocrError, setOcrError] = useState<string | null>(null)
 
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -253,6 +299,9 @@ export function DepositTab() {
   const processOcr = async (file: File) => {
     setOcrLoading(true)
     setOcrError(null)
+    setOcrResult(null)
+    setOcrDetected(null)
+    setReceiptId(null)
     setPreview(null)
     setPreviewError(null)
     setAllocations([])
@@ -266,6 +315,7 @@ export function DepositTab() {
       })
 
       const taskId = uploadRes.data.task_id
+      setReceiptId(uploadRes.data.receipt_id ?? null)
       const poll = async (): Promise<OcrResult> => {
         const statusRes = await apiClient.get(`/v1/ocr/task-status/${taskId}`)
         const data = statusRes.data
@@ -281,17 +331,23 @@ export function DepositTab() {
         return poll()
       }
 
-      const result = await poll()
+      const result = normalizeOcrResult(await poll())
       setOcrResult(result)
+      setOcrDetected(result)
     } catch (err: unknown) {
-      setOcrError(err instanceof Error ? err.message : "OCR processing failed")
+      setOcrError(
+        `${err instanceof Error ? err.message : "OCR processing failed"} You can enter the voucher details manually below.`,
+      )
+      // Fall back to manual entry so the member isn't stuck
+      setOcrResult({ ...EMPTY_OCR_RESULT })
+      setOcrDetected(null)
     } finally {
       setOcrLoading(false)
     }
   }
 
   const fetchPreview = useCallback(async () => {
-    if (!ocrResult || !selectedPolicyId || ocrResult.amount == null) return
+    if (!ocrResult || !selectedPolicyId || !voucherIsComplete(ocrResult)) return
 
     setPreviewLoading(true)
     setPreviewError(null)
@@ -332,9 +388,19 @@ export function DepositTab() {
     }
   }, [ocrResult, selectedPolicyId])
 
+  // Debounced so editing the voucher fields doesn't fire a request per keystroke
   useEffect(() => {
-    if (ocrResult && ocrResult.amount != null && selectedPolicyId) fetchPreview()
+    if (!ocrResult || !selectedPolicyId || !voucherIsComplete(ocrResult)) {
+      setPreview(null)
+      return
+    }
+    const timer = setTimeout(fetchPreview, 500)
+    return () => clearTimeout(timer)
   }, [ocrResult, selectedPolicyId, fetchPreview])
+
+  const updateVoucher = (changes: Partial<OcrResult>) => {
+    setOcrResult((prev) => ({ ...(prev ?? EMPTY_OCR_RESULT), ...changes }))
+  }
 
   const mapDepositItem = (raw: DepositItem): DepositItem => ({
     ...raw,
@@ -437,6 +503,8 @@ export function DepositTab() {
   const clearFile = () => {
     setSelectedFile(null)
     setOcrResult(null)
+    setOcrDetected(null)
+    setReceiptId(null)
     setOcrError(null)
     setPreview(null)
     setAllocations([])
@@ -457,6 +525,7 @@ export function DepositTab() {
         ocr_charge: ocrResult.charge ?? 0,
         ocr_date: ocrResult.date ?? new Date().toISOString(),
         ocr_reference: ocrResult.reference,
+        receipt_id: receiptId,
         allocations: allocations.map((a) => ({
           category: a.category,
           amount_rupees: a.amount_rupees,
@@ -760,43 +829,102 @@ export function DepositTab() {
                   </div>
                 )}
 
-                {ocrResult && (
-                  <div className="rounded-lg border p-4">
-                    <div className="mb-3 flex items-center gap-2">
-                      <ScanLine className="h-4 w-4 text-primary" />
-                      <p className="text-xs font-semibold uppercase tracking-wider text-primary">Voucher Details</p>
-                    </div>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                      <div className="flex flex-col gap-1">
-                        <Label className="text-xs font-medium text-muted-foreground">Deposited Amount</Label>
-                        <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/30 px-3">
-                          <IndianRupee className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="font-mono text-sm font-semibold">
-                            {ocrResult.amount != null ? formatRsFromRupees(ocrResult.amount) : "Not detected"}
-                          </span>
+                {ocrResult && (() => {
+                  const detected = ocrDetected
+                  const amountEdited = !!detected && ocrResult.amount !== detected.amount
+                  const dateEdited = !!detected && ocrResult.date !== detected.date
+                  const refEdited = !!detected && (ocrResult.reference ?? "") !== (detected.reference ?? "")
+                  const dateInFuture =
+                    !!ocrResult.date && new Date(ocrResult.date).getTime() > Date.now() + 60_000
+                  const ocrHint = (edited: boolean, original: string) =>
+                    edited ? (
+                      <p className="flex items-center gap-1 text-xs text-warning">
+                        <AlertTriangle className="h-3 w-3" />
+                        Edited. OCR read: {original}
+                      </p>
+                    ) : null
+
+                  return (
+                    <div className="rounded-lg border p-4">
+                      <div className="mb-1 flex items-center gap-2">
+                        <ScanLine className="h-4 w-4 text-primary" />
+                        <p className="text-xs font-semibold uppercase tracking-wider text-primary">Voucher Details</p>
+                      </div>
+                      <p className="mb-3 text-xs text-muted-foreground">
+                        {detected
+                          ? "Check these against your voucher and correct anything OCR misread."
+                          : "Enter the details exactly as shown on your voucher."}{" "}
+                        The treasurer verifies every deposit before it counts.
+                        {receiptId &&
+                          " Your voucher image is kept for 15 days so the treasurer can check it, then deleted."}
+                      </p>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="flex flex-col gap-1">
+                          <Label htmlFor="voucher-amount" className="text-xs font-medium text-muted-foreground">
+                            Deposited Amount (Rs.)
+                          </Label>
+                          <div className="relative">
+                            <IndianRupee className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              id="voucher-amount"
+                              type="number"
+                              inputMode="decimal"
+                              min={0.01}
+                              step={0.01}
+                              placeholder="Not detected, enter amount"
+                              className="pl-8 font-mono font-semibold"
+                              value={ocrResult.amount ?? ""}
+                              onChange={(e) =>
+                                updateVoucher({ amount: e.target.value === "" ? null : Number(e.target.value) })
+                              }
+                            />
+                          </div>
+                          {ocrHint(
+                            amountEdited,
+                            detected?.amount != null ? formatRsFromRupees(detected.amount) : "nothing",
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <Label htmlFor="voucher-date" className="text-xs font-medium text-muted-foreground">
+                            Deposited Date &amp; Time
+                          </Label>
+                          <div className="relative">
+                            <CalendarClock className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              id="voucher-date"
+                              type="datetime-local"
+                              className="pl-8"
+                              max={isoToLocalInput(new Date().toISOString())}
+                              value={isoToLocalInput(ocrResult.date)}
+                              onChange={(e) => updateVoucher({ date: localInputToIso(e.target.value) })}
+                            />
+                          </div>
+                          {ocrHint(dateEdited, detected?.date ? formatDateTime(detected.date) : "nothing")}
+                          {dateInFuture && (
+                            <p className="text-xs text-destructive">The date can't be in the future.</p>
+                          )}
                         </div>
                       </div>
-                      <div className="flex flex-col gap-1">
-                        <Label className="text-xs font-medium text-muted-foreground">Deposited Date</Label>
-                        <div className="flex h-10 items-center gap-2 rounded-md border bg-muted/30 px-3">
-                          <CalendarClock className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="text-sm font-medium">
-                            {ocrResult.date ? formatDateTime(ocrResult.date) : "Not detected"}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    {ocrResult.reference && (
                       <div className="mt-3 flex flex-col gap-1">
-                        <Label className="text-xs font-medium text-muted-foreground">Voucher Reference</Label>
-                        <div className="flex h-10 items-center rounded-md border bg-muted/30 px-3">
-                          <Receipt className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="font-mono text-sm">{ocrResult.reference}</span>
+                        <Label htmlFor="voucher-ref" className="text-xs font-medium text-muted-foreground">
+                          Voucher Reference
+                        </Label>
+                        <div className="relative">
+                          <Receipt className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            id="voucher-ref"
+                            maxLength={64}
+                            placeholder="Reference code / transaction ID"
+                            className="pl-8 font-mono"
+                            value={ocrResult.reference ?? ""}
+                            onChange={(e) => updateVoucher({ reference: e.target.value || null })}
+                          />
                         </div>
+                        {ocrHint(refEdited, detected?.reference || "nothing")}
                       </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )
+                })()}
 
                 {previewLoading && (
                   <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
@@ -1062,7 +1190,15 @@ export function DepositTab() {
                             <p className="text-xs text-muted-foreground">User: {dep.user_id}</p>
                             {depositStatusBadge(dep.verification_status)}
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {dep.receipt_id ? (
+                              <Button size="sm" variant="ghost" onClick={() => setReviewReceiptId(dep.receipt_id)}>
+                                <Receipt className="mr-2 h-4 w-4" />
+                                View receipt
+                              </Button>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">No receipt attached</span>
+                            )}
                             <Button
                               size="sm"
                               onClick={() => handleReviewAction(dep.id, "verified")}
@@ -1099,6 +1235,7 @@ export function DepositTab() {
           </TabsContent>
         )}
       </Tabs>
+      <ReceiptReviewDialog receiptId={reviewReceiptId} onClose={() => setReviewReceiptId(null)} />
     </div>
   )
 }

@@ -1,22 +1,116 @@
 import uuid
-from typing import Optional, List
+from typing import List
 from fastapi import HTTPException, status
 from sqlmodel import Session, select, func
 from datetime import datetime, timezone
-from decimal import Decimal
 
 from app.models.loan_model import Loan, LoanStatus
-from app.models.loan_payment import LoanPayment, LoanPaymentType
+from app.models.loan_payment import LoanPayment, LoanPaymentStatus, LoanPaymentType
 from app.schemas.loan_payment_schema import (
     LoanPaymentCreate,
     LoanPaymentUpdate,
 )
 from app.models.user_model import User
+from app.models.receipt_model import Receipt
 from app.models.mixins.money import MoneyMixin
 
 
 class LoanPaymentService:
-    """Service class for managing loan payments."""
+    """Service class for managing loan payments.
+
+    Security model: a member can only *submit* a payment (status PENDING).
+    The loan's totals change only when a reviewer VERIFIES the payment
+    (directly, or by verifying the smart deposit it belongs to).
+    """
+
+    # Helpers that keep loan totals in sync with verified payments
+
+    @staticmethod
+    def apply_verified_payment(loan: Loan, payment: LoanPayment) -> None:
+        """Credit a just-verified payment to its loan."""
+        loan.total_paid_paisa += payment.amount_paisa
+        if (
+            payment.payment_type == LoanPaymentType.PRINCIPAL
+            and loan.total_paid_paisa >= loan.principal_paisa
+        ):
+            loan.status = LoanStatus.PAID
+
+    @staticmethod
+    def reverse_verified_payment(loan: Loan, payment: LoanPayment) -> None:
+        """Undo the effect of a verified payment that is being removed."""
+        loan.total_paid_paisa = max(0, loan.total_paid_paisa - payment.amount_paisa)
+        if (
+            loan.status == LoanStatus.PAID
+            and loan.total_paid_paisa < loan.principal_paisa
+        ):
+            loan.status = LoanStatus.ACTIVE
+
+    @classmethod
+    def review_payment_record(
+        cls,
+        session: Session,
+        payment: LoanPayment,
+        new_status: LoanPaymentStatus,
+        reviewer: User,
+    ) -> None:
+        """Set a PENDING payment to VERIFIED/REJECTED (no commit)."""
+        if payment.status != LoanPaymentStatus.PENDING:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Only pending payments can be reviewed. Current status: {payment.status.value}",
+            )
+        if new_status == LoanPaymentStatus.PENDING:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Review status must be 'verified' or 'rejected'.",
+            )
+
+        if new_status == LoanPaymentStatus.VERIFIED:
+            loan = session.get(Loan, payment.loan_id)
+            if not loan:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Loan not found",
+                )
+            cls.apply_verified_payment(loan, payment)
+            session.add(loan)
+
+        payment.status = new_status
+        payment.verified_by = f"{reviewer.first_name} {reviewer.last_name}".strip()
+        payment.verified_at = datetime.now(timezone.utc)
+        session.add(payment)
+
+    def _get_owned_pending_payment(
+        self, session: Session, payment_id: uuid.UUID, user_id: uuid.UUID
+    ) -> LoanPayment:
+        payment = session.get(LoanPayment, payment_id)
+        if not payment:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Loan payment not found",
+            )
+
+        # Verify ownership through the loan
+        loan = session.get(Loan, payment.loan_id)
+        if not loan or loan.user_id != user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only modify your own payments",
+            )
+
+        if payment.status != LoanPaymentStatus.PENDING:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only pending payments can be modified",
+            )
+        if payment.deposit_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This payment belongs to a deposit; edit or withdraw the deposit instead",
+            )
+        return payment
+
+    # Member operations
 
     def create_payment(
         self,
@@ -24,7 +118,7 @@ class LoanPaymentService:
         payment_in: LoanPaymentCreate,
         user_id: uuid.UUID,
     ) -> LoanPayment:
-        """Create a new loan payment."""
+        """Submit a new loan payment (PENDING until a reviewer verifies it)."""
 
         # Verify the loan exists and belongs to the user
         loan = session.get(Loan, payment_in.loan_id)
@@ -46,24 +140,27 @@ class LoanPaymentService:
                 detail=f"Cannot make payments on a loan with status '{loan.status.value}'",
             )
 
-        amount_paisa = MoneyMixin.rupees_to_paisa(payment_in.amount)
+        if payment_in.receipt_id is not None:
+            receipt = session.get(Receipt, payment_in.receipt_id)
+            if not receipt or receipt.user_id != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Receipt not found",
+                )
 
         payment = LoanPayment(
             loan_id=payment_in.loan_id,
             receipt_id=payment_in.receipt_id,
             payment_type=payment_in.payment_type,
-            amount_paisa=amount_paisa,
+            amount_paisa=MoneyMixin.rupees_to_paisa(payment_in.amount),
             date=payment_in.date,
+            status=LoanPaymentStatus.PENDING,
         )
 
-        # Update the loan's total_paid_paisa
-        loan.total_paid_paisa += amount_paisa
-
+        # Loan totals are NOT touched here; see review_payment().
         session.add(payment)
-        session.add(loan)
         session.commit()
         session.refresh(payment)
-        session.refresh(loan)
 
         return payment
 
@@ -162,34 +259,20 @@ class LoanPaymentService:
         payment_in: LoanPaymentUpdate,
         user_id: uuid.UUID,
     ) -> LoanPayment:
-        """Update an existing loan payment (only by the owner, before any verification)."""
+        """Update a PENDING loan payment (owner only)."""
 
-        payment = session.get(LoanPayment, payment_id)
-        if not payment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Loan payment not found",
-            )
-
-        # Verify ownership through the loan
-        loan = session.get(Loan, payment.loan_id)
-        if not loan or loan.user_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only update your own payments",
-            )
+        payment = self._get_owned_pending_payment(session, payment_id, user_id)
 
         update_data = payment_in.model_dump(exclude_unset=True)
-
-        # If amount is being changed, update loan totals accordingly
+        if update_data.get("receipt_id") is not None:
+            receipt = session.get(Receipt, update_data["receipt_id"])
+            if not receipt or receipt.user_id != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Receipt not found",
+                )
         if "amount" in update_data:
-            old_paisa = payment.amount_paisa
-            new_paisa = MoneyMixin.rupees_to_paisa(update_data.pop("amount"))
-            diff = new_paisa - old_paisa
-
-            payment.amount_paisa = new_paisa
-            loan.total_paid_paisa += diff
-            session.add(loan)
+            payment.amount_paisa = MoneyMixin.rupees_to_paisa(update_data.pop("amount"))
 
         for key, value in update_data.items():
             setattr(payment, key, value)
@@ -206,31 +289,51 @@ class LoanPaymentService:
         payment_id: uuid.UUID,
         user_id: uuid.UUID,
     ) -> None:
-        """Delete a loan payment (only by the owner)."""
+        """Withdraw a PENDING loan payment (owner only)."""
 
-        payment = session.get(LoanPayment, payment_id)
-        if not payment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Loan payment not found",
-            )
-
-        # Verify ownership through the loan
-        loan = session.get(Loan, payment.loan_id)
-        if not loan or loan.user_id != user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You can only delete your own payments",
-            )
-
-        # Reverse the payment from loan totals
-        loan.total_paid_paisa -= payment.amount_paisa
-        if loan.total_paid_paisa < 0:
-            loan.total_paid_paisa = 0
-
-        session.add(loan)
+        payment = self._get_owned_pending_payment(session, payment_id, user_id)
         session.delete(payment)
         session.commit()
+
+    # Reviewer operations (treasurer / moderator / admin)
+
+    def list_pending_payments(
+        self,
+        session: Session,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> tuple[List[LoanPayment], int]:
+        """Standalone payments awaiting review (deposit-linked ones are
+        reviewed through their deposit)."""
+        base = select(LoanPayment).where(
+            LoanPayment.status == LoanPaymentStatus.PENDING,
+            LoanPayment.deposit_id.is_(None),
+        )
+        total = session.exec(select(func.count()).select_from(base.subquery())).one()
+        payments = session.exec(
+            base.order_by(LoanPayment.date.desc()).offset(skip).limit(limit)
+        ).all()
+        return list(payments), total
+
+    def review_payment(
+        self,
+        session: Session,
+        payment_id: uuid.UUID,
+        new_status: LoanPaymentStatus,
+        reviewer: User,
+    ) -> LoanPayment:
+        """Verify or reject a standalone pending payment."""
+        payment = self.get_payment(session, payment_id)
+        if payment.deposit_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This payment belongs to a deposit; review the deposit instead",
+            )
+
+        self.review_payment_record(session, payment, new_status, reviewer)
+        session.commit()
+        session.refresh(payment)
+        return payment
 
     def moderator_delete_payment(
         self,
@@ -240,20 +343,14 @@ class LoanPaymentService:
     ) -> None:
         """Delete a loan payment (moderator/treasurer)."""
 
-        payment = session.get(LoanPayment, payment_id)
-        if not payment:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Loan payment not found",
-            )
+        payment = self.get_payment(session, payment_id)
 
-        # Reverse the payment from loan totals
-        loan = session.get(Loan, payment.loan_id)
-        if loan:
-            loan.total_paid_paisa -= payment.amount_paisa
-            if loan.total_paid_paisa < 0:
-                loan.total_paid_paisa = 0
-            session.add(loan)
+        # Only verified payments were ever credited to the loan
+        if payment.status == LoanPaymentStatus.VERIFIED:
+            loan = session.get(Loan, payment.loan_id)
+            if loan:
+                self.reverse_verified_payment(loan, payment)
+                session.add(loan)
 
         session.delete(payment)
         session.commit()

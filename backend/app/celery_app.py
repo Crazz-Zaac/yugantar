@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 import os
 
 
@@ -9,3 +10,11 @@ celery_app = Celery(
 )
 
 celery_app.autodiscover_tasks(["app.tasks"])
+
+# Hourly, so images are removed within an hour of their expiry
+celery_app.conf.beat_schedule = {
+    "purge-expired-receipts": {
+        "task": "purge_expired_receipts",
+        "schedule": crontab(minute=0),
+    },
+}

@@ -11,7 +11,6 @@ from app.schemas.deposit_schema import (
     DepositUserUpdate,
     DepositModeratorUpdate,
 )
-from app.services.receipt_service import ReceiptService
 from app.models.user_model import User, CooperativeRole, AccessRole
 from app.utils.deposit_date_utils import (
     calculate_due_date,
@@ -21,6 +20,9 @@ from app.utils.deposit_date_utils import (
 )
 from app.models.mixins.money import MoneyMixin
 from app.models.fine_model import Fine
+from app.models.loan_model import Loan
+from app.models.loan_payment import LoanPayment, LoanPaymentStatus
+from app.services.loan_payment_service import LoanPaymentService
 
 
 class DepositService:
@@ -42,6 +44,14 @@ class DepositService:
             CooperativeRole.TREASURER.value in cooperative_roles
             or AccessRole.MODERATOR.value in access_roles
             or AccessRole.ADMIN.value in access_roles
+        )
+
+    @staticmethod
+    def _linked_payments(session: Session, deposit_id: uuid.UUID) -> list[LoanPayment]:
+        return list(
+            session.exec(
+                select(LoanPayment).where(LoanPayment.deposit_id == deposit_id)
+            ).all()
         )
 
     def create_deposit(
@@ -177,6 +187,24 @@ class DepositService:
         deposit.verification_status = deposit_in.verification_status
         deposit.verified_by = f"{current_user.first_name} {current_user.last_name}"
         session.add(deposit)
+
+        # Loan payments allocated from this deposit follow its outcome; only
+        # now (on VERIFIED) are they credited to the loan.
+        if deposit_in.verification_status in (
+            DepositVerificationStatus.VERIFIED,
+            DepositVerificationStatus.REJECTED,
+        ):
+            payment_status = (
+                LoanPaymentStatus.VERIFIED
+                if deposit_in.verification_status == DepositVerificationStatus.VERIFIED
+                else LoanPaymentStatus.REJECTED
+            )
+            for payment in self._linked_payments(session, deposit.id):
+                if payment.status == LoanPaymentStatus.PENDING:
+                    LoanPaymentService.review_payment_record(
+                        session, payment, payment_status, current_user
+                    )
+
         session.commit()
         session.refresh(deposit)
 
@@ -257,6 +285,9 @@ class DepositService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Only pending deposits can be withdrawn",
             )
+        # Linked loan payments are still pending (never credited), just remove them
+        for payment in self._linked_payments(session, deposit.id):
+            session.delete(payment)
         session.delete(deposit)
         session.commit()
 
@@ -282,6 +313,15 @@ class DepositService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Deposit not found",
             )
+
+        # Remove linked loan payments, undoing any that were credited to a loan
+        for payment in self._linked_payments(session, deposit.id):
+            if payment.status == LoanPaymentStatus.VERIFIED:
+                loan = session.get(Loan, payment.loan_id)
+                if loan:
+                    LoanPaymentService.reverse_verified_payment(loan, payment)
+                    session.add(loan)
+            session.delete(payment)
 
         session.delete(deposit)
         session.commit()

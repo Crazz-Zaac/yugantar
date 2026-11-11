@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 import uuid
 
-from app.models.loan_payment import LoanPaymentType
+from app.models.loan_payment import LoanPaymentType, LoanPaymentStatus
 
 
 # ----------------------------
@@ -34,13 +34,23 @@ class LoanPaymentUpdate(SQLModel):
     receipt_id: Optional[uuid.UUID] = None
 
 
+class LoanPaymentReview(SQLModel):
+    """Reviewer decision on a pending loan payment."""
+
+    status: LoanPaymentStatus  # VERIFIED or REJECTED
+
+
 class LoanPaymentResponse(SQLModel):
     """Schema for loan payment responses."""
 
     id: uuid.UUID
     loan_id: uuid.UUID
     receipt_id: Optional[uuid.UUID]
+    deposit_id: Optional[uuid.UUID] = None
     payment_type: LoanPaymentType
+    status: LoanPaymentStatus
+    verified_by: Optional[str] = None
+    verified_at: Optional[datetime] = None
     amount_paisa: int
     date: datetime
     created_at: datetime

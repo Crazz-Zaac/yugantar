@@ -104,6 +104,9 @@ class SmartDepositCreate(SQLModel):
     ocr_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     ocr_reference: Optional[str] = None
     receipt_screenshot: Optional[str] = None
+    # Receipt returned by /v1/ocr/process-image; lets the treasurer view the
+    # voucher and compare OCR values with the submitted ones.
+    receipt_id: Optional[uuid.UUID] = None
 
     allocations: List[SmartDepositAllocation]
 

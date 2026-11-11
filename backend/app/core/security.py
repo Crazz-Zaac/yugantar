@@ -2,6 +2,8 @@
 Adapted from fastapi repository: https://github.com/fastapi/full-stack-fastapi-template/blob/master/backend/app/core/security.py
 """
 
+import hashlib
+import hmac
 import jwt
 import bcrypt
 from datetime import datetime, timedelta, timezone
@@ -115,6 +117,41 @@ def create_url_safe_token(data: dict) -> str:
     token = serializer.dumps(data)
 
     return token
+
+
+# ---------------------------------------------------------------------------
+# Password reset tokens
+# ---------------------------------------------------------------------------
+# Separate salt so email-verification tokens can't be used as reset tokens
+# (and vice versa). The token embeds a fingerprint of the current password
+# hash, so it stops working as soon as the password changes (single use).
+_reset_serializer = URLSafeTimedSerializer(settings.SECRET_KEY, salt="password-reset")
+PASSWORD_RESET_MAX_AGE_SECONDS = 30 * 60
+
+
+def _password_fingerprint(hashed_password: str) -> str:
+    return hashlib.sha256(hashed_password.encode("utf-8")).hexdigest()[:16]
+
+
+def create_password_reset_token(user_id: Any, hashed_password: str) -> str:
+    return _reset_serializer.dumps(
+        {"uid": str(user_id), "fp": _password_fingerprint(hashed_password)}
+    )
+
+
+def read_password_reset_token(token: str) -> dict:
+    """Return the payload ({uid, fp}) or raise ValueError if invalid/expired."""
+    try:
+        data = _reset_serializer.loads(token, max_age=PASSWORD_RESET_MAX_AGE_SECONDS)
+    except Exception:
+        raise ValueError("Invalid or expired reset token")
+    if not isinstance(data, dict) or "uid" not in data or "fp" not in data:
+        raise ValueError("Invalid or expired reset token")
+    return data
+
+
+def password_fingerprint_matches(hashed_password: str, fingerprint: str) -> bool:
+    return hmac.compare_digest(_password_fingerprint(hashed_password), fingerprint)
 
 
 # Decode URL-safe token with max age of 24 hours (86400 seconds)

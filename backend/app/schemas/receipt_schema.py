@@ -1,80 +1,43 @@
-from sqlmodel import SQLModel, Field
-from typing import Optional
-from datetime import datetime, timezone
-import uuid
-from pydantic import field_validator
+from sqlmodel import SQLModel
+from typing import Optional, List
+from datetime import datetime
 from decimal import Decimal
+import uuid
+
 
 # ----------------------------
 # Receipt Schemas
 # ----------------------------
 
 
-class ReceiptBase(SQLModel):
+class ReceiptDuplicate(SQLModel):
+    """Another deposit that used the same image or bank reference."""
+
+    deposit_id: uuid.UUID
     user_id: uuid.UUID
-    receipt_screenshot: Optional[str] = Field(default=None, max_length=255)
-    
-    amount: Decimal = Field(..., gt=0)
-    txn_number: Optional[int] = None
-    date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-    @field_validator("receipt_screenshot")
-    def validate_receipt_screenshot(cls, value):
-        # Allow None for optional field, only validate if value is provided
-        if value is not None:
-            if not value.lower().endswith((".png", ".jpg", ".jpeg")):
-                raise ValueError(
-                    "Invalid file type. Only .png, .jpg, and .jpeg are allowed."
-                )
-        return value
-
-    @field_validator("amount")
-    def validate_amount(cls, value):
-        if value <= 0:
-            raise ValueError("Amount must be greater than 0.")
-        return value
-
-    @property
-    def has_screenshot(self) -> bool:
-        return self.receipt_screenshot is not None
-
-    @property
-    def is_recent(self) -> bool:
-        """Check if receipt is from the last 7 days"""
-        return (datetime.now(timezone.utc) - self.date).days <= 7
+    match: str  # "same_image" | "same_reference"
 
 
-class ReceiptCreate(ReceiptBase):
-    pass
-    
-class ReceiptUpdate(SQLModel):
-    receipt_screenshot: Optional[str] = Field(default=None, max_length=255)
-    
-    amount: Optional[float] = Field(default=None, gt=0)
-    txn_number: Optional[int] = None
-    date: Optional[datetime] = None
-    
+class ReceiptResponse(SQLModel):
+    """Receipt metadata for the uploader and reviewers."""
 
-    @field_validator("receipt_screenshot")
-    def validate_receipt_screenshot(cls, value):
-        if value is not None:
-            if not value.lower().endswith((".png", ".jpg", ".jpeg")):
-                raise ValueError(
-                    "Invalid file type. Only .png, .jpg, and .jpeg are allowed."
-                )
-        return value
-
-class ReceiptResponse(ReceiptBase):
     id: uuid.UUID
-    created_at: datetime
-    updated_at: datetime
+    user_id: Optional[uuid.UUID]
+    uploaded_at: datetime
+    expires_at: datetime
+    image_available: bool
 
-    class Config:
-        from_attributes = True
+    ocr_status: str
+    ocr_amount: Optional[Decimal] = None  # rupees
+    ocr_charge: Optional[Decimal] = None  # rupees
+    ocr_date: Optional[datetime] = None
+    ocr_reference: Optional[str] = None
 
+    # Present when the receipt is linked to a deposit
+    deposit_id: Optional[uuid.UUID] = None
+    submitted_amount: Optional[Decimal] = None  # rupees, as submitted by the member
+    submitted_date: Optional[datetime] = None
+    amount_differs_from_ocr: bool = False
+    date_differs_from_ocr: bool = False
 
-# Schema for database operations
-class ReceiptDB(ReceiptBase, table=False):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    duplicates: List[ReceiptDuplicate] = []

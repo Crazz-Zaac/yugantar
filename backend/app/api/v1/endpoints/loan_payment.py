@@ -8,6 +8,7 @@ from app.schemas.loan_payment_schema import (
     LoanPaymentUpdate,
     LoanPaymentResponse,
     LoanPaymentListResponse,
+    LoanPaymentReview,
 )
 from app.services.loan_payment_service import LoanPaymentService
 from app.api.dependencies.auth import get_current_active_user
@@ -135,6 +136,43 @@ def delete_my_loan_payment(
 
 
 # Treasurer / Moderator endpoints
+
+
+@router.get(
+    "/review/pending",
+    response_model=LoanPaymentListResponse,
+)
+def get_pending_loan_payments(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(get_current_policy_manager),
+    session: Session = Depends(get_session),
+):
+    """List standalone loan payments awaiting review (treasurer/moderator/admin)."""
+    payments, total = loan_payment_service.list_pending_payments(
+        session=session, skip=skip, limit=limit
+    )
+    return LoanPaymentListResponse(payments=payments, total=total)
+
+
+@router.put(
+    "/{payment_id}/review",
+    response_model=LoanPaymentResponse,
+)
+def review_loan_payment(
+    payment_id: UUID,
+    review: LoanPaymentReview,
+    current_user: User = Depends(get_current_policy_manager),
+    session: Session = Depends(get_session),
+):
+    """Verify or reject a pending loan payment. Only verified payments
+    are credited to the loan."""
+    return loan_payment_service.review_payment(
+        session=session,
+        payment_id=payment_id,
+        new_status=review.status,
+        reviewer=current_user,
+    )
 
 
 @router.delete(

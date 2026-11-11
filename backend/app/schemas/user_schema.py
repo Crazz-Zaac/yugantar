@@ -13,6 +13,20 @@ from app.models.user_model import AccessRole, CooperativeRole, GenderEnum
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
+def validate_password_strength(value: str) -> str:
+    """Shared password rules for registration, change and reset."""
+    # Ensure password doesn't exceed bcrypt's 72-byte limit
+    if len(value.encode("utf-8")) > 72:
+        raise ValueError("Password cannot exceed 72 bytes")
+    if not any(char.isdigit() for char in value):
+        raise ValueError("Password must contain at least one digit")
+    if not any(char.isalpha() for char in value):
+        raise ValueError("Password must contain at least one letter")
+    if not any(char.isupper() for char in value):
+        raise ValueError("Password must contain at least one uppercase letter")
+    return value
+
+
 # ----------------------------
 # User Schemas
 # ----------------------------
@@ -67,18 +81,7 @@ class UserCreate(UserBase):
 
     @field_validator("password")
     def validate_password_strength(cls, value):
-        # Ensure password doesn't exceed bcrypt's 72-byte limit
-        if len(value.encode("utf-8")) > 72:
-            raise ValueError("Password cannot exceed 72 bytes")
-
-        # Basic password strength validation
-        if not any(char.isdigit() for char in value):
-            raise ValueError("Password must contain at least one digit")
-        if not any(char.isalpha() for char in value):
-            raise ValueError("Password must contain at least one letter")
-        if not any(char.isupper() for char in value):
-            raise ValueError("Password must contain at least one uppercase letter")
-        return value
+        return validate_password_strength(value)
 
 
 # Schema for updating user information
@@ -99,16 +102,20 @@ class UserPasswordChange(SQLModel):
 
     @field_validator("new_password")
     def validate_new_password_strength(cls, value):
-        # Ensure password doesn't exceed bcrypt's 72-byte limit
-        if len(value.encode("utf-8")) > 72:
-            raise ValueError("Password cannot exceed 72 bytes")
+        return validate_password_strength(value)
 
-        # Basic password strength validation
-        if not any(char.isdigit() for char in value):
-            raise ValueError("Password must contain at least one digit")
-        if not any(char.isalpha() for char in value):
-            raise ValueError("Password must contain at least one letter")
-        return value
+
+class PasswordResetRequest(SQLModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(SQLModel):
+    token: str = Field(..., max_length=512)
+    new_password: str = Field(..., min_length=8, max_length=72)
+
+    @field_validator("new_password")
+    def validate_new_password_strength(cls, value):
+        return validate_password_strength(value)
 
 
 # Schema for returning user information (response model)

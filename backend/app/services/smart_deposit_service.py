@@ -12,8 +12,9 @@ from app.models.policy.deposit_policy import DepositPolicy
 from app.models.deposit_model import Deposit, DepositType, DepositVerificationStatus
 from app.models.fine_model import Fine, FineType
 from app.models.loan_model import Loan, LoanStatus
-from app.models.loan_payment import LoanPayment, LoanPaymentType
+from app.models.loan_payment import LoanPayment, LoanPaymentType, LoanPaymentStatus
 from app.models.mixins.money import MoneyMixin
+from app.services.receipt_service import ReceiptService
 from app.utils.deposit_date_utils import (
     calculate_due_date,
     calculate_late_fine,
@@ -161,6 +162,12 @@ class SmartDepositService:
                 "Deposit policy not found",
             )
 
+        receipt_id = None
+        if req.receipt_id is not None:
+            receipt_id = ReceiptService().claim_for_deposit(
+                session, req.receipt_id, user_id
+            ).id
+
         total_deposit = deposit_amount + advance_amount
         due_date = calculate_due_date(policy=policy, reference_date=now)
         deposit_type: Optional[DepositType] = (
@@ -175,6 +182,7 @@ class SmartDepositService:
             due_deposit_date=due_date,
             amount_paisa=MoneyMixin.rupees_to_paisa(alloc_total),
             verification_status=DepositVerificationStatus.PENDING,
+            receipt_id=receipt_id,
         )
         session.add(deposit)
         session.flush()
@@ -214,55 +222,42 @@ class SmartDepositService:
                 raise HTTPException(
                     status.HTTP_403_FORBIDDEN, "Cannot pay someone else's loan"
                 )
+            if loan.status not in (LoanStatus.ACTIVE, LoanStatus.APPROVED):
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"Cannot make payments on a loan with status '{loan.status.value}'",
+                )
 
             paisa = MoneyMixin.rupees_to_paisa(la.amount_rupees)
 
             if la.category == SplitCategory.LOAN_RENEWAL:
-                # Loan renewal: pay off remaining outstanding principal
-                outstanding = loan.principal_paisa - loan.total_paid_paisa
-                if outstanding < 0:
-                    outstanding = 0
+                # Loan renewal: must cover the remaining outstanding principal
+                outstanding = max(0, loan.principal_paisa - loan.total_paid_paisa)
                 if paisa < outstanding:
                     raise HTTPException(
                         status.HTTP_400_BAD_REQUEST,
                         f"Loan renewal requires at least {outstanding / 100} rupees "
                         f"to cover outstanding principal",
                     )
-                # Create a PRINCIPAL payment for the outstanding amount
-                payment = LoanPayment(
-                    loan_id=la.loan_id,
-                    payment_type=LoanPaymentType.PRINCIPAL,
-                    amount_paisa=paisa,
-                    date=now,
-                )
-                session.add(payment)
-                loan_payment_ids.append(payment.id)
 
-                loan.total_paid_paisa += paisa
-                # Mark loan as PAID since the full principal is covered
-                if loan.total_paid_paisa >= loan.principal_paisa:
-                    loan.status = LoanStatus.PAID
-                session.add(loan)
-            else:
-                # Regular loan principal or interest payment
-                payment_type = (
-                    LoanPaymentType.PRINCIPAL
-                    if la.category == SplitCategory.LOAN_PRINCIPAL
-                    else LoanPaymentType.INTEREST
-                )
+            payment_type = (
+                LoanPaymentType.INTEREST
+                if la.category == SplitCategory.LOAN_INTEREST
+                else LoanPaymentType.PRINCIPAL
+            )
 
-                payment = LoanPayment(
-                    loan_id=la.loan_id,
-                    payment_type=payment_type,
-                    amount_paisa=paisa,
-                    date=now,
-                )
-                session.add(payment)
-                loan_payment_ids.append(payment.id)
-
-                # Update loan totals
-                loan.total_paid_paisa += paisa
-                session.add(loan)
+            # Payments stay PENDING and do not touch the loan's totals until
+            # a reviewer verifies the deposit (see DepositService.verify_deposit).
+            payment = LoanPayment(
+                loan_id=la.loan_id,
+                deposit_id=deposit.id,
+                payment_type=payment_type,
+                amount_paisa=paisa,
+                date=now,
+                status=LoanPaymentStatus.PENDING,
+            )
+            session.add(payment)
+            loan_payment_ids.append(payment.id)
 
         # Commit everything
         session.commit()
@@ -279,5 +274,5 @@ class SmartDepositService:
             fine_amount_paisa=fine_amount_paisa,
             loan_payment_ids=loan_payment_ids,
             total_allocated_rupees=total_allocated,
-            message="Deposit created successfully",
+            message="Deposit submitted; awaiting treasurer verification",
         )

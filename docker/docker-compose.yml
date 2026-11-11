@@ -6,7 +6,7 @@ services:
     env_file:
       - ../backend/.env
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"  # localhost only; never expose the DB publicly
     volumes:
       - db_data:/var/lib/postgresql/data
     networks:
@@ -18,7 +18,7 @@ services:
     env_file:
       - ../backend/.env
     ports:
-      - "8080:80"  
+      - "127.0.0.1:8080:80"  # localhost only
     volumes:
       - pgadmin_data:/var/lib/pgadmin
     networks:
@@ -43,6 +43,7 @@ services:
     volumes: 
       - ../backend:/app
       - upload-data:/tmp/ocr_uploads  # shared volume for uploaded data
+      - receipts-data:/data/receipts  # private receipt images (served only via API)
     networks:
       - yugantar-network
     restart: unless-stopped
@@ -67,7 +68,6 @@ services:
     volumes:
       - ../frontend/yugantar:/app       # live code changes reflect instantly
       - /app/node_modules
-      - upload-data:/app/uploads # shared volume for uploaded data
     networks:
       - yugantar-network
     restart: unless-stopped
@@ -96,6 +96,7 @@ services:
     volumes:
       - ../backend:/app
       - upload-data:/tmp/ocr_uploads # shared volume for uploaded data
+      - receipts-data:/data/receipts
     networks:
       - yugantar-network
     restart: unless-stopped
@@ -130,7 +131,8 @@ volumes:
   db_data:
   pgadmin_data:
   redis_data:
-  upload-data:  # shared between backend, frontend, and celery worker
+  upload-data:  # temporary OCR uploads, shared by backend and celery worker
+  receipts-data:  # receipt images kept for review (RECEIPT_RETENTION_DAYS); back this up
   # portainer_data:
 
 networks:

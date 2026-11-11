@@ -51,17 +51,19 @@ async def get_current_user(
     user = session.exec(statement).first()
     if user is None:
         raise credentials_exception
+    # Checked on every request so disabling an account takes effect
+    # immediately, even for still-valid access tokens.
+    if user.disabled:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User account is disabled",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     return user
 
 
 async def get_current_active_user(
     current_user: User = Depends(get_current_user),
 ) -> User:
-    """Ensure the current user is active."""
-    if current_user.disabled:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account is disabled",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    """Kept for compatibility; get_current_user already rejects disabled users."""
     return current_user
