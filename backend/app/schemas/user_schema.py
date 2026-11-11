@@ -198,13 +198,20 @@ class UserDB(UserBase):
 
 # Schema for public user information (limited fields)
 class UserPublic(SQLModel):
-    """Public profile - minimal information visible to other users"""
+    """Member profile visible to all other members of the cooperative.
+
+    Contact details (email, phone) are shared: this is a closed group and
+    members/office bearers need to reach each other. Address, date of birth
+    and gender stay private (self, admin and moderator only).
+    """
 
     id: uuid.UUID
     first_name: str
     middle_name: Optional[str] = None
     last_name: Optional[str] = None  # Optionally hide last name
-    gender: GenderEnum
+
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
 
     access_roles: List[AccessRole]
     cooperative_roles: List[CooperativeRole]

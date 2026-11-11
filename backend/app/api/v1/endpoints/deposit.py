@@ -30,6 +30,8 @@ from app.api.dependencies.auth import get_current_active_user
 from app.models.user_model import User, CooperativeRole
 from app.models.notification_model import Notification, NotificationType
 from app.services.email_notify import send_generic_email
+from app.services.visibility import can_view_deposit
+from app.services.duties import Duty, responsible_users
 from fastapi_mail import NameEmail
 
 
@@ -41,18 +43,13 @@ smart_deposit_service = SmartDepositService()
 def _notify_treasurers_new_deposit(
     session: Session,
     background_tasks: BackgroundTasks,
-    depositor_name: str,
+    depositor: User,
     amount_rupees: str,
 ) -> None:
-    all_users = session.exec(select(User)).all()
-    treasurers = []
-    for user in all_users:
-        cooperative_roles = {
-            str(getattr(role, "value", role)).lower()
-            for role in (user.cooperative_roles or [])
-        }
-        if CooperativeRole.TREASURER.value in cooperative_roles:
-            treasurers.append(user)
+    """Notify whoever verifies this deposit (the Treasurers, or the Secretary
+    if the depositor is the Treasurer)."""
+    depositor_name = f"{depositor.first_name} {depositor.last_name}".strip()
+    treasurers = responsible_users(session, Duty.VERIFY_DEPOSIT, depositor)
 
     for treasurer in treasurers:
         session.add(
@@ -143,11 +140,10 @@ def create_deposit(
         user_id=current_user.id,
     )
 
-    depositor_name = f"{current_user.first_name} {current_user.last_name}".strip()
     _notify_treasurers_new_deposit(
         session=session,
         background_tasks=background_tasks,
-        depositor_name=depositor_name,
+        depositor=current_user,
         amount_rupees=f"{new_deposit.amount_rupees:,.2f}",
     )
 
@@ -218,11 +214,16 @@ def get_deposit(
 ):
     """
     Retrieve a deposit by its ID.
+
+    Verified deposits are visible to every member; pending/rejected ones only
+    to the depositor and office bearers (others get 404).
     """
     deposit = deposit_service.get_deposit(
         session=session,
         deposit_id=deposit_id,
     )
+    if not can_view_deposit(current_user, deposit):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deposit not found")
     return deposit
 
 
@@ -376,11 +377,10 @@ def create_smart_deposit(
     )
 
     if result.deposit_id:
-        depositor_name = f"{current_user.first_name} {current_user.last_name}".strip()
         _notify_treasurers_new_deposit(
             session=session,
             background_tasks=background_tasks,
-            depositor_name=depositor_name,
+            depositor=current_user,
             amount_rupees=f"{result.deposit_amount_paisa / 100:,.2f}",
         )
 

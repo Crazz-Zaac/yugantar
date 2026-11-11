@@ -11,6 +11,7 @@ from app.models.policy.loan_policy import LoanPolicy
 from app.models.policy.base_policy import PolicyStatus
 from app.models.user_model import User
 from app.models.mixins.money import MoneyMixin
+from app.services.duties import Duty, denial_reason
 from app.schemas.loan_schema import (
     LoanApplicationCreate,
     LoanResponse,
@@ -184,6 +185,7 @@ class LoanService:
         session: Session,
         skip: int = 0,
         limit: int = 50,
+        viewer: User | None = None,
     ) -> Tuple[List[LoanResponse], int]:
         base = select(Loan).where(Loan.status == LoanStatus.PENDING)
         total = session.exec(select(func.count()).select_from(base.subquery())).one()
@@ -194,10 +196,24 @@ class LoanService:
         for loan in loans:
             user = session.get(User, loan.user_id)
             name = f"{user.first_name} {user.last_name}".strip() if user else None
-            result.append(_loan_to_response(loan, applicant_name=name))
+            response = _loan_to_response(loan, applicant_name=name)
+            if viewer is not None:
+                # Same rules the endpoints enforce, so the UI only offers
+                # actions that will succeed (services/duties.py).
+                response.viewer_can_verify_funds = (
+                    not loan.fund_verified_by
+                    and denial_reason(viewer, Duty.VERIFY_LOAN_FUNDS, user) is None
+                )
+                response.viewer_can_decide = (
+                    bool(loan.fund_verified_by)
+                    and loan.fund_verified_by != viewer.email
+                    and denial_reason(viewer, Duty.DECIDE_LOAN, user) is None
+                )
+                response.is_own_application = loan.user_id == viewer.id
+            result.append(response)
         return result, total
 
-    # Community loans (all approved/active/paid – anonymised) 
+    # Community loans (all approved/active/paid; full names: closed group) 
     def get_community_loans(
         self,
         session: Session,
@@ -220,12 +236,7 @@ class LoanService:
         result = []
         for loan in loans:
             user = session.get(User, loan.user_id)
-            # Only show first name + last initial for privacy
-            if user:
-                last_initial = f"{user.last_name[0]}." if user.last_name else ""
-                name = f"{user.first_name} {last_initial}".strip()
-            else:
-                name = "Unknown"
+            name = f"{user.first_name} {user.last_name}".strip() if user else "Unknown"
             result.append(_loan_to_response(loan, applicant_name=name))
         return result, total
 

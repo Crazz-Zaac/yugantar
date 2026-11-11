@@ -23,28 +23,13 @@ from app.models.fine_model import Fine
 from app.models.loan_model import Loan
 from app.models.loan_payment import LoanPayment, LoanPaymentStatus
 from app.services.loan_payment_service import LoanPaymentService
+from app.services.duties import Duty, require_duty, denial_reason, may_perform_any
 
 
 class DepositService:
     """
     Service class for managing deposits.
     """
-
-    @staticmethod
-    def _is_deposit_reviewer(current_user: User) -> bool:
-        cooperative_roles = {
-            str(getattr(role, "value", role)).lower()
-            for role in (current_user.cooperative_roles or [])
-        }
-        access_roles = {
-            str(getattr(role, "value", role)).lower()
-            for role in (current_user.access_roles or [])
-        }
-        return (
-            CooperativeRole.TREASURER.value in cooperative_roles
-            or AccessRole.MODERATOR.value in access_roles
-            or AccessRole.ADMIN.value in access_roles
-        )
 
     @staticmethod
     def _linked_payments(session: Session, deposit_id: uuid.UUID) -> list[LoanPayment]:
@@ -160,20 +145,16 @@ class DepositService:
         current_user: User,
     ) -> Deposit:
         """
-        Moderator update for an existing deposit.
+        Verify or reject a pending deposit (Treasurer; Secretary for the
+        Treasurer's own deposits; never your own; see services/duties.py).
         """
-
-        if not self._is_deposit_reviewer(current_user):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient privileges",
-            )
         deposit = session.get(Deposit, deposit_id)
         if not deposit:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Deposit not found",
             )
+        require_duty(current_user, Duty.VERIFY_DEPOSIT, session.get(User, deposit.user_id))
 
         if deposit.verification_status != DepositVerificationStatus.PENDING:
             raise HTTPException(
@@ -298,21 +279,15 @@ class DepositService:
         current_user: User,
     ) -> None:
         """
-        Delete a deposit by its ID.
+        Delete a deposit by its ID (same people who may verify it).
         """
-
-        if not self._is_deposit_reviewer(current_user):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Insufficient privileges",
-            )
-
         deposit = session.get(Deposit, deposit_id)
         if not deposit:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Deposit not found",
             )
+        require_duty(current_user, Duty.VERIFY_DEPOSIT, session.get(User, deposit.user_id))
 
         # Remove linked loan payments, undoing any that were credited to a loan
         for payment in self._linked_payments(session, deposit.id):
@@ -388,7 +363,8 @@ class DepositService:
         skip: int = 0,
         limit: int = 50,
     ) -> list[Deposit]:
-        if not self._is_deposit_reviewer(current_user):
+        """Pending deposits this user may act on (never their own)."""
+        if not may_perform_any(current_user, Duty.VERIFY_DEPOSIT):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Insufficient privileges",
@@ -398,7 +374,10 @@ class DepositService:
             select(Deposit)
             .where(Deposit.verification_status == DepositVerificationStatus.PENDING)
             .order_by(Deposit.created_at.desc())
-            .offset(skip)
-            .limit(limit)
         )
-        return list(session.exec(statement).all())
+        actionable = [
+            d
+            for d in session.exec(statement).all()
+            if denial_reason(current_user, Duty.VERIFY_DEPOSIT, d.user) is None
+        ]
+        return actionable[skip : skip + limit]

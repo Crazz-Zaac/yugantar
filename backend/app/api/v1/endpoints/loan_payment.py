@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session
 from uuid import UUID
 
@@ -12,8 +12,13 @@ from app.schemas.loan_payment_schema import (
 )
 from app.services.loan_payment_service import LoanPaymentService
 from app.api.dependencies.auth import get_current_active_user
-from app.api.dependencies.admin import get_current_policy_manager
 from app.models.user_model import User
+from app.models.loan_model import Loan
+from app.services.visibility import (
+    can_view_loan,
+    can_view_loan_payment,
+    can_view_all_payments_of,
+)
 
 
 router = APIRouter(prefix="/loan-payments", tags=["loan-payments"])
@@ -72,12 +77,20 @@ def get_payments_for_loan(
     current_user: User = Depends(get_current_active_user),
     session: Session = Depends(get_session),
 ):
-    """Get all payments for a specific loan."""
+    """Get all payments for a specific loan.
+
+    Owner and office bearers see every payment; other members see only
+    verified payments of loans visible to them.
+    """
+    loan = session.get(Loan, loan_id)
+    if not loan or not can_view_loan(current_user, loan):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Loan not found")
     payments, total = loan_payment_service.get_payments_for_loan(
         session=session,
         loan_id=loan_id,
         skip=skip,
         limit=limit,
+        verified_only=not can_view_all_payments_of(current_user, loan),
     )
     return LoanPaymentListResponse(payments=payments, total=total)
 
@@ -91,11 +104,12 @@ def get_loan_payment(
     current_user: User = Depends(get_current_active_user),
     session: Session = Depends(get_session),
 ):
-    """Get a specific loan payment by ID."""
-    return loan_payment_service.get_payment(
-        session=session,
-        payment_id=payment_id,
-    )
+    """Get a specific loan payment by ID (hidden payments return 404)."""
+    payment = loan_payment_service.get_payment(session=session, payment_id=payment_id)
+    loan = session.get(Loan, payment.loan_id)
+    if not loan or not can_view_loan_payment(current_user, payment, loan):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Loan payment not found")
+    return payment
 
 
 @router.put(
@@ -135,7 +149,7 @@ def delete_my_loan_payment(
     return None
 
 
-# Treasurer / Moderator endpoints
+# Treasurer / Secretary endpoints (see services/duties.py)
 
 
 @router.get(
@@ -145,12 +159,13 @@ def delete_my_loan_payment(
 def get_pending_loan_payments(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    current_user: User = Depends(get_current_policy_manager),
+    current_user: User = Depends(get_current_active_user),
     session: Session = Depends(get_session),
 ):
-    """List standalone loan payments awaiting review (treasurer/moderator/admin)."""
+    """List standalone loan payments awaiting review that you may act on
+    (Treasurer; Secretary for the Treasurer's own payments)."""
     payments, total = loan_payment_service.list_pending_payments(
-        session=session, skip=skip, limit=limit
+        session=session, current_user=current_user, skip=skip, limit=limit
     )
     return LoanPaymentListResponse(payments=payments, total=total)
 
@@ -162,7 +177,7 @@ def get_pending_loan_payments(
 def review_loan_payment(
     payment_id: UUID,
     review: LoanPaymentReview,
-    current_user: User = Depends(get_current_policy_manager),
+    current_user: User = Depends(get_current_active_user),
     session: Session = Depends(get_session),
 ):
     """Verify or reject a pending loan payment. Only verified payments
@@ -181,10 +196,10 @@ def review_loan_payment(
 )
 def moderator_delete_loan_payment(
     payment_id: UUID,
-    current_user: User = Depends(get_current_policy_manager),
+    current_user: User = Depends(get_current_active_user),
     session: Session = Depends(get_session),
 ):
-    """Delete a loan payment (treasurer/moderator only)."""
+    """Delete a loan payment (Treasurer; Secretary for the Treasurer's own)."""
     loan_payment_service.moderator_delete_payment(
         session=session,
         payment_id=payment_id,

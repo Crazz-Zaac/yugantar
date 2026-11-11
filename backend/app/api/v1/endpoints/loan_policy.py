@@ -14,6 +14,7 @@ from app.schemas.policy.loan_policy_schema import (
 )
 from app.services.loan_policy_service import LoanPolicyService
 from app.api.dependencies.admin import get_current_policy_manager
+from app.services.duties import Duty, require_duty, responsible_users
 from app.api.dependencies.auth import get_current_user
 from app.core.config import settings
 from app.models.user_model import User, CooperativeRole
@@ -22,6 +23,14 @@ from app.services.email_notify import send_generic_email
 from fastapi_mail import NameEmail
 
 router = APIRouter(prefix="/policies", tags=["policies"])
+
+
+def _policy_creator(session: Session, policy) -> User | None:
+    """The user who created the policy (created_by stores their email)."""
+    if not policy.created_by:
+        return None
+    return session.exec(select(User).where(User.email == policy.created_by)).first()
+
 
 loan_policy_service = LoanPolicyService()
 
@@ -33,12 +42,9 @@ def _notify_presidents_loan(
     submitted_by_name: str,
 ):
     """Create in-app notifications and send emails to all Presidents."""
-    all_users = session.exec(select(User)).all()
-    presidents = [
-        u
-        for u in all_users
-        if CooperativeRole.PRESIDENT.value in (u.cooperative_roles or [])
-    ]
+    presidents = responsible_users(
+        session, Duty.DECIDE_POLICY, _policy_creator(session, policy)
+    )
 
     for president in presidents:
         notif = Notification(
@@ -229,11 +235,6 @@ def approve_loan_policy(
     Approve a finalized loan policy (set status to ACTIVE).
     Only users with the President cooperative role can approve.
     """
-    if CooperativeRole.PRESIDENT.value not in (current_user.cooperative_roles or []):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the President can approve policies.",
-        )
 
     statement = select(LoanPolicy).where(LoanPolicy.policy_id == policy_id)
     policy = session.exec(statement).first()
@@ -243,6 +244,7 @@ def approve_loan_policy(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Loan policy not found.",
         )
+    require_duty(current_user, Duty.DECIDE_POLICY, _policy_creator(session, policy))
 
     if policy.status != PolicyStatus.FINALIZED:
         raise HTTPException(
@@ -279,11 +281,6 @@ def reject_loan_policy(
     Reject a finalized loan policy (set status to VOID).
     Only users with the President cooperative role can reject.
     """
-    if CooperativeRole.PRESIDENT.value not in (current_user.cooperative_roles or []):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the President can reject policies.",
-        )
 
     statement = select(LoanPolicy).where(LoanPolicy.policy_id == policy_id)
     policy = session.exec(statement).first()
@@ -293,6 +290,7 @@ def reject_loan_policy(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Loan policy not found.",
         )
+    require_duty(current_user, Duty.DECIDE_POLICY, _policy_creator(session, policy))
 
     if policy.status != PolicyStatus.FINALIZED:
         raise HTTPException(

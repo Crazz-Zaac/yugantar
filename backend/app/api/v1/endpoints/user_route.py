@@ -6,11 +6,13 @@ from uuid import UUID
 from datetime import timedelta
 
 from app.core.db import get_session
-from app.models.user_model import User
+from app.models.user_model import User, AccessRole
+from typing import Union
 from app.schemas.user_schema import (
     UserCreate,
     UserUpdate,
     UserResponse,
+    UserPublic,
     LoginSuccess,
     TokenResponse,
     LoginRequest,
@@ -268,18 +270,20 @@ async def logout_user(
 # -----------------------------
 
 
-@router.get("/{user_id}", response_model=UserResponse)
+@router.get("/{user_id}", response_model=Union[UserResponse, UserPublic])
 async def get_user_by_id(
     user_id: UUID,
     session: Session = Depends(get_session),
-    current_user: User = Depends(get_current_user),  # Added authentication
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Retrieve a user by ID (requires authentication).
+    Retrieve a user by ID.
     Privacy rules:
-        - Users can view their own details.
-        - Admins can view any user's details.
-        - Public profiles (is_public=True) can be viewed by anyone.
+        - Users get their own full profile.
+        - Admins and moderators get any user's full profile.
+        - Other members get the member profile: name, email, phone,
+          roles and join date (closed group). Address, date of birth and
+          gender stay private.
     """
     user = user_service.get_user_by_id(session=session, user_id=user_id)
     if not user:
@@ -288,4 +292,13 @@ async def get_user_by_id(
             detail="User not found",
         )
 
-    return user
+    viewer_roles = {
+        str(getattr(role, "value", role)).lower()
+        for role in (current_user.access_roles or [])
+    }
+    can_see_full = user.id == current_user.id or bool(
+        viewer_roles & {AccessRole.ADMIN.value, AccessRole.MODERATOR.value}
+    )
+    if can_see_full:
+        return UserResponse.model_validate(user)
+    return UserPublic.model_validate(user)

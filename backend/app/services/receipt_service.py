@@ -16,7 +16,7 @@ from app.models.mixins.money import MoneyMixin
 from app.models.receipt_model import Receipt
 from app.models.user_model import User
 from app.schemas.receipt_schema import ReceiptDuplicate, ReceiptResponse
-from app.services.deposit_service import DepositService
+from app.services.duties import is_office_bearer
 
 _AMBIGUOUS = str.maketrans({"O": "0", "Q": "0", "I": "1", "L": "1"})
 
@@ -91,10 +91,10 @@ class ReceiptService:
     # Access
 
     def get_for_viewer(self, session: Session, receipt_id: uuid.UUID, user: User) -> Receipt:
-        """Uploader or deposit reviewers only; everyone else gets 404."""
+        """Uploader or office bearers only; everyone else gets 404."""
         receipt = session.get(Receipt, receipt_id)
         if not receipt or (
-            receipt.user_id != user.id and not DepositService._is_deposit_reviewer(user)
+            receipt.user_id != user.id and not is_office_bearer(user)
         ):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found")
         return receipt

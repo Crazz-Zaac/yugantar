@@ -691,3 +691,43 @@ echo "password" > secrets/pgadmin_password.txt"
   - `DepositTab` sends `receipt_id` and tells the member the image is kept for 15 days.
   - The treasurer review tab has a "View receipt" button that opens the new `ReceiptReviewDialog`: the image, OCR vs submitted values, and warnings for edits and duplicates.
 - **Ops:** back up the `receipts-data` volume together with Postgres.
+
+### 6. Any member could read every member's personal details
+- **Issue:** `GET /users/{user_id}` returned the full profile (email, phone, address, date of birth, gender) to any logged-in user. The docstring described privacy rules that weren't implemented. Deposit lists expose `user_id`s, so anyone who registered could collect every member's details.
+- **Fix:** the endpoint now returns the full `UserResponse` only to the user themselves and to admins and moderators. Every other member gets `UserPublic`: id, names, **email, phone**, roles, join date. Contact details are shared because this is a closed group and members, the treasurer and the president need to reach each other. Address, date of birth and gender stay private (`gender` was removed from `UserPublic`).
+- The frontend uses `/admin/users/{id}` (admin only), so no UI change was needed.
+
+### 7. Record visibility: transparent, but not for pending/rejected items
+- **Decision:** the cooperative is a closed group and deliberately transparent. Every member can see other members' approved/active/paid loans (amount, term, rate, purpose, payments) and verified deposits and loan payments in full, with full names.
+- **Issue:** the by-ID endpoints also exposed **pending and rejected** records to everyone: loan applications under review (with collateral offered), the President's rejection reasons, and unverified deposits and loan payments.
+- **Fix:**
+  - New `services/visibility.py` holds the rule in one place. Owner and office bearers (Treasurer, President, Moderator, Admin) see everything; other members see only approved/active/paid loans and verified deposits and payments. Hidden records return 404.
+  - Applied to `GET /loans/{id}`, `GET /loan-payments/{id}`, `GET /loan-payments/loan/{loan_id}` (others get verified payments only) and `GET /deposits/deposit/{id}`.
+  - Community views use full names: `applicant_name` on community loans (was "First L."), and a new `depositor_name` on deposit responses, shown in the community deposit table and the treasurer review queue (both showed raw user IDs before).
+
+### 8. Separation of duties
+- **Issue:** nothing stopped office bearers acting on their own money. A Treasurer could verify their own deposit or loan funds, a President could approve their own loan, and one person holding both roles could verify and approve the same loan. Admin/Moderator (technical access roles) could also verify deposits and payments and manage policies.
+- **Rules agreed** (all in `services/duties.py`):
+  1. Nobody acts on their own deposit, loan, loan payment, or a policy they created.
+  2. A loan's fund verification and approval must be done by two different people.
+  3. Each duty has one primary office role. When that person is the one asking, the **Secretary** steps in.
+  4. Money decisions belong to office bearers only (President, Treasurer, Secretary). Admin/Moderator manage accounts and roles; they have no financial powers.
+
+  | Duty | Primary | Backup |
+  |---|---|---|
+  | Verify / delete deposit | Treasurer | Secretary |
+  | Review / delete loan payment | Treasurer | Secretary |
+  | Verify loan funds | Treasurer | Secretary |
+  | Approve / reject loan | President (not whoever verified funds) | Secretary |
+  | Approve / reject policy | President | Secretary (if the President created it) |
+  | Create / edit / delete policy | Treasurer | none |
+
+- **Applied to:**
+  - Deposit verify/delete and review queue; loan-payment review/delete and queue; loan verify-funds/approve/reject (plus the two-person check via `fund_verified_by`); policy approve/reject (creator via `created_by`); `get_current_policy_manager` (Treasurer only); `get_current_loan_reviewer` (office bearers).
+  - Review queues only list items the user may act on.
+  - Visibility of pending/rejected items and receipt access: office bearers only (Admin/Moderator removed).
+- **Notifications:** `responsible_users()` uses the same rule, so the Treasurer's own deposit or loan notifies the Secretary, and the President's own loan approval request goes to the Secretary.
+- **Frontend:**
+  - The Secretary now sees the deposit and loan review tabs.
+  - The pending-loan queue returns per-loan `viewer_can_verify_funds` / `viewer_can_decide` / `is_own_application`, computed by the same backend rule. Buttons appear only when the action will succeed; otherwise the card says why (e.g. "Your own application: another office bearer handles it").
+- **Not covered:** `MemberPoliciesTab` still shows approve/reject to the President only. The Secretary-approves-the-President's-policy case (rare: only when a Treasurer is also President) works in the API but has no button yet. The admin Policies tab is still mock data (`@/lib/data`).

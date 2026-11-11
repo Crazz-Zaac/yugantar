@@ -113,6 +113,10 @@ class LoanResponse(SQLModel):
     # Treasurer fund verification
     fund_verified_by: Optional[str] = None
     fund_verified_at: Optional[datetime] = None
+    # Only set on the pending-review queue, for the requesting office bearer
+    viewer_can_verify_funds: Optional[bool] = None
+    viewer_can_decide: Optional[bool] = None
+    is_own_application: Optional[bool] = None
 
     class Config:
         from_attributes = True

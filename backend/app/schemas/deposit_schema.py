@@ -64,6 +64,10 @@ class DepositBase(SQLModel):
             payload["late_deposit_fine"] = policy.late_deposit_fine
             payload["amount_to_be_deposited"] = policy.amount_rupees
 
+        # __dict__ doesn't include model properties
+        if "depositor_name" not in payload and hasattr(values, "depositor_name"):
+            payload["depositor_name"] = values.depositor_name
+
         return payload
 
     @field_validator("receipt_screenshot", mode="before")
@@ -114,6 +118,7 @@ class DepositResponse(DepositBase):
     verification_status: DepositVerificationStatus
 
     fine_amount: Optional[int] = None
+    depositor_name: Optional[str] = None
 
     created_at: datetime
     updated_at: datetime

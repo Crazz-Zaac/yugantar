@@ -84,6 +84,10 @@ interface LoanItem {
   purpose: string | null
   fund_verified_by: string | null
   fund_verified_at: string | null
+  // Set by the backend on the review queue (same rules it enforces)
+  viewer_can_verify_funds?: boolean | null
+  viewer_can_decide?: boolean | null
+  is_own_application?: boolean | null
 }
 
 interface CalculatorResult {
@@ -159,7 +163,10 @@ export function LoansTab() {
   const normalizedRoles = (user?.cooperative_roles ?? []).map((role) => String(role).toLowerCase())
   const isTreasurer = normalizedRoles.includes("treasurer")
   const isPresident = normalizedRoles.includes("president")
-  const isReviewer = isTreasurer || isPresident
+  const isSecretary = normalizedRoles.includes("secretary")
+  // Office bearers. The Secretary steps in for the Treasurer's/President's own
+  // loans; which buttons appear per loan comes from the backend.
+  const isReviewer = isTreasurer || isPresident || isSecretary
 
   // ── State ────────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState("apply")
@@ -866,11 +873,8 @@ export function LoansTab() {
                   Pending Loan Applications
                 </CardTitle>
                 <CardDescription>
-                  {isTreasurer && isPresident
-                    ? "Verify funds as Treasurer, then approve/reject as President."
-                    : isTreasurer
-                      ? "Verify fund availability for pending loan applications."
-                      : "Approve or reject loans that have been fund-verified by the Treasurer."}
+                  The Treasurer verifies funds, then the President approves or rejects. Nobody handles their own
+                  application, and the same person can't do both steps; the Secretary steps in when needed.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -920,8 +924,8 @@ export function LoansTab() {
                                   </Badge>
                                 )}
 
-                                {/* Treasurer: Verify Funds — always visible */}
-                                {isTreasurer && !isVerified && (
+                                {/* Verify Funds: Treasurer (Secretary for the Treasurer's own loan) */}
+                                {loan.viewer_can_verify_funds && (
                                   <Button
                                     size="sm"
                                     onClick={() => handleVerifyFunds(loan.id)}
@@ -936,8 +940,8 @@ export function LoansTab() {
                                   </Button>
                                 )}
 
-                                {/* President: Approve / Reject — always visible when funds verified */}
-                                {isPresident && isVerified && (
+                                {/* Approve / Reject: President (Secretary for the President's own loan) */}
+                                {loan.viewer_can_decide && (
                                   <>
                                     <Button
                                       size="sm"
@@ -967,10 +971,14 @@ export function LoansTab() {
                                   </>
                                 )}
 
-                                {/* President waiting message */}
-                                {isPresident && !isVerified && !isTreasurer && (
+                                {/* Nothing for this viewer to do: say why */}
+                                {!loan.viewer_can_verify_funds && !loan.viewer_can_decide && (
                                   <span className="text-xs text-muted-foreground italic">
-                                    Awaiting fund verification
+                                    {loan.is_own_application
+                                      ? "Your own application: another office bearer handles it"
+                                      : isVerified
+                                        ? "Awaiting approval"
+                                        : "Awaiting fund verification"}
                                   </span>
                                 )}
 

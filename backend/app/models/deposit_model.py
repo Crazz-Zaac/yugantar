@@ -65,3 +65,10 @@ class Deposit(BaseModel, MoneyMixin, table=True):
         back_populates="deposit", sa_relationship_kwargs={"uselist": False}
     )
     deposit_policy: Optional["DepositPolicy"] = Relationship(back_populates="deposits")
+
+    @property
+    def depositor_name(self) -> Optional[str]:
+        """Full name of the depositor (closed group: shown in community views)."""
+        if not self.user:
+            return None
+        return f"{self.user.first_name} {self.user.last_name}".strip()

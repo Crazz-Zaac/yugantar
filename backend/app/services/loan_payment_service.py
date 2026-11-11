@@ -12,6 +12,7 @@ from app.schemas.loan_payment_schema import (
 )
 from app.models.user_model import User
 from app.models.receipt_model import Receipt
+from app.services.duties import Duty, require_duty, denial_reason, may_perform_any
 from app.models.mixins.money import MoneyMixin
 
 
@@ -185,8 +186,9 @@ class LoanPaymentService:
         loan_id: uuid.UUID,
         skip: int = 0,
         limit: int = 50,
+        verified_only: bool = False,
     ) -> tuple[List[LoanPayment], int]:
-        """Retrieve all payments for a specific loan."""
+        """Retrieve payments for a specific loan (optionally verified only)."""
 
         # Verify loan exists
         loan = session.get(Loan, loan_id)
@@ -196,18 +198,18 @@ class LoanPaymentService:
                 detail="Loan not found",
             )
 
+        conditions = [LoanPayment.loan_id == loan_id]
+        if verified_only:
+            conditions.append(LoanPayment.status == LoanPaymentStatus.VERIFIED)
+
         # Count total
-        count_stmt = (
-            select(func.count())
-            .select_from(LoanPayment)
-            .where(LoanPayment.loan_id == loan_id)
-        )
+        count_stmt = select(func.count()).select_from(LoanPayment).where(*conditions)
         total = session.exec(count_stmt).one()
 
         # Fetch paginated
         statement = (
             select(LoanPayment)
-            .where(LoanPayment.loan_id == loan_id)
+            .where(*conditions)
             .order_by(LoanPayment.date.desc())
             .offset(skip)
             .limit(limit)
@@ -300,20 +302,32 @@ class LoanPaymentService:
     def list_pending_payments(
         self,
         session: Session,
+        current_user: User,
         skip: int = 0,
         limit: int = 50,
     ) -> tuple[List[LoanPayment], int]:
-        """Standalone payments awaiting review (deposit-linked ones are
-        reviewed through their deposit)."""
-        base = select(LoanPayment).where(
-            LoanPayment.status == LoanPaymentStatus.PENDING,
-            LoanPayment.deposit_id.is_(None),
-        )
-        total = session.exec(select(func.count()).select_from(base.subquery())).one()
-        payments = session.exec(
-            base.order_by(LoanPayment.date.desc()).offset(skip).limit(limit)
+        """Standalone payments awaiting review that this user may act on
+        (deposit-linked ones are reviewed through their deposit)."""
+        if not may_perform_any(current_user, Duty.REVIEW_LOAN_PAYMENT):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient privileges",
+            )
+        rows = session.exec(
+            select(LoanPayment, Loan)
+            .join(Loan, LoanPayment.loan_id == Loan.id)
+            .where(
+                LoanPayment.status == LoanPaymentStatus.PENDING,
+                LoanPayment.deposit_id.is_(None),
+            )
+            .order_by(LoanPayment.date.desc())
         ).all()
-        return list(payments), total
+        actionable = [
+            payment
+            for payment, loan in rows
+            if denial_reason(current_user, Duty.REVIEW_LOAN_PAYMENT, loan.user) is None
+        ]
+        return actionable[skip : skip + limit], len(actionable)
 
     def review_payment(
         self,
@@ -329,6 +343,8 @@ class LoanPaymentService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="This payment belongs to a deposit; review the deposit instead",
             )
+        loan = session.get(Loan, payment.loan_id)
+        require_duty(reviewer, Duty.REVIEW_LOAN_PAYMENT, loan.user if loan else None)
 
         self.review_payment_record(session, payment, new_status, reviewer)
         session.commit()
@@ -341,9 +357,13 @@ class LoanPaymentService:
         payment_id: uuid.UUID,
         current_user: User,
     ) -> None:
-        """Delete a loan payment (moderator/treasurer)."""
+        """Delete a loan payment (same people who may review it)."""
 
         payment = self.get_payment(session, payment_id)
+        owner_loan = session.get(Loan, payment.loan_id)
+        require_duty(
+            current_user, Duty.REVIEW_LOAN_PAYMENT, owner_loan.user if owner_loan else None
+        )
 
         # Only verified payments were ever credited to the loan
         if payment.status == LoanPaymentStatus.VERIFIED:

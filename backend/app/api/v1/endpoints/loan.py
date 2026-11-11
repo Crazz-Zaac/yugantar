@@ -16,12 +16,11 @@ from app.schemas.loan_schema import (
 )
 from app.services.loan_service import LoanService
 from app.api.dependencies.auth import get_current_active_user
-from app.api.dependencies.admin import (
-    get_current_policy_manager,
-    get_current_loan_reviewer,
-)
+from app.api.dependencies.admin import get_current_loan_reviewer
+from app.services.duties import Duty, require_duty, responsible_users
 from app.models.user_model import User, CooperativeRole
-from app.models.loan_model import LoanStatus
+from app.models.loan_model import Loan, LoanStatus
+from app.services.visibility import can_view_loan
 from app.models.notification_model import Notification, NotificationType
 from app.services.email_notify import send_generic_email
 from fastapi_mail import NameEmail
@@ -39,13 +38,12 @@ def _notify_treasurers_new_loan(
     amount_rupees: str,
     purpose: str,
 ):
-    """Notify all Treasurers that a new loan application was submitted."""
-    all_users = session.exec(select(User)).all()
-    treasurers = [
-        u
-        for u in all_users
-        if CooperativeRole.TREASURER.value in (u.cooperative_roles or [])
-    ]
+    """Notify whoever verifies funds for this loan (the Treasurers, or the
+    Secretary if the applicant is the Treasurer)."""
+    loan = session.get(Loan, loan_id)
+    treasurers = responsible_users(
+        session, Duty.VERIFY_LOAN_FUNDS, loan.user if loan else None
+    )
 
     for treasurer in treasurers:
         notif = Notification(
@@ -83,13 +81,10 @@ def _notify_presidents_loan_verified(
     amount_rupees: str,
     treasurer_name: str,
 ):
-    """Notify all Presidents that a treasurer has verified funds for a loan."""
-    all_users = session.exec(select(User)).all()
-    presidents = [
-        u
-        for u in all_users
-        if CooperativeRole.PRESIDENT.value in (u.cooperative_roles or [])
-    ]
+    """Notify whoever approves this loan (the Presidents, or the Secretary
+    if the applicant is the President) that funds were verified."""
+    loan = session.get(Loan, loan_id)
+    presidents = responsible_users(session, Duty.DECIDE_LOAN, loan.user if loan else None)
 
     for president in presidents:
         notif = Notification(
@@ -195,6 +190,27 @@ def _notify_applicant_decision(
     )
 
 
+def _get_applicant(session: Session, loan_id: UUID) -> User:
+    loan = session.get(Loan, loan_id)
+    if not loan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Loan not found.")
+    return loan.user
+
+
+def _require_loan_decider(session: Session, loan_id: UUID, user: User) -> None:
+    """President (Secretary for the President's own loan), never the
+    applicant, and never the same person who verified the funds."""
+    loan = session.get(Loan, loan_id)
+    if not loan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Loan not found.")
+    require_duty(user, Duty.DECIDE_LOAN, loan.user)
+    if loan.fund_verified_by and loan.fund_verified_by == user.email:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You verified the funds for this loan; a different person has to approve or reject it.",
+        )
+
+
 # Loan Endpoints
 
 @router.post(
@@ -289,6 +305,7 @@ def get_pending_loans(
         session=session,
         skip=skip,
         limit=limit,
+        viewer=current_user,
     )
     return LoanListResponse(loans=loans, total=total)
 
@@ -302,7 +319,15 @@ def get_loan(
     current_user: User = Depends(get_current_active_user),
     session: Session = Depends(get_session),
 ):
-    """Get a specific loan by ID."""
+    """Get a specific loan by ID.
+
+    Approved/active/paid loans are visible to every member (closed-group
+    transparency); pending/rejected ones only to the applicant and office
+    bearers. Hidden loans return 404.
+    """
+    loan = session.get(Loan, loan_id)
+    if not loan or not can_view_loan(current_user, loan):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Loan not found.")
     return loan_service.get_loan(session=session, loan_id=loan_id)
 
 
@@ -315,19 +340,16 @@ def verify_loan_funds(
     loan_id: UUID,
     body: LoanFundVerification,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(get_current_policy_manager),
+    current_user: User = Depends(get_current_active_user),
     session: Session = Depends(get_session),
 ):
     """
-    Treasurer verifies that the cooperative has sufficient funds for this loan.
-    Notifies all Presidents for approval.
+    Treasurer verifies that the cooperative has sufficient funds for this loan
+    (Secretary if it's the Treasurer's own loan; never your own).
+    Notifies whoever must approve it.
     """
-    # Ensure the user is actually a treasurer
-    if CooperativeRole.TREASURER.value not in (current_user.cooperative_roles or []):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only a Treasurer can verify funds.",
-        )
+    applicant = _get_applicant(session, loan_id)
+    require_duty(current_user, Duty.VERIFY_LOAN_FUNDS, applicant)
 
     loan = loan_service.verify_funds(
         session=session,
@@ -373,11 +395,7 @@ def approve_loan(
     President approves a pending loan (funds must already be verified).
     Notifies the applicant with treasurer contact info.
     """
-    if CooperativeRole.PRESIDENT.value not in (current_user.cooperative_roles or []):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the President can approve loans.",
-        )
+    _require_loan_decider(session, loan_id, current_user)
 
     loan = loan_service.approve_loan(
         session=session,
@@ -413,11 +431,7 @@ def reject_loan(
     President rejects a pending loan.
     Notifies the applicant with the reason.
     """
-    if CooperativeRole.PRESIDENT.value not in (current_user.cooperative_roles or []):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the President can reject loans.",
-        )
+    _require_loan_decider(session, loan_id, current_user)
 
     loan = loan_service.reject_loan(
         session=session,

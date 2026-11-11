@@ -137,6 +137,7 @@ interface DepositItem {
   verification_status: "pending" | "verified" | "rejected"
   verified_by: string | null
   receipt_id: string | null
+  depositor_name?: string | null
   created_at: string
 }
 
@@ -214,7 +215,10 @@ export function DepositTab() {
   const normalizedRoles = (user?.cooperative_roles ?? []).map((role) =>
     String(role).toLowerCase()
   )
-  const isTreasurer = normalizedRoles.includes("treasurer")
+  // Deposit reviewers: the Treasurer, and the Secretary for the Treasurer's own
+  // deposits. The backend only returns deposits this user may act on.
+  const isDepositReviewer =
+    normalizedRoles.includes("treasurer") || normalizedRoles.includes("secretary")
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -226,14 +230,14 @@ export function DepositTab() {
     const subtab = params.get("subtab")
     if (!subtab) return
 
-    const allowedTabs = isTreasurer
+    const allowedTabs = isDepositReviewer
       ? ["make", "my", "community", "history", "review"]
       : ["make", "my", "community", "history"]
 
     if (allowedTabs.includes(subtab)) {
       setActiveTab(subtab)
     }
-  }, [location, isTreasurer])
+  }, [location, isDepositReviewer])
 
   const [activePolicies, setActivePolicies] = useState<DepositPolicy[]>([])
   const [policiesLoading, setPoliciesLoading] = useState(true)
@@ -444,7 +448,7 @@ export function DepositTab() {
   }, [])
 
   const fetchReviewDeposits = useCallback(async () => {
-    if (!isTreasurer) return
+    if (!isDepositReviewer) return
     setReviewLoading(true)
     try {
       const res = await apiClient.get("/deposits/review/pending")
@@ -454,7 +458,7 @@ export function DepositTab() {
     } finally {
       setReviewLoading(false)
     }
-  }, [isTreasurer])
+  }, [isDepositReviewer])
 
   useEffect(() => {
     if (activeTab === "my") fetchMyDeposits()
@@ -537,7 +541,7 @@ export function DepositTab() {
       setSubmitSuccess(true)
       fetchMyDeposits()
       fetchHistoryDeposits()
-      if (isTreasurer) fetchReviewDeposits()
+      if (isDepositReviewer) fetchReviewDeposits()
 
       setTimeout(() => {
         clearFile()
@@ -629,7 +633,9 @@ export function DepositTab() {
             rows.map((dep) => (
               <TableRow key={dep.id}>
                 <TableCell className="text-xs">{formatDateTime(dep.deposited_date || dep.created_at)}</TableCell>
-                {showUser && <TableCell className="text-xs font-mono">{dep.user_id.slice(0, 8)}…</TableCell>}
+                {showUser && (
+                  <TableCell className="text-xs">{dep.depositor_name ?? `${dep.user_id.slice(0, 8)}…`}</TableCell>
+                )}
                 <TableCell className="text-xs font-medium">{formatRsFromRupees(Number(dep.deposited_amount))}</TableCell>
                 <TableCell className="text-xs capitalize">{dep.deposit_type.replace("_", " ")}</TableCell>
                 <TableCell className="text-xs">{formatDate(dep.due_deposit_date)}</TableCell>
@@ -674,7 +680,7 @@ export function DepositTab() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className={`grid w-full ${isTreasurer ? "max-w-2xl grid-cols-5" : "max-w-xl grid-cols-4"}`}>
+        <TabsList className={`grid w-full ${isDepositReviewer ? "max-w-2xl grid-cols-5" : "max-w-xl grid-cols-4"}`}>
           <TabsTrigger value="make" className="gap-1">
             <Banknote className="h-4 w-4" />
             Make Deposit
@@ -691,7 +697,7 @@ export function DepositTab() {
             <History className="h-4 w-4" />
             History
           </TabsTrigger>
-          {isTreasurer && (
+          {isDepositReviewer && (
             <TabsTrigger value="review" className="gap-1">
               <ShieldCheck className="h-4 w-4" />
               Review
@@ -1164,12 +1170,12 @@ export function DepositTab() {
           </Card>
         </TabsContent>
 
-        {isTreasurer && (
+        {isDepositReviewer && (
           <TabsContent value="review" className="mt-4 flex flex-col gap-4">
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm font-semibold">Review Deposits</CardTitle>
-                <CardDescription>Treasurer verification queue</CardDescription>
+                <CardDescription>Deposits waiting for your verification (never your own)</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
                 {reviewLoading ? (
@@ -1187,7 +1193,7 @@ export function DepositTab() {
                           <div className="space-y-1">
                             <p className="text-sm font-semibold">{formatRsFromRupees(Number(dep.deposited_amount))}</p>
                             <p className="text-xs text-muted-foreground">Deposited: {formatDateTime(dep.deposited_date)}</p>
-                            <p className="text-xs text-muted-foreground">User: {dep.user_id}</p>
+                            <p className="text-xs text-muted-foreground">Member: {dep.depositor_name ?? dep.user_id}</p>
                             {depositStatusBadge(dep.verification_status)}
                           </div>
                           <div className="flex flex-wrap items-center gap-2">
