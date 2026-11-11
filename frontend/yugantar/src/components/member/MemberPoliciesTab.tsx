@@ -11,10 +11,9 @@ import {
     Landmark,
     CreditCard,
     Loader2,
-    ShieldCheck,
+    PenLine,
     Info,
     Send,
-    XCircle,
     FileCheck,
     ChevronDown,
 } from "lucide-react"
@@ -55,6 +54,9 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { apiClient } from "@/api/api"
 import { useAuth } from "@/contexts/AuthContext"
+import PolicySigningDialog from "@/components/policies/PolicySigningDialog"
+import ProxyRequestsPanel from "@/components/policies/ProxyRequestsPanel"
+import type { SigningTarget } from "@/components/policies/signing"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -111,7 +113,7 @@ const statusConfig: Record<PolicyStatus, { label: string; icon: typeof CheckCirc
         className: "border-warning/30 bg-warning/10 text-warning",
     },
     finalized: {
-        label: "Under Review",
+        label: "Open for signing",
         icon: FileCheck,
         className: "border-chart-2/30 bg-chart-2/10 text-chart-2",
     },
@@ -190,7 +192,8 @@ export function MemberPoliciesTab() {
     const canManage = user?.cooperative_roles?.includes("treasurer")
 
     // Role check: president can approve draft policies
-    const isPresident = user?.cooperative_roles?.includes("president")
+    // Office bearers authorise Admin proxy signatures for absent members
+    const isOfficeBearer = ["president", "treasurer", "secretary"].some((r) => user?.cooperative_roles?.includes(r))
 
     // State
     const [depositPolicies, setDepositPolicies] = useState<DepositPolicy[]>([])
@@ -207,6 +210,7 @@ export function MemberPoliciesTab() {
     const [depositForm, setDepositForm] = useState(emptyDepositForm)
     const [loanForm, setLoanForm] = useState(emptyLoanForm)
     const [submitting, setSubmitting] = useState(false)
+    const [signingTarget, setSigningTarget] = useState<SigningTarget | null>(null)
     const [deleteConfirm, setDeleteConfirm] = useState<{ type: "deposit" | "loan"; id: string } | null>(null)
 
     // Fetch
@@ -371,43 +375,16 @@ export function MemberPoliciesTab() {
         }
     }
 
-    // ─── Submit for Review ─────────────────────────────────────────────
+    // ─── Sign & open for member signatures (Treasurer) ────────────────
 
-    const submitForReview = async (type: "deposit" | "loan", policyId: string) => {
+    const openForSigning = async (type: "deposit" | "loan", policyId: string) => {
+        if (!window.confirm("Sign this policy and open it for every member to sign? It can no longer be edited unless you withdraw it.")) return
         setSubmitting(true)
         try {
             await apiClient.post(`/policies/${type}/${policyId}/submit`)
             fetchPolicies()
         } catch {
-            setError(`Failed to submit ${type} policy for review.`)
-        } finally {
-            setSubmitting(false)
-        }
-    }
-
-    // ─── Approve ─────────────────────────────────────────────────────────
-
-    const approvePolicy = async (type: "deposit" | "loan", policyId: string) => {
-        setSubmitting(true)
-        try {
-            await apiClient.post(`/policies/${type}/${policyId}/approve`)
-            fetchPolicies()
-        } catch {
-            setError(`Failed to approve ${type} policy.`)
-        } finally {
-            setSubmitting(false)
-        }
-    }
-
-    // ─── Reject ──────────────────────────────────────────────────────────
-
-    const rejectPolicy = async (type: "deposit" | "loan", policyId: string) => {
-        setSubmitting(true)
-        try {
-            await apiClient.post(`/policies/${type}/${policyId}/reject`)
-            fetchPolicies()
-        } catch {
-            setError(`Failed to reject ${type} policy.`)
+            setError(`Failed to open the ${type} policy for signing.`)
         } finally {
             setSubmitting(false)
         }
@@ -441,10 +418,8 @@ export function MemberPoliciesTab() {
                     <h2 className="text-lg font-semibold text-foreground">Policies</h2>
                     <p className="text-sm text-muted-foreground">
                         {canManage
-                            ? "View and manage cooperative deposit & loan policies"
-                            : isPresident
-                                ? "Review and approve cooperative deposit & loan policies"
-                                : "View cooperative deposit & loan policies"}
+                            ? "Create cooperative deposit & loan policies and open them for member signatures"
+                            : "View cooperative policies and sign the ones open for signing"}
                     </p>
                 </div>
                 {canManage && (
@@ -470,18 +445,18 @@ export function MemberPoliciesTab() {
                 )}
             </div>
 
-            {(canManage || isPresident) && (
-                <Card className="border-primary/20 bg-primary/5">
-                    <CardContent className="flex items-center gap-2 py-3">
-                        <Info className="h-4 w-4 shrink-0 text-primary" />
-                        <p className="text-sm text-primary">
-                            {canManage
-                                ? "New policies are created as Draft. Edit freely, then Submit for Review when ready. The President will approve or reject."
-                                : "Policies submitted for your review will appear as \"Under Review\". You can Approve or Reject them."}
-                        </p>
-                    </CardContent>
-                </Card>
-            )}
+            <Card className="border-primary/20 bg-primary/5">
+                <CardContent className="flex items-center gap-2 py-3">
+                    <Info className="h-4 w-4 shrink-0 text-primary" />
+                    <p className="text-sm text-primary">
+                        {canManage
+                            ? "New policies start as Draft. When ready, sign and open it for signing: members then have one week, and it takes effect only if every member has signed by the deadline. You can withdraw or revise it."
+                            : "Each new policy is open for signing for one week and takes effect only if every member has signed by then. Open \"Signatures\" to sign or reject it (you can change your decision until the deadline) and to see everyone's decisions."}
+                    </p>
+                </CardContent>
+            </Card>
+
+            {isOfficeBearer && <ProxyRequestsPanel mode="bearer" onChanged={fetchPolicies} />}
 
             {error && (
                 <Card className="border-destructive/50 bg-destructive/5">
@@ -585,13 +560,13 @@ export function MemberPoliciesTab() {
                                             <TableHead className="text-xs">Effective From</TableHead>
                                             <TableHead className="text-xs">Effective To</TableHead>
                                             <TableHead className="text-xs">Status</TableHead>
-                                            {(canManage || isPresident) && <TableHead className="w-24 text-xs">Actions</TableHead>}
+                                            <TableHead className="w-24 text-xs">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {depositPolicies.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={(canManage || isPresident) ? 8 : 7} className="py-8 text-center text-sm text-muted-foreground">
+                                                <TableCell colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
                                                     No deposit policies found.
                                                 </TableCell>
                                             </TableRow>
@@ -629,49 +604,33 @@ export function MemberPoliciesTab() {
                                                         <TableCell>
                                                             <StatusBadge status={p.status} />
                                                         </TableCell>
-                                                        {(canManage || isPresident) && (
                                                             <TableCell>
                                                                 <div className="flex items-center gap-1">
-                                                                    {/* Treasurer: Submit for Review (only on draft) */}
+                                                                    {/* Treasurer: Sign & open for member signatures (only on draft) */}
                                                                     {canManage && p.status === "draft" && (
                                                                         <Button
                                                                             variant="ghost"
                                                                             size="icon"
                                                                             className="h-8 w-8 text-chart-2 hover:text-chart-2"
-                                                                            onClick={() => submitForReview("deposit", p.policy_id)}
+                                                                            onClick={() => openForSigning("deposit", p.policy_id)}
                                                                             disabled={submitting}
-                                                                            title="Submit for Review"
-                                                                            aria-label="Submit for Review"
+                                                                            title="Sign & open for signing"
+                                                                            aria-label="Sign and open for signing"
                                                                         >
                                                                             <Send className="h-3.5 w-3.5" />
                                                                         </Button>
                                                                     )}
-                                                                    {/* President: Approve (only on finalized) */}
-                                                                    {isPresident && p.status === "finalized" && (
+                                                                    {/* Signatures: anyone can view; members sign or reject while open */}
+                                                                    {(p.status === "finalized" || p.status === "active" || p.status === "void") && (
                                                                         <Button
                                                                             variant="ghost"
                                                                             size="icon"
-                                                                            className="h-8 w-8 text-success hover:text-success"
-                                                                            onClick={() => approvePolicy("deposit", p.policy_id)}
-                                                                            disabled={submitting}
-                                                                            title="Approve"
-                                                                            aria-label="Approve"
+                                                                            className="h-8 w-8 text-chart-2 hover:text-chart-2"
+                                                                            onClick={() => setSigningTarget({ type: "deposit", id: p.policy_id, label: `Deposit policy (${formatAmount(p.amount_paisa)})` })}
+                                                                            title="Signatures"
+                                                                            aria-label="Signatures"
                                                                         >
-                                                                            <ShieldCheck className="h-3.5 w-3.5" />
-                                                                        </Button>
-                                                                    )}
-                                                                    {/* President: Reject (only on finalized) */}
-                                                                    {isPresident && p.status === "finalized" && (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8 text-destructive hover:text-destructive"
-                                                                            onClick={() => rejectPolicy("deposit", p.policy_id)}
-                                                                            disabled={submitting}
-                                                                            title="Reject"
-                                                                            aria-label="Reject"
-                                                                        >
-                                                                            <XCircle className="h-3.5 w-3.5" />
+                                                                            <PenLine className="h-3.5 w-3.5" />
                                                                         </Button>
                                                                     )}
                                                                     {/* Treasurer: Edit (only draft) */}
@@ -700,7 +659,6 @@ export function MemberPoliciesTab() {
                                                                     )}
                                                                 </div>
                                                             </TableCell>
-                                                        )}
                                                     </TableRow>
                                                 ))
                                         )}
@@ -757,13 +715,13 @@ export function MemberPoliciesTab() {
                                             <TableHead className="text-xs">EMI</TableHead>
                                             <TableHead className="text-xs">Effective</TableHead>
                                             <TableHead className="text-xs">Status</TableHead>
-                                            {(canManage || isPresident) && <TableHead className="w-24 text-xs">Actions</TableHead>}
+                                            <TableHead className="w-24 text-xs">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {loanPolicies.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={(canManage || isPresident) ? 9 : 8} className="py-8 text-center text-sm text-muted-foreground">
+                                                <TableCell colSpan={9} className="py-8 text-center text-sm text-muted-foreground">
                                                     No loan policies found.
                                                 </TableCell>
                                             </TableRow>
@@ -810,49 +768,33 @@ export function MemberPoliciesTab() {
                                                         <TableCell>
                                                             <StatusBadge status={p.status} />
                                                         </TableCell>
-                                                        {(canManage || isPresident) && (
                                                             <TableCell>
                                                                 <div className="flex items-center gap-1">
-                                                                    {/* Treasurer: Submit for Review (only on draft) */}
+                                                                    {/* Treasurer: Sign & open for member signatures (only on draft) */}
                                                                     {canManage && p.status === "draft" && (
                                                                         <Button
                                                                             variant="ghost"
                                                                             size="icon"
                                                                             className="h-8 w-8 text-chart-2 hover:text-chart-2"
-                                                                            onClick={() => submitForReview("loan", p.policy_id)}
+                                                                            onClick={() => openForSigning("loan", p.policy_id)}
                                                                             disabled={submitting}
-                                                                            title="Submit for Review"
-                                                                            aria-label="Submit for Review"
+                                                                            title="Sign & open for signing"
+                                                                            aria-label="Sign and open for signing"
                                                                         >
                                                                             <Send className="h-3.5 w-3.5" />
                                                                         </Button>
                                                                     )}
-                                                                    {/* President: Approve (only on finalized) */}
-                                                                    {isPresident && p.status === "finalized" && (
+                                                                    {/* Signatures: anyone can view; members sign or reject while open */}
+                                                                    {(p.status === "finalized" || p.status === "active" || p.status === "void") && (
                                                                         <Button
                                                                             variant="ghost"
                                                                             size="icon"
-                                                                            className="h-8 w-8 text-success hover:text-success"
-                                                                            onClick={() => approvePolicy("loan", p.policy_id)}
-                                                                            disabled={submitting}
-                                                                            title="Approve"
-                                                                            aria-label="Approve"
+                                                                            className="h-8 w-8 text-chart-2 hover:text-chart-2"
+                                                                            onClick={() => setSigningTarget({ type: "loan", id: p.policy_id, label: `Loan policy (${formatDecimalAmount(p.min_loan_amount)}–${formatDecimalAmount(p.max_loan_amount)}, ${p.interest_rate}%)` })}
+                                                                            title="Signatures"
+                                                                            aria-label="Signatures"
                                                                         >
-                                                                            <ShieldCheck className="h-3.5 w-3.5" />
-                                                                        </Button>
-                                                                    )}
-                                                                    {/* President: Reject (only on finalized) */}
-                                                                    {isPresident && p.status === "finalized" && (
-                                                                        <Button
-                                                                            variant="ghost"
-                                                                            size="icon"
-                                                                            className="h-8 w-8 text-destructive hover:text-destructive"
-                                                                            onClick={() => rejectPolicy("loan", p.policy_id)}
-                                                                            disabled={submitting}
-                                                                            title="Reject"
-                                                                            aria-label="Reject"
-                                                                        >
-                                                                            <XCircle className="h-3.5 w-3.5" />
+                                                                            <PenLine className="h-3.5 w-3.5" />
                                                                         </Button>
                                                                     )}
                                                                     {/* Treasurer: Edit (only draft) */}
@@ -881,7 +823,6 @@ export function MemberPoliciesTab() {
                                                                     )}
                                                                 </div>
                                                             </TableCell>
-                                                        )}
                                                     </TableRow>
                                                 ))
                                         )}
@@ -1152,6 +1093,13 @@ export function MemberPoliciesTab() {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <PolicySigningDialog
+                target={signingTarget}
+                onClose={() => setSigningTarget(null)}
+                onChanged={fetchPolicies}
+                canWithdraw={!!canManage}
+            />
         </div>
     )
 }

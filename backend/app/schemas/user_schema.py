@@ -125,6 +125,9 @@ class UserResponse(UserBase):
     access_roles: List[AccessRole]
     cooperative_roles: List[CooperativeRole]
 
+    is_approved: bool = False
+    approved_at: Optional[datetime] = None
+
     created_at: datetime
     updated_at: datetime
 
@@ -165,6 +168,7 @@ class UserListResponse(SQLModel):
     cooperative_roles: List[CooperativeRole]  # Fixed: was CooperativeRole (not a list)
 
     is_verified: bool
+    is_approved: bool = False
     disabled: bool
     created_at: datetime
 

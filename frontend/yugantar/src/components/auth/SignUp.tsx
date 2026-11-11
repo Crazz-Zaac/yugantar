@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { apiClient } from "@/api/api"
 import { Eye, EyeOff, ArrowRight, Loader2, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -51,13 +52,9 @@ function PasswordStrength({ password }: { password: string }) {
   )
 }
 
-export function SignUp({
-  onSignUp,
-  onGoToSignIn,
-}: {
-  onSignUp: (role: "member" | "admin") => void
-  onGoToSignIn: () => void
-}) {
+export function SignUp({ onGoToSignIn }: { onGoToSignIn: () => void }) {
+  // Set after a successful registration: show "check your email" instead of the form
+  const [registeredEmail, setRegisteredEmail] = useState<string | null>(null)
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
@@ -107,7 +104,7 @@ export function SignUp({
         },
         password
       )
-      onSignUp("member")
+      setRegisteredEmail(email)
     } catch (err: any) {
       const message =
         err?.response?.data?.detail ||
@@ -117,6 +114,38 @@ export function SignUp({
     } finally {
       setIsLoading(false)
     }
+  }
+
+  if (registeredEmail) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="w-full max-w-md rounded-lg border bg-card p-6 text-center shadow-sm">
+          <h1 className="text-xl font-semibold text-foreground">Check your email</h1>
+          <p className="mt-3 text-sm text-muted-foreground">
+            We sent a verification link to <span className="font-medium text-foreground">{registeredEmail}</span>.
+          </p>
+          <ol className="mt-4 space-y-1 text-left text-sm text-muted-foreground">
+            <li>1. Open the link to verify your email address.</li>
+            <li>2. An administrator then reviews and approves your registration.</li>
+            <li>3. You'll get an email once your account is approved, and can then sign in.</li>
+          </ol>
+          <div className="mt-6 flex flex-col gap-2">
+            <Button onClick={onGoToSignIn}>Back to sign in</Button>
+            <Button
+              variant="ghost"
+              onClick={() =>
+                apiClient
+                  .post("/users/resend-verification", { email: registeredEmail })
+                  .then(() => alert("If your email isn't verified yet, a new link is on its way."))
+                  .catch(() => alert("Could not resend right now. Please try again later."))
+              }
+            >
+              Resend verification email
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

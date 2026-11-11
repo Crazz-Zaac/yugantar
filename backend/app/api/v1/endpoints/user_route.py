@@ -94,13 +94,10 @@ async def login_user(
     """
     Authenticate user and return user details.
     """
-    user = user_service.get_user_by_email(session=session, email=login_data.email)
-    if not user or not verify_password(login_data.password, user.hashed_password):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+    # Checks the password, then that the email is verified and the account approved
+    user = user_service.authenticate_user(
+        session=session, email=login_data.email, password=login_data.password
+    )
 
     # Generate access tokens
     access_token = await create_access_token(
@@ -138,16 +135,49 @@ async def get_current_user_info(
 @router.patch("/me", response_model=UserResponse)
 async def update_current_user(
     user_in: UserUpdate,
+    background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ):
     """
     Update the current authenticated user's information.
+
+    Changing the email marks the account unverified: a verification link is
+    sent to the new address, and all sessions end until it is verified.
     """
+    old_email = current_user.email
     user = user_service.update_user(
         session=session, db_user=current_user, user_in=user_in
     )
+    if user.email != old_email:
+        revoke_all_refresh_tokens(user.id)
+        _send_verification(background_tasks, user)
     return user
+
+
+def _send_verification(background_tasks: BackgroundTasks, user: User) -> None:
+    token = create_url_safe_token(data={"email": user.email})
+    link = f"{settings.FRONTEND_HOST}/verify-email?token={token}"
+    background_tasks.add_task(
+        send_registration_notification,
+        [NameEmail(name=user.first_name, email=user.email)],
+        f"{user.first_name} {user.last_name}".strip(),
+        link,
+    )
+
+
+@router.post("/resend-verification", status_code=status.HTTP_200_OK)
+async def resend_verification(
+    payload: PasswordResetRequest,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+):
+    """Send the email verification link again. Same response whether or not
+    the email is registered (no account discovery)."""
+    user = user_service.get_user_by_email(session=session, email=payload.email.lower())
+    if user and not user.is_verified:
+        _send_verification(background_tasks, user)
+    return {"msg": "If that account exists and isn't verified yet, a new link has been sent."}
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)

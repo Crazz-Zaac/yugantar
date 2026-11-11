@@ -1,210 +1,267 @@
-import { useState } from "react"
-import { Plus, Pencil, CheckCircle2, Clock, Search } from "lucide-react"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import { Loader2, PenLine, Search } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { policies } from "@/lib/data"
-// TODO: Replace mock `policies` import with real API calls once a GET /api/v1/policies/ endpoint is available.
-// Current backend has POST/PUT/DELETE for deposit & loan policies but no list-all endpoint.
+import { apiClient } from "@/api/api"
+import PolicySigningDialog from "@/components/policies/PolicySigningDialog"
+import ProxyRequestsPanel from "@/components/policies/ProxyRequestsPanel"
+import { apiError, timeLeft, type PolicyType, type SigningSummary, type SigningTarget } from "@/components/policies/signing"
+
+type Status = "draft" | "finalized" | "active" | "expired" | "void"
+
+interface PolicyRow {
+  type: PolicyType
+  id: string
+  label: string
+  status: Status
+  effectiveFrom: string
+  createdBy: string | null
+}
+
+interface RawDeposit {
+  policy_id: string
+  amount_paisa: number | string
+  schedule_type: string
+  status: Status
+  effective_from: string
+  created_by: string | null
+}
+
+interface RawLoan {
+  policy_id: string
+  min_loan_amount: number | string
+  max_loan_amount: number | string
+  interest_rate: number | string
+  status: Status
+  effective_from: string
+  created_by: string | null
+}
+
+const STATUS_LABEL: Record<Status, string> = {
+  draft: "Draft",
+  finalized: "Open for signing",
+  active: "Active",
+  expired: "Expired",
+  void: "Void",
+}
+
+const STATUS_CLASS: Record<Status, string> = {
+  draft: "border-warning/30 bg-warning/10 text-warning",
+  finalized: "border-chart-2/30 bg-chart-2/10 text-chart-2",
+  active: "border-success/30 bg-success/10 text-success",
+  expired: "border-muted-foreground/30 bg-muted/50 text-muted-foreground",
+  void: "border-destructive/30 bg-destructive/10 text-destructive",
+}
+
+const rs = (n: number | string) => `Rs. ${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
 
 export function PoliciesTab() {
-  const [searchQuery, setSearchQuery] = useState("")
-  const [categoryFilter, setCategoryFilter] = useState("all")
-  const [editOpen, setEditOpen] = useState(false)
+  const [rows, setRows] = useState<PolicyRow[]>([])
+  const [progress, setProgress] = useState<Record<string, SigningSummary>>({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [search, setSearch] = useState("")
+  const [statusFilter, setStatusFilter] = useState<Status | "all">("all")
+  const [target, setTarget] = useState<SigningTarget | null>(null)
+  const [proxyRefresh, setProxyRefresh] = useState(0)
 
-  const categories = [...new Set(policies.map((p) => p.category))]
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const [dep, loan] = await Promise.all([apiClient.get("/policies/deposit"), apiClient.get("/policies/loan")])
+      const all: PolicyRow[] = [
+        ...(dep.data as RawDeposit[]).map((p) => ({
+          type: "deposit" as const,
+          id: p.policy_id,
+          label: `Deposit policy (${rs(Number(p.amount_paisa) / 100)}, ${p.schedule_type.replace(/_/g, " ")})`,
+          status: p.status,
+          effectiveFrom: p.effective_from,
+          createdBy: p.created_by,
+        })),
+        ...(loan.data as RawLoan[]).map((p) => ({
+          type: "loan" as const,
+          id: p.policy_id,
+          label: `Loan policy (${rs(p.min_loan_amount)}–${rs(p.max_loan_amount)}, ${Number(p.interest_rate)}%)`,
+          status: p.status,
+          effectiveFrom: p.effective_from,
+          createdBy: p.created_by,
+        })),
+      ]
+      setRows(all)
+      setError(null)
 
-  const filtered = policies.filter((p) => {
-    const matchesSearch = p.title.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = categoryFilter === "all" || p.category === categoryFilter
-    return matchesSearch && matchesCategory
-  })
+      // Signing progress for policies that are open
+      const open = all.filter((r) => r.status === "finalized")
+      const summaries = await Promise.all(
+        open.map((r) =>
+          apiClient
+            .get(`/policies/${r.type}/${r.id}/signatures`)
+            .then((res) => res.data as SigningSummary)
+            .catch(() => null),
+        ),
+      )
+      const map: Record<string, SigningSummary> = {}
+      summaries.forEach((s) => s && (map[s.policy_id] = s))
+      setProgress(map)
+    } catch (err) {
+      setError(apiError(err, "Could not load policies."))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return rows
+      .filter((r) => statusFilter === "all" || r.status === statusFilter)
+      .filter((r) => !q || r.label.toLowerCase().includes(q) || (r.createdBy ?? "").toLowerCase().includes(q))
+      .sort((a, b) => Number(b.status === "finalized") - Number(a.status === "finalized"))
+  }, [rows, search, statusFilter])
+
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: rows.length }
+    rows.forEach((r) => (c[r.status] = (c[r.status] ?? 0) + 1))
+    return c
+  }, [rows])
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Policies</h2>
-          <p className="text-sm text-muted-foreground">Manage cooperative rules, rates, and policies</p>
-        </div>
-        <Dialog>
-          <DialogTrigger asChild>
-            <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-              <Plus className="mr-2 h-4 w-4" />
-              Add Policy
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Add New Policy</DialogTitle>
-              <DialogDescription>Create a new cooperative policy or rule</DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-4 pt-2">
-              <div className="flex flex-col gap-2">
-                <Label className="text-xs font-medium">Policy Title</Label>
-                <Input placeholder="e.g. Maximum Savings Withdrawal" />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium">Value</Label>
-                  <Input placeholder="e.g. 50% of balance" />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium">Category</Label>
-                  <Select>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat} value={cat.toLowerCase()}>{cat}</SelectItem>
-                      ))}
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label className="text-xs font-medium">Description</Label>
-                <Textarea placeholder="Explain the policy details..." className="min-h-[80px] resize-none" />
-              </div>
-              <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-                Save Policy
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+      <div>
+        <h2 className="text-lg font-semibold text-foreground">Policies</h2>
+        <p className="text-sm text-muted-foreground">
+          The Treasurer drafts policies; members then have one week to sign, and a policy takes effect only if every member has signed by the deadline. In extreme cases you can
+          sign on behalf of an absent member, after consulting them and with the President's, Treasurer's and
+          Secretary's authorisation.
+        </p>
       </div>
 
-      {/* Category Summary */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-5">
-        {categories.map((cat) => (
-          <Card
-            key={cat}
-            className={`cursor-pointer transition-colors hover:bg-accent/50 ${categoryFilter === cat ? "border-primary bg-accent/50" : ""
-              }`}
-            onClick={() => setCategoryFilter(categoryFilter === cat ? "all" : cat)}
-          >
-            <CardContent className="flex flex-col items-center p-4">
-              <p className="font-nums text-xl font-bold text-foreground">
-                {policies.filter((p) => p.category === cat).length}
-              </p>
-              <p className="text-xs text-muted-foreground">{cat}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <ProxyRequestsPanel mode="admin" refreshKey={proxyRefresh} onChanged={load} />
 
-      {/* Policies Table */}
       <Card>
-        <CardHeader className="pb-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <CardHeader className="gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <CardTitle className="text-sm font-semibold">All Policies</CardTitle>
-              <CardDescription>{filtered.length} policies</CardDescription>
+              <CardTitle className="text-sm font-semibold">All policies</CardTitle>
+              <CardDescription>{filtered.length} shown</CardDescription>
             </div>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Search policies..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-9 w-64 pl-9 text-sm"
+                className="pl-8"
+                placeholder="Search policies"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
             </div>
           </div>
+          <div className="flex flex-wrap gap-2">
+            {(["all", "finalized", "active", "draft", "void", "expired"] as const).map((s) => (
+              <Button
+                key={s}
+                size="sm"
+                variant={statusFilter === s ? "default" : "outline"}
+                className="h-7 text-xs"
+                onClick={() => setStatusFilter(s)}
+              >
+                {s === "all" ? "All" : STATUS_LABEL[s]} ({counts[s] ?? 0})
+              </Button>
+            ))}
+          </div>
         </CardHeader>
         <CardContent>
+          {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="text-xs">Policy</TableHead>
-                  <TableHead className="text-xs">Category</TableHead>
-                  <TableHead className="text-xs">Value</TableHead>
-                  <TableHead className="text-xs">Last Updated</TableHead>
                   <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="w-10 text-xs"></TableHead>
+                  <TableHead className="text-xs">Signatures</TableHead>
+                  <TableHead className="text-xs">Created by</TableHead>
+                  <TableHead className="w-28 text-xs">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((policy) => (
-                  <TableRow key={policy.id}>
-                    <TableCell className="text-sm font-medium text-foreground">{policy.title}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="text-xs">{policy.category}</Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm font-semibold text-foreground">{policy.value}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{policy.lastUpdated}</TableCell>
-                    <TableCell>
-                      {policy.status === "active" ? (
-                        <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-success text-xs">
-                          <CheckCircle2 className="h-3 w-3" />
-                          Active
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline" className="gap-1 border-warning/30 bg-warning/10 text-warning text-xs">
-                          <Clock className="h-3 w-3" />
-                          Under Review
-                        </Badge>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                        <DialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Edit ${policy.title}`}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="max-w-lg">
-                          <DialogHeader>
-                            <DialogTitle>Edit Policy</DialogTitle>
-                            <DialogDescription>Modify the policy details below</DialogDescription>
-                          </DialogHeader>
-                          <div className="flex flex-col gap-4 pt-2">
-                            <div className="flex flex-col gap-2">
-                              <Label className="text-xs font-medium">Policy Title</Label>
-                              <Input defaultValue={policy.title} />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Value</Label>
-                                <Input defaultValue={policy.value} />
-                              </div>
-                              <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Status</Label>
-                                <Select defaultValue={policy.status}>
-                                  <SelectTrigger>
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="active">Active</SelectItem>
-                                    <SelectItem value="under review">Under Review</SelectItem>
-                                    <SelectItem value="deprecated">Deprecated</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            </div>
-                            <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setEditOpen(false)}>
-                              Update Policy
-                            </Button>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-8 text-center">
+                      <Loader2 className="mx-auto h-4 w-4 animate-spin text-muted-foreground" />
                     </TableCell>
                   </TableRow>
-                ))}
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                      No policies.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filtered.map((r) => {
+                    const p = progress[r.id]
+                    return (
+                      <TableRow key={`${r.type}-${r.id}`}>
+                        <TableCell className="text-sm">{r.label}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={`text-xs ${STATUS_CLASS[r.status]}`}>
+                            {STATUS_LABEL[r.status]}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="min-w-40">
+                          {p ? (
+                            <div className="flex flex-col gap-1">
+                              <span className="text-xs">
+                                {p.approved}/{p.required} signed
+                                {p.rejected > 0 && <span className="text-destructive"> · {p.rejected} rejected</span>}
+                              </span>
+                              <Progress value={p.required ? (p.approved / p.required) * 100 : 0} className="h-1.5" />
+                              {p.signing_deadline && (
+                                <span className="text-xs text-muted-foreground">{timeLeft(p.signing_deadline) ?? "closing"}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{r.createdBy ?? "—"}</TableCell>
+                        <TableCell>
+                          {(r.status === "finalized" || r.status === "active" || r.status === "void") && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-8"
+                              onClick={() => setTarget({ type: r.type, id: r.id, label: r.label })}
+                            >
+                              <PenLine className="mr-1.5 h-3.5 w-3.5" />
+                              Signatures
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })
+                )}
               </TableBody>
             </Table>
           </div>
         </CardContent>
       </Card>
+
+      <PolicySigningDialog
+        target={target}
+        onClose={() => setTarget(null)}
+        onChanged={() => {
+          load()
+          setProxyRefresh((n) => n + 1)
+        }}
+        canRequestProxy
+      />
     </div>
   )
 }

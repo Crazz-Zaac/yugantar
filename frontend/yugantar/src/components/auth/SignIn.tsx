@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { apiClient } from "@/api/api"
 import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -126,6 +127,20 @@ export function SignIn({
               {error && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive" role="alert">
                   {error}
+                  {error.toLowerCase().includes("verify your email") && email && (
+                    <button
+                      type="button"
+                      className="mt-1 block text-xs font-medium underline"
+                      onClick={() =>
+                        apiClient
+                          .post("/users/resend-verification", { email })
+                          .then(() => setError("A new verification link has been sent if your email isn't verified yet."))
+                          .catch(() => setError("Could not resend the verification email. Please try again later."))
+                      }
+                    >
+                      Resend verification email
+                    </button>
+                  )}
                 </div>
               )}
 

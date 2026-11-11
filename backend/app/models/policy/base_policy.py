@@ -54,6 +54,13 @@ class BasePolicy(SQLModel, table=False):
         description="Identifier of the user who created the policy",
     )
 
+    # When an open policy's member signing closes (set when opened for signing)
+    signing_deadline: Optional[datetime] = Field(
+        default=None,
+        nullable=True,
+        description="End of the member signing period",
+    )
+
     # policy status
     status: PolicyStatus = Field(
         default=PolicyStatus.DRAFT,

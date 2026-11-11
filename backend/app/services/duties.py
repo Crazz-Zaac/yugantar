@@ -18,8 +18,10 @@ Rules (agreed with the committee):
     review / delete payment  Treasurer    Secretary
     verify loan funds        Treasurer    Secretary
     approve / reject loan    President    Secretary
-    approve / reject policy  President    Secretary
     create / edit policy     Treasurer    (none)
+
+Policies are not approved by one person: every member signs them (see
+services/policy_signing_service.py).
 """
 
 from enum import Enum
@@ -43,7 +45,6 @@ class Duty(str, Enum):
     REVIEW_LOAN_PAYMENT = "review loan payments"
     VERIFY_LOAN_FUNDS = "verify loan funds"
     DECIDE_LOAN = "approve or reject loans"
-    DECIDE_POLICY = "approve or reject policies"
     MANAGE_POLICY = "create or edit policies"
 
 
@@ -52,7 +53,6 @@ PRIMARY_ROLE: dict[Duty, str] = {
     Duty.REVIEW_LOAN_PAYMENT: CooperativeRole.TREASURER.value,
     Duty.VERIFY_LOAN_FUNDS: CooperativeRole.TREASURER.value,
     Duty.DECIDE_LOAN: CooperativeRole.PRESIDENT.value,
-    Duty.DECIDE_POLICY: CooperativeRole.PRESIDENT.value,
     Duty.MANAGE_POLICY: CooperativeRole.TREASURER.value,
 }
 NO_BACKUP = {Duty.MANAGE_POLICY}
@@ -62,6 +62,11 @@ def coop_roles(user: Optional[User]) -> set[str]:
     if user is None:
         return set()
     return {str(getattr(r, "value", r)).lower() for r in (user.cooperative_roles or [])}
+
+
+def is_active_member(user: User) -> bool:
+    """Enabled, email-verified and approved: can actually use the app."""
+    return not user.disabled and bool(user.is_verified) and bool(user.is_approved)
 
 
 def is_office_bearer(user: User) -> bool:
@@ -109,7 +114,7 @@ def responsible_users(session: Session, duty: Duty, beneficiary: Optional[User] 
     the beneficiary, plus the Secretary when the beneficiary holds that role
     (or nobody else does)."""
     primary = PRIMARY_ROLE[duty]
-    users = session.exec(select(User).where(User.disabled == False)).all()  # noqa: E712
+    users = [u for u in session.exec(select(User)).all() if is_active_member(u)]
     exclude = beneficiary.id if beneficiary else None
 
     result = [u for u in users if primary in coop_roles(u) and u.id != exclude]

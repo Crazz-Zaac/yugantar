@@ -3,6 +3,7 @@ from sqlmodel import SQLModel
 # Import all policy models to ensure they are registered
 from .policy.deposit_policy import DepositPolicy
 from .policy.loan_policy import LoanPolicy
+from .policy.policy_signature import PolicySignature, PolicyProxyRequest, PolicyProxyAuthorisation
 
 # Import other models
 from .base import BaseModel

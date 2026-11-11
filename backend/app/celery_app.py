@@ -17,4 +17,9 @@ celery_app.conf.beat_schedule = {
         "task": "purge_expired_receipts",
         "schedule": crontab(minute=0),
     },
+    # Policy signing deadlines: decide outcome within an hour of the deadline
+    "close-policy-signings": {
+        "task": "close_policy_signings",
+        "schedule": crontab(minute=5),
+    },
 }

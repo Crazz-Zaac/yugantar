@@ -87,6 +87,8 @@ export function NotificationPanel() {
       case "policy_finalized":
         return isAdminArea ? "/admin/policies" : "/dashboard/policies"
       default:
+        // e.g. proxy-signature notifications (type "general") about a policy
+        if (notification.policy_id) return isAdminArea ? "/admin/policies" : "/dashboard/policies"
         return isAdminArea ? "/admin" : "/dashboard"
     }
   }

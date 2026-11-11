@@ -14,9 +14,14 @@ class UserService:
     """
 
     def create_user(self, session: Session, user_in: UserCreate) -> User:
-        # Create user with explicit field mapping
-        user_dict = user_in.model_dump(exclude={"password"})
+        # Account-state fields are never taken from the client: a new
+        # registration starts unverified, unapproved and enabled.
+        user_dict = user_in.model_dump(
+            exclude={"password", "is_verified", "disabled", "joined_at"}
+        )
         user_dict["hashed_password"] = get_password_hash(user_in.password)
+        user_dict["is_verified"] = False
+        user_dict["is_approved"] = False
 
         user = User(**user_dict)
 
@@ -27,7 +32,23 @@ class UserService:
         return user
 
     def update_user(self, session: Session, db_user: User, user_in: UserUpdate) -> User:
+        """Update profile fields. Changing the email requires verifying the
+        new address again (the caller sends the verification email)."""
         user_data = user_in.model_dump(exclude_unset=True)
+        new_email = user_data.get("email")
+        if new_email is not None:
+            new_email = new_email.lower()
+            user_data["email"] = new_email
+            if new_email != db_user.email:
+                taken = session.exec(select(User).where(User.email == new_email)).first()
+                if taken:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="That email address is already in use.",
+                    )
+                db_user.is_verified = False
+            else:
+                user_data.pop("email")
         db_user.sqlmodel_update(user_data)
         session.add(db_user)
         session.commit()
@@ -50,6 +71,17 @@ class UserService:
         statement = select(User).where(User.email == email, User.disabled == False)
         return session.exec(statement).first()
 
+    @staticmethod
+    def account_block_reason(user: User) -> Optional[str]:
+        """Why this account can't use the app yet, or None."""
+        if user.disabled:
+            return "This account is disabled."
+        if not user.is_verified:
+            return "Please verify your email address first. Check your inbox for the verification link."
+        if not user.is_approved:
+            return "Your account is awaiting approval by an administrator."
+        return None
+
     def get_user_by_id(self, session: Session, user_id: uuid.UUID) -> Optional[User]:
         statement = select(User).where(User.id == user_id)
         return session.exec(statement).first()
@@ -63,21 +95,29 @@ class UserService:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid email or password",
             )
+        # Only after the password checked out, so this reveals nothing to strangers
+        reason = self.account_block_reason(user)
+        if reason:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
         return user
 
-    def get_total_user_count(self, session: Session) -> int:
+    def get_total_user_count(self, session: Session, pending_only: bool = False) -> int:
         """Get total user count (admin only)."""
         statement = select(func.count()).select_from(User)
+        if pending_only:
+            statement = statement.where(User.is_approved == False)  # noqa: E712
         total = session.exec(statement).one()
         return total
 
     # this method is for admin use to get all users
     def get_all_users(
-        self, session: Session, skip: int = 0, limit: int = 10
+        self, session: Session, skip: int = 0, limit: int = 10, pending_only: bool = False
     ) -> List[User]:
-        """Get all user (admin only)."""
-        statement = select(User).offset(skip).limit(limit)
-        users = list(session.exec(statement).all())
+        """Get all users, or only registrations awaiting approval (admin only)."""
+        statement = select(User).order_by(User.created_at.desc())
+        if pending_only:
+            statement = statement.where(User.is_approved == False)  # noqa: E712
+        users = list(session.exec(statement.offset(skip).limit(limit)).all())
         return users
 
     def admin_assign_user_roles(

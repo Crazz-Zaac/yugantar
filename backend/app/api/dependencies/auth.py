@@ -8,6 +8,7 @@ import jwt
 from app.core.db import get_session
 from app.core.config import settings
 from app.models.user_model import User
+from app.services.user_service import UserService
 
 # tokenUrl should match the actual login endpoint
 oauth2_scheme = OAuth2PasswordBearer(
@@ -59,6 +60,10 @@ async def get_current_user(
             detail="User account is disabled",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # e.g. the email was changed and not re-verified yet
+    reason = UserService.account_block_reason(user)
+    if reason:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
     return user
 
 

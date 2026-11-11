@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Response, Request
 from fastapi.responses import RedirectResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
@@ -97,8 +97,8 @@ async def refresh_access_token(
     statement = select(User).where(User.id == UUID(str(user_id)))
     user = session.exec(statement).first()
 
-    if not user or user.disabled:
-        # Deleted or disabled account: kill every session it still has
+    if not user or UserService.account_block_reason(user):
+        # Deleted, disabled, unverified or unapproved: kill every session
         revoke_all_refresh_tokens(user_id)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -136,7 +136,11 @@ async def verify_email_redirect(token: str):
 
 # actual verification logic called by the frontend
 @router.post("/verify-email", status_code=status.HTTP_200_OK)
-async def verify_email_token(token: str, session: Session = Depends(get_session)):
+async def verify_email_token(
+    token: str,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+):
     """
     Verify email using the provided token. Called by the frontend page.
     """
@@ -173,4 +177,42 @@ async def verify_email_token(token: str, session: Session = Depends(get_session)
     session.commit()
     session.refresh(user)
 
+    if not user.is_approved:
+        _notify_admins_pending_approval(session, background_tasks, user)
+        return {
+            "msg": "Email verified successfully. An administrator will review your registration; "
+            "you'll get an email once your account is approved."
+        }
     return {"msg": "Email verified successfully."}
+
+
+def _notify_admins_pending_approval(session: Session, background_tasks: BackgroundTasks, user: User) -> None:
+    """Tell every admin that a verified registration is waiting for approval."""
+    from sqlmodel import select
+    from app.models.notification_model import Notification, NotificationType
+    from app.services.email_notify import send_generic_email
+    from fastapi_mail import NameEmail
+
+    name = f"{user.first_name} {user.last_name}".strip()
+    admins = [
+        u for u in session.exec(select(User).where(User.disabled == False)).all()  # noqa: E712
+        if "admin" in {str(getattr(r, "value", r)).lower() for r in (u.access_roles or [])}
+    ]
+    for admin in admins:
+        session.add(
+            Notification(
+                user_id=admin.id,
+                title="New member awaiting approval",
+                message=f"{name} ({user.email}) verified their email and is waiting for your approval.",
+                notification_type=NotificationType.GENERAL,
+            )
+        )
+        background_tasks.add_task(
+            send_generic_email,
+            [NameEmail(name=admin.first_name, email=admin.email)],
+            "New member awaiting approval — Yugantar",
+            f"Hello {admin.first_name},\n\n{name} ({user.email}) registered and verified their email. "
+            "Please review the registration in the admin Members tab and approve or reject it.\n\n"
+            "Best regards,\nYugantar System",
+        )
+    session.commit()

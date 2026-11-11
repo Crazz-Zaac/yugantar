@@ -29,16 +29,9 @@ function AuthPage() {
     navigate(role === "admin" ? "/admin" : "/dashboard");
   };
 
-  const handleSignUp = (role: "member" | "admin") => {
-    navigate(role === "admin" ? "/admin" : "/dashboard");
-  };
-
   if (mode === "signup") {
     return (
-      <SignUp
-        onSignUp={handleSignUp}
-        onGoToSignIn={() => setMode("signin")}
-      />
+      <SignUp onGoToSignIn={() => setMode("signin")} />
     );
   }
 

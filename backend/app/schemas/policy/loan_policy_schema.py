@@ -71,6 +71,7 @@ class LoanPolicyResponse(SQLModel):
     requires_collateral: bool
 
     status: PolicyStatus
+    signing_deadline: Optional[datetime] = None
     emi_applicable: bool
 
     effective_from: datetime

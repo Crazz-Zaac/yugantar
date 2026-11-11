@@ -79,7 +79,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
       });
 
-      console.log("Signup request body:", body);
 
       const res = await fetch(`${API_BASE}/users/register`, {
         method: "POST",
@@ -89,11 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!res.ok) {
         const errorData = await res.json();
-        console.error("Signup error response:", errorData);
 
         if (errorData.detail) {
           if (Array.isArray(errorData.detail)) {
-            console.error("Validation errors:", errorData.detail);
             const firstError = errorData.detail[0];
             throw new Error(firstError.msg || "Validation failed");
           }
@@ -102,18 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error("Failed to register");
       }
 
-      const data = await res.json();
-      console.log("Signup success response:", data);
-
-      if (data.access_token) {
-        localStorage.setItem("access_token", data.access_token);
-        // Refresh token is delivered via httpOnly cookie — never store in localStorage
-        setUser(normalizeUser(data.user ?? data));
-      } else if (data.user) {
-        setUser(normalizeUser(data.user));
-      } else {
-        setUser(normalizeUser(data));
-      }
+      // A new account can't sign in yet: the email must be verified and an
+      // administrator must approve it. So we don't set a user here.
     } catch (err) {
       console.error("Signup error:", err);
       throw err;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { Search, MoreHorizontal, UserPlus, CheckCircle2, XCircle, AlertTriangle, Loader2, Shield } from "lucide-react"
+import { Search, MoreHorizontal, UserPlus, CheckCircle2, XCircle, AlertTriangle, Loader2, Shield, Clock, UserCheck } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -26,9 +26,12 @@ interface MemberUser {
   access_roles: string[]
   cooperative_roles: string[]
   is_verified: boolean
+  is_approved: boolean
   disabled: boolean
   joined_at: string
 }
+
+type MemberStatus = "active" | "pending" | "inactive" | "suspended"
 
 function getInitials(firstName: string, lastName: string) {
   return `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase()
@@ -38,13 +41,22 @@ function getFullName(m: MemberUser) {
   return `${m.first_name} ${m.last_name}`.trim()
 }
 
-function getMemberStatus(m: MemberUser): "active" | "inactive" | "suspended" {
+function getMemberStatus(m: MemberUser): MemberStatus {
   if (m.disabled) return "suspended"
+  if (!m.is_approved) return "pending"
   if (!m.is_verified) return "inactive"
   return "active"
 }
 
-function MemberStatusBadge({ status }: { status: "active" | "inactive" | "suspended" }) {
+function MemberStatusBadge({ status }: { status: MemberStatus }) {
+  if (status === "pending") {
+    return (
+      <Badge variant="outline" className="gap-1 border-warning/30 bg-warning/10 text-warning text-xs">
+        <Clock className="h-3 w-3" />
+        Pending approval
+      </Badge>
+    )
+  }
   if (status === "active") {
     return (
       <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-success text-xs">
@@ -57,7 +69,7 @@ function MemberStatusBadge({ status }: { status: "active" | "inactive" | "suspen
     return (
       <Badge variant="outline" className="gap-1 border-muted-foreground/30 bg-muted text-muted-foreground text-xs">
         <XCircle className="h-3 w-3" />
-        Inactive
+        Email unverified
       </Badge>
     )
   }
@@ -106,6 +118,24 @@ export function MembersTab() {
     }
   }
 
+  // New registrations: approve (they can sign in once their email is verified)
+  // or reject (the account is removed and they're told by email)
+  const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null)
+  const handleApproval = async (member: MemberUser, approve: boolean) => {
+    if (!approve && !window.confirm(`Reject ${getFullName(member)}'s registration? Their account will be removed.`)) return
+    setApprovalBusyId(member.id)
+    try {
+      await apiClient.post(`/admin/users/${member.id}/${approve ? "approve" : "reject"}`)
+      fetchMembers()
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || `Failed to ${approve ? "approve" : "reject"} the registration`)
+    } finally {
+      setApprovalBusyId(null)
+    }
+  }
+  const pendingApproval = members.filter((m) => !m.is_approved && !m.disabled)
+
   const handleRoleSave = async (accessRoles: AccessRole[], cooperativeRoles: CooperativeRole[]) => {
     if (!roleModalUser) return
     await apiClient.patch(`/admin/users/${roleModalUser.id}`, {
@@ -139,6 +169,50 @@ export function MembersTab() {
         </Button>
       </div>
 
+      {pendingApproval.length > 0 && (
+        <Card className="border-warning/40">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+              <UserCheck className="h-4 w-4" />
+              Registrations awaiting approval ({pendingApproval.length})
+            </CardTitle>
+            <CardDescription>
+              New members can sign in only after verifying their email and being approved here.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {pendingApproval.map((m) => (
+              <div key={m.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border p-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">{getFullName(m)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {m.email} · {m.phone || "no phone"} · registered {new Date(m.joined_at).toLocaleDateString()}
+                  </p>
+                  <p className={`text-xs ${m.is_verified ? "text-success" : "text-muted-foreground"}`}>
+                    {m.is_verified ? "Email verified" : "Email not verified yet"}
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" disabled={approvalBusyId === m.id} onClick={() => handleApproval(m, true)}>
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    Approve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={approvalBusyId === m.id}
+                    onClick={() => handleApproval(m, false)}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    Reject
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader className="pb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -157,13 +231,14 @@ export function MembersTab() {
                 />
               </div>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="h-9 w-32">
+                <SelectTrigger className="h-9 w-44">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
+                  <SelectItem value="pending">Pending approval</SelectItem>
+                  <SelectItem value="inactive">Email unverified</SelectItem>
                   <SelectItem value="suspended">Suspended</SelectItem>
                 </SelectContent>
               </Select>

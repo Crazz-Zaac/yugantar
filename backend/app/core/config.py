@@ -161,6 +161,10 @@ class Settings(BaseSettings):
     # Images are deleted this many days after upload (metadata is kept)
     RECEIPT_RETENTION_DAYS: int = 15
 
+    # Members have this many days to sign a new policy (decisions can be
+    # changed until the deadline; the outcome is decided at the deadline)
+    POLICY_SIGNING_DAYS: int = 7
+
     # ---------------------------
     # Redis Settings for Caching
     # ---------------------------

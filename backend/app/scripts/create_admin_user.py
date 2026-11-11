@@ -28,6 +28,9 @@ def create_admin_user(email: str, password: str) -> None:
             phone="+97790000000000",
             address="",
             access_roles=[AccessRole.ADMIN],
+            # Configured by the operator, not self-registered
+            is_verified=True,
+            is_approved=True,
         )
 
         session.add(admin_user)

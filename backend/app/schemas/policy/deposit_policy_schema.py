@@ -63,6 +63,7 @@ class DepositPolicyResponse(SQLModel):
     max_occurrences: Optional[int] = None
 
     status: PolicyStatus
+    signing_deadline: Optional[datetime] = None
     effective_from: datetime
     effective_to: Optional[datetime] = None
 

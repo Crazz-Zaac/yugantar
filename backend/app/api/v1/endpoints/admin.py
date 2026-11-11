@@ -1,4 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Query
+from fastapi_mail import NameEmail
+
+from app.services.email_notify import send_generic_email
 from sqlmodel import Session
 from typing import List
 from uuid import UUID
@@ -23,6 +26,7 @@ user_service = UserService()
 async def list_users(
     skip: int = 0,
     limit: int = Query(10, le=100),
+    pending: bool = Query(False, description="Only registrations awaiting approval"),
     session: Session = Depends(get_session),
     current_admin: User = Depends(get_current_admin),
 ):
@@ -34,10 +38,8 @@ async def list_users(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Admin access required",
         )
-    users = user_service.get_all_users(session=session, skip=skip, limit=limit)
-    total = user_service.get_total_user_count(session=session)
-    if not users:
-        return []
+    users = user_service.get_all_users(session=session, skip=skip, limit=limit, pending_only=pending)
+    total = user_service.get_total_user_count(session=session, pending_only=pending)
     return PaginatedUserListResponse(
         total=total,
         users=users,
@@ -153,3 +155,73 @@ async def toggle_user_disabled_status(
     if user.disabled:
         revoke_all_refresh_tokens(user.id)
     return user
+
+
+@router.post("/users/{user_id}/approve", response_model=UserResponse)
+async def approve_user(
+    user_id: UUID,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Approve a new registration. The member can log in once their email is
+    also verified."""
+    user = user_service.get_user_by_id(session=session, user_id=user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if user.is_approved:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User is already approved")
+
+    from datetime import datetime, timezone
+
+    user.is_approved = True
+    user.approved_by = current_admin.email
+    user.approved_at = datetime.now(timezone.utc)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+
+    next_step = (
+        "You can now log in."
+        if user.is_verified
+        else "Please also verify your email address using the link we sent you; then you can log in."
+    )
+    background_tasks.add_task(
+        send_generic_email,
+        [NameEmail(name=user.first_name, email=user.email)],
+        "Your Yugantar membership was approved",
+        f"Hello {user.first_name},\n\nYour registration has been approved. {next_step}\n\n"
+        "Best regards,\nYugantar System",
+    )
+    return user
+
+
+@router.post("/users/{user_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+async def reject_registration(
+    user_id: UUID,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Reject a registration that was never approved: the account is removed
+    and the person is told by email. Approved members are disabled instead."""
+    user = user_service.get_user_by_id(session=session, user_id=user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if user.is_approved:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This member is already approved; disable the account instead.",
+        )
+    email, first_name = user.email, user.first_name
+    session.delete(user)
+    session.commit()
+    revoke_all_refresh_tokens(user_id)
+    background_tasks.add_task(
+        send_generic_email,
+        [NameEmail(name=first_name, email=email)],
+        "Your Yugantar registration",
+        f"Hello {first_name},\n\nYour registration was not approved. If you think this is a mistake, "
+        "please contact the cooperative's administrator.\n\nBest regards,\nYugantar System",
+    )
+    return None

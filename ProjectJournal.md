@@ -719,7 +719,7 @@ echo "password" > secrets/pgadmin_password.txt"
   | Review / delete loan payment | Treasurer | Secretary |
   | Verify loan funds | Treasurer | Secretary |
   | Approve / reject loan | President (not whoever verified funds) | Secretary |
-  | Approve / reject policy | President | Secretary (if the President created it) |
+  | ~~Approve / reject policy~~ | replaced by member signatures (see 9) | |
   | Create / edit / delete policy | Treasurer | none |
 
 - **Applied to:**
@@ -731,3 +731,48 @@ echo "password" > secrets/pgadmin_password.txt"
   - The Secretary now sees the deposit and loan review tabs.
   - The pending-loan queue returns per-loan `viewer_can_verify_funds` / `viewer_can_decide` / `is_own_application`, computed by the same backend rule. Buttons appear only when the action will succeed; otherwise the card says why (e.g. "Your own application: another office bearer handles it").
 - **Not covered:** `MemberPoliciesTab` still shows approve/reject to the President only. The Secretary-approves-the-President's-policy case (rare: only when a Treasurer is also President) works in the API but has no button yet. The admin Policies tab is still mock data (`@/lib/data`).
+
+### 9. Policies approved by every member's signature
+- **Decision:** a new policy needs the approval of *all* members, office bearers included, not just the President. Each signature records the member's name and date. In extreme cases an Admin can sign for an absent member, but only after consulting them (e.g. by phone) and with the President's, Treasurer's and Secretary's authorisation.
+- **Lifecycle** (`services/policy_signing_service.py`):
+  - `DRAFT`: the Treasurer creates and edits it.
+  - `FINALIZED`, shown as "Open for signing": the Treasurer signs and opens it, which creates a signature row for every required signer. Signers are a snapshot of active accounts with a cooperative role; a pure system-admin account doesn't sign.
+  - Members approve, or reject with a reason, and can change their response while it's open. A rejection blocks activation and notifies the Treasurer, who can withdraw the policy to `DRAFT` to revise it (this clears the signatures).
+  - `ACTIVE` once every counted signer has approved; everyone is notified. Members disabled during signing stop counting (re-checked when an admin toggles a user).
+- **Proxy signing:**
+  - The Admin files a request with the member, their decision (and reason if rejecting), and a note on how they were consulted.
+  - It's applied only once each office role (President, Treasurer, Secretary) has authorised it, with at least two different people. The absent member and the requesting Admin can't authorise.
+  - The signature shows "Signed by Admin X on their behalf (consultation), authorised by …", and the member is notified. Any office bearer can decline; the Admin can cancel.
+- **Data:** new tables `policysignature`, `policyproxyrequest`, `policyproxyauthorisation` (migration `f83cd6bcc6c3`).
+- **API** (`endpoints/policy_signing.py`): `POST /policies/{type}/{id}/submit` (sign and open), `/withdraw`, `GET …/signatures`, `POST …/sign`, `POST …/proxy-requests`, `GET /policies/proxy-requests`, `POST /policies/proxy-requests/{id}/authorise | cancel`. The old President `approve`/`reject` endpoints are removed, and `DECIDE_POLICY` is gone from `duties.py`.
+- **Frontend:**
+  - Shared `components/policies/`: `PolicySigningDialog` (progress, signer list with dates/reasons/proxy details, sign/reject, Treasurer withdraw, Admin proxy form) and `ProxyRequestsPanel` (authorise/decline for office bearers; overview and cancel for the Admin).
+  - `MemberPoliciesTab`: the President's approve/reject became a "Signatures" button for every member; "Submit for review" became "Sign & open for signing".
+  - The admin Policies tab was a mock (`@/lib/data`); it's now real (all policies, signing progress, proxy requests).
+  - Notifications about a policy link to the Policies tab.
+
+### 9b. One-week signing deadline
+- **Decision:** members have **1 week** (`POLICY_SIGNING_DAYS=7`) to sign a new policy and can change their decision until the deadline. The outcome is decided **at the deadline**, so nobody's change of mind is cut off early. Every member sees everyone's decisions, reasons and proxy details in the Signatures dialog.
+- **How:**
+  - `signing_deadline` column on policies (migration `cce2093badc1`).
+  - Signing, changing a decision and proxy requests/authorisations are refused after the deadline.
+  - At the deadline the policy becomes ACTIVE if every counted member approved, otherwise VOID ("not adopted"), and members are notified.
+  - Closed by the hourly Celery Beat task `close_policy_signings`, and also on read, so the UI is never stale.
+  - The Treasurer can revise a lapsed policy back into a draft.
+- Signing API timestamps are now sent as UTC (`…Z`). The DB stores naive UTC, which browsers would otherwise show 5h45 off in Nepal. *Other endpoints still send naive timestamps; see open items.*
+
+### 10. Registration requires email verification + admin approval (also fixes 11)
+- **Issue:** anyone could register and immediately act as a member and see other members' contact details. Registration also accepted `is_verified`/`disabled` from the client, and changing your email skipped verification.
+- **Fix:**
+  - New `user.is_approved` / `approved_by` / `approved_at`. Existing accounts were grandfathered as approved, and the script-created admin was marked verified.
+  - `create_user` ignores client-supplied account-state fields. New accounts start unverified and unapproved.
+  - `UserService.account_block_reason()` (disabled / unverified / unapproved) is enforced at both login endpoints (only *after* the password checks out, so strangers learn nothing), on token refresh, and on every request via `get_current_user`.
+  - Verifying the email notifies admins. `POST /admin/users/{id}/approve` emails the member; `/reject` removes a never-approved registration and emails them. `GET /admin/users?pending=true` lists pending registrations. `POST /users/resend-verification` gives the same answer for unknown emails.
+  - **#11:** changing your email marks the account unverified, sends a link to the new address and ends all sessions until it's verified. Taking another member's email is refused.
+  - Signer pools, notified office bearers and proxy authorisers count only active members (enabled, verified, approved).
+  - Also fixed: `GET /admin/users` returned a bare `[]` for an empty page (a 500 with its response model).
+- **Frontend:**
+  - Sign-up now ends on a "check your email → admin approval → sign in" screen with a resend button. Before, it pretended the user was signed in.
+  - Removed `console.log` of the sign-up request body, **which included the password**.
+  - Sign-in shows the reason and offers "Resend verification email".
+  - The admin Members tab has a "Registrations awaiting approval" card (Approve/Reject) and a "Pending approval" status/filter.

@@ -66,6 +66,12 @@ class User(BaseModel, table=True):
     # Indicates if the user's email is verified
     is_verified: bool = Field(default=False, nullable=False)
 
+    # New registrations need an admin's approval (in addition to a verified
+    # email) before they can log in.
+    is_approved: bool = Field(default=False, nullable=False)
+    approved_by: Optional[str] = Field(default=None, max_length=100, nullable=True)
+    approved_at: Optional[datetime] = Field(default=None, nullable=True)
+
     disabled: bool = Field(default=False)
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
