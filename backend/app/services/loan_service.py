@@ -99,17 +99,17 @@ class LoanService:
                 detail="This policy requires collateral details.",
             )
 
-        # 4. Check no other PENDING or ACTIVE loan for this user
+        # 4. One open loan at a time: pending, approved (not yet disbursed) or active
         existing = session.exec(
             select(Loan).where(
                 Loan.user_id == user.id,
-                col(Loan.status).in_([LoanStatus.PENDING, LoanStatus.ACTIVE]),
+                col(Loan.status).in_([LoanStatus.PENDING, LoanStatus.APPROVED, LoanStatus.ACTIVE]),
             )
         ).first()
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="You already have a pending or active loan. Please complete it before applying for a new one.",
+                detail="You already have a pending, approved or active loan. Please complete it before applying for a new one.",
             )
 
         # 5. Create the loan record

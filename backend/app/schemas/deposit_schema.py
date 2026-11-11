@@ -82,14 +82,22 @@ class DepositBase(SQLModel):
 
 
 class DepositCreate(DepositBase):
-    verification_status: DepositVerificationStatus = Field(
-        default=DepositVerificationStatus.PENDING
-    )
+    """What a member submits. Status, reviewer, dates and fines are set by the
+    server; client values for them (verified_by, verification_status, ...)
+    are ignored."""
+
     deposit_type: DepositType = Field(default=DepositType.CURRENT)
+
+    @field_validator("deposited_amount")
+    @classmethod
+    def _positive_amount(cls, value):
+        if value is None or value <= 0:
+            raise ValueError("Deposited amount must be greater than 0.")
+        return value
 
 
 class DepositUserUpdate(SQLModel):
-    deposited_amount: Optional[int] = Field(default=None, gt=0)
+    deposited_amount: Optional[Decimal] = Field(default=None, gt=0)
     receipt_screenshot: Optional[str] = None
 
 

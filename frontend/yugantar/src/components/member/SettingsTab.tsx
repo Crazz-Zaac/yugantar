@@ -369,17 +369,10 @@ export function SettingsTab() {
 
               <div className="flex flex-col gap-2">
                 <Label htmlFor="timezone" className="text-xs font-medium">Timezone</Label>
-                <Select defaultValue="gmt">
-                  <SelectTrigger id="timezone" className="max-w-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="gmt">GMT+0 (Accra)</SelectItem>
-                    <SelectItem value="wat">GMT+1 (Lagos)</SelectItem>
-                    <SelectItem value="eat">GMT+3 (Nairobi)</SelectItem>
-                    <SelectItem value="utc">UTC</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input id="timezone" value="Nepal Time (NPT, UTC+5:45)" disabled className="max-w-xs bg-muted" />
+                <p className="text-xs text-muted-foreground">
+                  All dates and times are shown in Nepal Time for every member, wherever you are.
+                </p>
               </div>
 
               <Button className="self-end bg-primary text-primary-foreground hover:bg-primary/90">

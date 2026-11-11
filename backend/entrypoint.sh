@@ -28,11 +28,21 @@ case "$ROLE" in
     # Create admin user
     python -m app.scripts.create_admin_user
     
+    # Auto-reload is for local development only
+    RELOAD_FLAG=""
+    if [ "${ENVIRONMENT:-local}" = "local" ]; then
+      RELOAD_FLAG="--reload"
+    fi
+
     echo "Starting Uvicorn..."
+    # --proxy-headers: take the client IP from X-Forwarded-For, but only when
+    # the request comes from a trusted proxy (nginx). Rate limits rely on it.
     exec uvicorn main:app \
       --host 0.0.0.0 \
       --port "${PORT:-8000}" \
-      --reload
+      --proxy-headers \
+      --forwarded-allow-ips "${FORWARDED_ALLOW_IPS:-127.0.0.1}" \
+      $RELOAD_FLAG
     ;;
     
   worker)

@@ -10,7 +10,7 @@ import pytesseract
 
 logger = logging.getLogger(__name__)
 
-LOCAL_TZ = ZoneInfo("Asia/Kathmandu")
+from app.utils.local_time import LOCAL_TZ  # receipts show Nepal time
 TESSERACT_CONFIG = "--oem 3 --psm 6"
 
 _MONTHS = {

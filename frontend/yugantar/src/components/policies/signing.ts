@@ -70,15 +70,14 @@ export function apiError(err: unknown, fallback: string): string {
   return typeof detail === "string" ? detail : fallback
 }
 
-export function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return "—"
-  return new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
-}
+export { formatDateTime } from "@/lib/datetime"
+import { parseUtc } from "@/lib/datetime"
 
 /** "3 days left", "5 hours left", or null once passed. */
 export function timeLeft(iso: string | null | undefined): string | null {
-  if (!iso) return null
-  const ms = new Date(iso).getTime() - Date.now()
+  const deadline = parseUtc(iso)
+  if (!deadline) return null
+  const ms = deadline.getTime() - Date.now()
   if (ms <= 0) return null
   const hours = Math.floor(ms / 3_600_000)
   if (hours >= 48) return `${Math.floor(hours / 24)} days left`

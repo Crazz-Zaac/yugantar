@@ -16,7 +16,15 @@ from app.api.v1.endpoints import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 
-app = FastAPI(title=settings.PROJECT_NAME, version="1.0.0")
+# Interactive API docs only outside production (they map every endpoint)
+_docs_enabled = settings.ENVIRONMENT != "production"
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version="1.0.0",
+    docs_url="/docs" if _docs_enabled else None,
+    redoc_url="/redoc" if _docs_enabled else None,
+    openapi_url="/openapi.json" if _docs_enabled else None,
+)
 
 origins = ["http://localhost:3000", "http://localhost:3001"]
 

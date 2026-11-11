@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { AlertTriangle, ImageOff, Loader2 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { apiClient } from "@/api/api"
+import { formatDateTime } from "@/lib/datetime"
 
 interface ReceiptDuplicate {
   deposit_id: string
@@ -29,11 +30,6 @@ interface ReceiptDetails {
 function rs(value: string | number | null): string {
   if (value == null) return "—"
   return `Rs. ${Number(value).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
-}
-
-function dt(iso: string | null): string {
-  if (!iso) return "—"
-  return new Date(iso).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })
 }
 
 interface Props {
@@ -99,7 +95,7 @@ export default function ReceiptReviewDialog({ receiptId, onClose }: Props) {
     if (details.amount_differs_from_ocr)
       warnings.push(`Amount was changed: OCR read ${rs(details.ocr_amount)}, submitted ${rs(details.submitted_amount)}.`)
     if (details.date_differs_from_ocr)
-      warnings.push(`Date was changed: OCR read ${dt(details.ocr_date)}, submitted ${dt(details.submitted_date)}.`)
+      warnings.push(`Date was changed: OCR read ${formatDateTime(details.ocr_date)}, submitted ${formatDateTime(details.submitted_date)}.`)
     for (const dup of details.duplicates) {
       warnings.push(
         dup.match === "same_image"
@@ -116,7 +112,7 @@ export default function ReceiptReviewDialog({ receiptId, onClose }: Props) {
           <DialogTitle>Deposit receipt</DialogTitle>
           <DialogDescription>
             {details
-              ? `Uploaded ${dt(details.uploaded_at)} · image kept until ${dt(details.expires_at)}`
+              ? `Uploaded ${formatDateTime(details.uploaded_at)} · image kept until ${formatDateTime(details.expires_at)}`
               : "Voucher image and OCR check"}
           </DialogDescription>
         </DialogHeader>
@@ -160,9 +156,9 @@ export default function ReceiptReviewDialog({ receiptId, onClose }: Props) {
                 <dt className="text-muted-foreground">Bank charge</dt>
                 <dd className="font-mono">{rs(details.ocr_charge)}</dd>
                 <dt className="text-muted-foreground">Submitted date</dt>
-                <dd>{dt(details.submitted_date)}</dd>
+                <dd>{formatDateTime(details.submitted_date)}</dd>
                 <dt className="text-muted-foreground">OCR date</dt>
-                <dd>{dt(details.ocr_date)}</dd>
+                <dd>{formatDateTime(details.ocr_date)}</dd>
                 <dt className="text-muted-foreground">Reference</dt>
                 <dd className="break-all font-mono">{details.ocr_reference ?? "—"}</dd>
               </dl>

@@ -2,12 +2,16 @@ from sqlmodel import Session, create_engine, select
 from typing import Generator
 
 from .config import settings
+from . import utc_datetimes
 from app.models.user_model import User
 from app.schemas.user_schema import UserCreate
 from app.services.user_service import UserService
 
 
 engine = create_engine(str(settings.SQLALCHEMY_DATABASE_URI))
+
+# Every datetime loaded from the DB is UTC-aware (API sends "...Z")
+utc_datetimes.register()
 
 
 # ------------------

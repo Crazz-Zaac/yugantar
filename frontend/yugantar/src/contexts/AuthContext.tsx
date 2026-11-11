@@ -1,5 +1,12 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { apiClient, SESSION_EXPIRED_EVENT } from "@/api/api";
+import {
+  apiClient,
+  SESSION_EXPIRED_EVENT,
+  broadcastAuth,
+  onAuthBroadcast,
+  refreshAccessToken,
+  setAccessToken,
+} from "@/api/api";
 import { ENV } from "@/config/env";
 import {
   normalizeUser,
@@ -41,33 +48,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, [handleSessionExpired]);
 
-  useEffect(() => {
-    const initAuth = async () => {
-      const token = localStorage.getItem("access_token");
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
-
-      apiClient.defaults.headers.common.Authorization = `Bearer ${token}`;
-
-      try {
-        // If the access token is expired, the 401 interceptor will
-        // automatically call /auth/refresh and retry this request.
-        // We only land in catch if refresh also fails.
-        const res = await apiClient.get("/users/me");
-        setUser(normalizeUser(res.data));
-      } catch {
-        // Refresh failed too - clear everything
-        localStorage.removeItem("access_token");
-        setUser(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initAuth();
+  // Restore the session on page load: the access token lives only in memory,
+  // so get a new one with the httpOnly refresh cookie (if there is a session).
+  const restoreSession = useCallback(async () => {
+    try {
+      await refreshAccessToken();
+      const res = await apiClient.get("/users/me");
+      setUser(normalizeUser(res.data));
+    } catch {
+      setAccessToken(null);
+      setUser(null);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    // Tokens used to be kept in localStorage; remove any left behind
+    localStorage.removeItem("access_token");
+    restoreSession();
+  }, [restoreSession]);
+
+  // Keep tabs in sync: logging out in one tab logs out all of them, and
+  // logging in picks up the new session in the others.
+  useEffect(
+    () =>
+      onAuthBroadcast((message) => {
+        if (message.type === "logout") {
+          setAccessToken(null);
+          setUser(null);
+        } else if (message.type === "login") {
+          restoreSession();
+        }
+      }),
+    [restoreSession]
+  );
 
   const signup = async (userData: Partial<UserForUI>, password: string) => {
     setIsLoading(true);
@@ -117,14 +132,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         password,
       });
 
-      const accessToken = res.data.token.access_token;
-      localStorage.setItem("access_token", accessToken);
-
-      apiClient.defaults.headers.common.Authorization = `Bearer ${accessToken}`;
+      // Access token in memory only; the refresh token is an httpOnly cookie
+      setAccessToken(res.data.token.access_token);
 
       const me = await apiClient.get("/users/me");
       const normalized_user = normalizeUser(me.data);
       setUser(normalized_user);
+      broadcastAuth({ type: "login" });
       return normalized_user;
     } catch (err) {
       console.error("Login error:", err);
@@ -140,8 +154,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.error("Logout error:", err);
     } finally {
-      localStorage.removeItem("access_token");
+      setAccessToken(null);
       setUser(null);
+      broadcastAuth({ type: "logout" });
     }
   };
 

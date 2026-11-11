@@ -13,7 +13,7 @@ services:
       - yugantar-network
     restart: unless-stopped
   pgadmin:
-    image: dpage/pgadmin4:latest
+    image: dpage/pgadmin4:8.14
     container_name: pgadmin
     env_file:
       - ../backend/.env
@@ -73,7 +73,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:latest
+    image: redis:7.4
     container_name: yugantar-redis
     # ports:
     #   - "6379:6379"

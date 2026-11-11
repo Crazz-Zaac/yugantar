@@ -10,6 +10,7 @@ from app.core.security import create_access_token, decode_url_safe_token
 from app.schemas.user_schema import TokenResponse
 from app.core.config import settings
 from app.core.db import get_session
+from app.core import rate_limit
 from app.core.refresh_tokens import (
     issue_refresh_token,
     get_user_id_for_token,
@@ -22,8 +23,23 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 user_service = UserService()
 
 
+def authenticate_with_rate_limit(request: Request, session: Session, email: str, password: str) -> User:
+    """Password check with brute-force protection: failed attempts are
+    limited per account+IP and per IP; a success resets the account counter."""
+    rate_limit.check_login_allowed(request, email)
+    try:
+        user = user_service.authenticate_user(session=session, email=email, password=password)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            rate_limit.record_login_failure(request, email)
+        raise
+    rate_limit.record_login_success(request, email)
+    return user
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login_for_access_token(
+    request: Request,
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: Session = Depends(get_session),
@@ -33,9 +49,7 @@ async def login_for_access_token(
 
     **Note:** Enter your EMAIL address in the 'username' field below.
     """
-    user = user_service.authenticate_user(
-        session=session, email=form_data.username, password=form_data.password
-    )
+    user = authenticate_with_rate_limit(request, session, form_data.username, form_data.password)
 
     if not user:
         raise HTTPException(

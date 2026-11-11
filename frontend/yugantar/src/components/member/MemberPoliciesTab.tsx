@@ -57,6 +57,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import PolicySigningDialog from "@/components/policies/PolicySigningDialog"
 import ProxyRequestsPanel from "@/components/policies/ProxyRequestsPanel"
 import type { SigningTarget } from "@/components/policies/signing"
+import { formatDate, fromZoneInputValue, nowZoneInputValue, toZoneInputValue, TIME_ZONE_LABEL } from "@/lib/datetime"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -140,15 +141,6 @@ function StatusBadge({ status }: { status: PolicyStatus }) {
     )
 }
 
-function formatDate(iso: string | null | undefined): string {
-    if (!iso) return "—"
-    return new Date(iso).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    })
-}
-
 function formatAmount(paisa: number): string {
     const rupees = Math.round(Number(paisa) / 100)
     return `Rs. ${rupees.toLocaleString("en-IN")}`
@@ -167,7 +159,7 @@ const emptyDepositForm = {
     due_day_of_month: "",
     allowed_months: "",
     max_occurrences: "",
-    effective_from: new Date().toISOString().slice(0, 16),
+    effective_from: nowZoneInputValue(),
     effective_to: "",
 }
 
@@ -179,7 +171,7 @@ const emptyLoanForm = {
     max_renewals: "0",
     requires_collateral: false,
     emi_applicable: false,
-    effective_from: new Date().toISOString().slice(0, 16),
+    effective_from: nowZoneInputValue(),
     effective_to: "",
 }
 
@@ -252,8 +244,8 @@ export function MemberPoliciesTab() {
             due_day_of_month: p.due_day_of_month != null ? String(p.due_day_of_month) : "",
             allowed_months: p.allowed_months != null ? String(p.allowed_months) : "",
             max_occurrences: p.max_occurrences != null ? String(p.max_occurrences) : "",
-            effective_from: p.effective_from ? p.effective_from.slice(0, 16) : "",
-            effective_to: p.effective_to ? p.effective_to.slice(0, 16) : "",
+            effective_from: toZoneInputValue(p.effective_from),
+            effective_to: toZoneInputValue(p.effective_to),
         })
         setDepositDialogOpen(true)
     }
@@ -266,10 +258,10 @@ export function MemberPoliciesTab() {
                 late_deposit_fine: Number(depositForm.late_deposit_fine),
                 schedule_type: depositForm.schedule_type,
                 effective_from: depositForm.effective_from
-                    ? new Date(depositForm.effective_from).toISOString()
+                    ? fromZoneInputValue(depositForm.effective_from)
                     : undefined,
                 effective_to: depositForm.effective_to
-                    ? new Date(depositForm.effective_to).toISOString()
+                    ? fromZoneInputValue(depositForm.effective_to)
                     : null,
             }
             if (depositForm.due_day_of_month)
@@ -314,8 +306,8 @@ export function MemberPoliciesTab() {
             max_renewals: String(p.max_renewals ?? 0),
             requires_collateral: p.requires_collateral,
             emi_applicable: p.emi_applicable,
-            effective_from: p.effective_from ? p.effective_from.slice(0, 16) : "",
-            effective_to: p.effective_to ? p.effective_to.slice(0, 16) : "",
+            effective_from: toZoneInputValue(p.effective_from),
+            effective_to: toZoneInputValue(p.effective_to),
         })
         setLoanDialogOpen(true)
     }
@@ -332,10 +324,10 @@ export function MemberPoliciesTab() {
                 requires_collateral: loanForm.requires_collateral,
                 emi_applicable: loanForm.emi_applicable,
                 effective_from: loanForm.effective_from
-                    ? new Date(loanForm.effective_from).toISOString()
+                    ? fromZoneInputValue(loanForm.effective_from)
                     : undefined,
                 effective_to: loanForm.effective_to
-                    ? new Date(loanForm.effective_to).toISOString()
+                    ? fromZoneInputValue(loanForm.effective_to)
                     : null,
             }
 
@@ -922,7 +914,7 @@ export function MemberPoliciesTab() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Effective From</Label>
+                                <Label className="text-xs font-medium">Effective From ({TIME_ZONE_LABEL})</Label>
                                 <Input
                                     type="datetime-local"
                                     value={depositForm.effective_from}
@@ -930,7 +922,7 @@ export function MemberPoliciesTab() {
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Effective To</Label>
+                                <Label className="text-xs font-medium">Effective To ({TIME_ZONE_LABEL})</Label>
                                 <Input
                                     type="datetime-local"
                                     value={depositForm.effective_to}
@@ -1040,7 +1032,7 @@ export function MemberPoliciesTab() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Effective From</Label>
+                                <Label className="text-xs font-medium">Effective From ({TIME_ZONE_LABEL})</Label>
                                 <Input
                                     type="datetime-local"
                                     value={loanForm.effective_from}
@@ -1048,7 +1040,7 @@ export function MemberPoliciesTab() {
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Effective To</Label>
+                                <Label className="text-xs font-medium">Effective To ({TIME_ZONE_LABEL})</Label>
                                 <Input
                                     type="datetime-local"
                                     value={loanForm.effective_to}

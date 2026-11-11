@@ -1,44 +1,104 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { ENV } from '@/config/env';
 
+/*
+ * Auth tokens (OWASP-recommended SPA pattern):
+ *  - The short-lived ACCESS token lives only in memory (this module), never in
+ *    localStorage, so injected script can't read it back out of storage and it
+ *    disappears when the tab closes.
+ *  - The REFRESH token is an httpOnly cookie set by the backend; JavaScript
+ *    never sees it. On page load and on any 401 we call /auth/refresh to get a
+ *    new access token.
+ *  - The backend rotates the refresh token on every refresh. To stop two tabs
+ *    from refreshing at the same moment (one would use an already-rotated
+ *    token and be logged out), refreshes are serialised across tabs with the
+ *    Web Locks API. The cookie jar is shared, so the second tab simply uses
+ *    the newly rotated cookie.
+ */
+
 export const apiClient = axios.create({
   baseURL: ENV.API_BASE,
   withCredentials: true,
 });
 
-export const refreshClient = axios.create({
+// Used only for /auth/refresh, so it never goes through the 401 interceptor
+const refreshClient = axios.create({
   baseURL: ENV.API_BASE,
   withCredentials: true,
 });
 
-// Request interceptor: attach access token 
+// ─── In-memory access token ────────────────────────────────────────────────
+
+let accessToken: string | null = null;
+
+export function getAccessToken(): string | null {
+  return accessToken;
+}
+
+export function setAccessToken(token: string | null): void {
+  accessToken = token;
+}
+
+// ─── Refresh (single-flight within a tab, serialised across tabs) ──────────
+
+const REFRESH_LOCK = 'yugantar-auth-refresh';
+let inflightRefresh: Promise<string> | null = null;
+
+function withCrossTabLock<T>(fn: () => Promise<T>): Promise<T> {
+  // Supported by all current browsers; fall back to no lock if missing
+  if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+    return navigator.locks.request(REFRESH_LOCK, fn) as Promise<T>;
+  }
+  return fn();
+}
+
+/** Get a fresh access token using the httpOnly refresh cookie. */
+export function refreshAccessToken(): Promise<string> {
+  if (!inflightRefresh) {
+    inflightRefresh = withCrossTabLock(async () => {
+      const res = await refreshClient.post('/auth/refresh');
+      const token: string = res.data.access_token;
+      setAccessToken(token);
+      return token;
+    }).finally(() => {
+      inflightRefresh = null;
+    });
+  }
+  return inflightRefresh;
+}
+
+// ─── Cross-tab logout ──────────────────────────────────────────────────────
+
+const authChannel: BroadcastChannel | null =
+  typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('yugantar-auth') : null;
+
+export type AuthBroadcast = { type: 'logout' } | { type: 'login' };
+
+export function broadcastAuth(message: AuthBroadcast): void {
+  authChannel?.postMessage(message);
+}
+
+export function onAuthBroadcast(handler: (message: AuthBroadcast) => void): () => void {
+  if (!authChannel) return () => {};
+  const listener = (event: MessageEvent<AuthBroadcast>) => handler(event.data);
+  authChannel.addEventListener('message', listener);
+  return () => authChannel.removeEventListener('message', listener);
+}
+
+// ─── Interceptors ──────────────────────────────────────────────────────────
 
 apiClient.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
+  const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-// Response interceptor: auto-refresh on 401 
-
 // Custom event dispatched when refresh fails — AuthContext listens to this
 export const SESSION_EXPIRED_EVENT = 'auth:session-expired';
 
-let isRefreshing = false;
-let pendingQueue: {
-  resolve: (token: string) => void;
-  reject: (err: unknown) => void;
-}[] = [];
-
-function processQueue(error: unknown, token: string | null = null) {
-  pendingQueue.forEach(({ resolve, reject }) => {
-    if (token) resolve(token);
-    else reject(error);
-  });
-  pendingQueue = [];
-}
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/refresh', '/users/login', '/users/register'];
 
 apiClient.interceptors.response.use(
   (response) => response,
@@ -48,57 +108,24 @@ apiClient.interceptors.response.use(
     };
 
     // Only attempt refresh for 401s that haven't already been retried
-    if (error.response?.status !== 401 || originalRequest._retry) {
+    if (!originalRequest || error.response?.status !== 401 || originalRequest._retry) {
       return Promise.reject(error);
     }
-
-    // Don't intercept auth endpoints themselves
     const url = originalRequest.url || '';
-    if (url.includes('/auth/login') || url.includes('/auth/refresh') || url.includes('/users/login') || url.includes('/users/register')) {
+    if (AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))) {
       return Promise.reject(error);
-    }
-
-    // If already refreshing, queue this request
-    if (isRefreshing) {
-      return new Promise<string>((resolve, reject) => {
-        pendingQueue.push({ resolve, reject });
-      }).then((newToken) => {
-        originalRequest.headers.Authorization = `Bearer ${newToken}`;
-        originalRequest._retry = true;
-        return apiClient(originalRequest);
-      });
     }
 
     originalRequest._retry = true;
-    isRefreshing = true;
-
     try {
-      // Call the refresh endpoint (sends httpOnly cookie automatically)
-      const res = await refreshClient.post('/auth/refresh');
-      const newAccessToken: string = res.data.access_token;
-
-      // Persist the new token
-      localStorage.setItem('access_token', newAccessToken);
-      apiClient.defaults.headers.common.Authorization = `Bearer ${newAccessToken}`;
-
-      // Retry all queued requests with the new token
-      processQueue(null, newAccessToken);
-
-      // Retry the original request
-      originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+      const newToken = await refreshAccessToken();
+      originalRequest.headers.Authorization = `Bearer ${newToken}`;
       return apiClient(originalRequest);
     } catch (refreshError) {
-      // Refresh failed - session is truly expired
-      processQueue(refreshError, null);
-      localStorage.removeItem('access_token');
-
-      // Notify AuthContext to clear user state
+      // Session is truly over (expired, revoked, account blocked)
+      setAccessToken(null);
       window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
-
       return Promise.reject(refreshError);
-    } finally {
-      isRefreshing = false;
     }
   }
 );
-

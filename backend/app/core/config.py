@@ -39,7 +39,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    ALGORITHM: str = ""
+    ALGORITHM: str = "HS256"
 
     # ---------------------------
     # General Settings
@@ -152,6 +152,19 @@ class Settings(BaseSettings):
         self._check_default_secret("ADMIN_PASSWORD", self.ADMIN_PASSWORD)
         return self
 
+    @model_validator(mode="after")
+    def _enforce_token_signing_config(self) -> Self:
+        """Refuse to start with a missing/weak signing key or algorithm in any
+        environment: every JWT and reset/verification token is signed with it."""
+        if len(self.SECRET_KEY or "") < 32:
+            raise ValueError(
+                "SECRET_KEY must be set to a random value of at least 32 characters "
+                '(python -c "import secrets; print(secrets.token_hex(32))").'
+            )
+        if self.ALGORITHM not in {"HS256", "HS384", "HS512"}:
+            raise ValueError("ALGORITHM must be one of HS256, HS384, HS512.")
+        return self
+
     # ---------------------------
     # Receipt image storage
     # ---------------------------
@@ -160,6 +173,11 @@ class Settings(BaseSettings):
     RECEIPT_STORAGE_DIR: str = "/data/receipts"
     # Images are deleted this many days after upload (metadata is kept)
     RECEIPT_RETENTION_DAYS: int = 15
+
+    # The cooperative's timezone: calendar days (deposit due dates) and dates
+    # shown in messages use it. Timestamps are still stored/sent in UTC.
+    COOPERATIVE_TIMEZONE: str = "Asia/Kathmandu"
+    COOPERATIVE_TIMEZONE_LABEL: str = "NPT"
 
     # Members have this many days to sign a new policy (decisions can be
     # changed until the deadline; the outcome is decided at the deadline)
@@ -187,7 +205,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-print(
-    "Loaded DB:", settings.POSTGRES_SERVER, settings.POSTGRES_USER, settings.POSTGRES_DB
-)
-print("Running in Docker?", settings.is_running_in_docker)

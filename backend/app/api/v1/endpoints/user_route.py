@@ -35,6 +35,8 @@ from app.services.email_notify import (
     send_registration_notification,
 )
 from app.core.config import settings
+from app.core import rate_limit
+from app.api.v1.endpoints.auth import authenticate_with_rate_limit
 from app.core.refresh_tokens import (
     issue_refresh_token,
     revoke_refresh_token,
@@ -53,12 +55,14 @@ user_service = UserService()
 )
 async def register_user(
     user_in: UserCreate,
+    request: Request,
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ):
     """
     Create a new user.
     """
+    rate_limit.enforce(f"register:{rate_limit.client_ip(request)}", rate_limit.REGISTRATIONS_PER_IP)
 
     user_email = user_in.email
     user_exists = user_service.get_user_by_email(session=session, email=user_email)
@@ -87,6 +91,7 @@ async def register_user(
 
 @router.post("/login", response_model=LoginSuccess)
 async def login_user(
+    request: Request,
     reponse: Response,
     login_data: LoginRequest,
     session: Session = Depends(get_session),
@@ -94,10 +99,8 @@ async def login_user(
     """
     Authenticate user and return user details.
     """
-    # Checks the password, then that the email is verified and the account approved
-    user = user_service.authenticate_user(
-        session=session, email=login_data.email, password=login_data.password
-    )
+    # Password check (rate limited), then email verified + account approved
+    user = authenticate_with_rate_limit(request, session, login_data.email, login_data.password)
 
     # Generate access tokens
     access_token = await create_access_token(
@@ -169,13 +172,18 @@ def _send_verification(background_tasks: BackgroundTasks, user: User) -> None:
 @router.post("/resend-verification", status_code=status.HTTP_200_OK)
 async def resend_verification(
     payload: PasswordResetRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ):
     """Send the email verification link again. Same response whether or not
     the email is registered (no account discovery)."""
+    rate_limit.enforce(f"email-ip:{rate_limit.client_ip(request)}", rate_limit.EMAIL_REQUESTS_PER_IP)
     user = user_service.get_user_by_email(session=session, email=payload.email.lower())
-    if user and not user.is_verified:
+    # Per-address cap is silent (same response) so it reveals nothing
+    if user and not user.is_verified and rate_limit.hit(
+        f"email-to:{user.email}", rate_limit.EMAIL_REQUESTS_PER_ADDRESS
+    ):
         _send_verification(background_tasks, user)
     return {"msg": "If that account exists and isn't verified yet, a new link has been sent."}
 
@@ -198,6 +206,7 @@ async def delete_current_user(
 @router.post("/me/reset-password", status_code=status.HTTP_200_OK, tags=["password"])
 async def reset_password(
     payload: PasswordResetRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ):
@@ -208,8 +217,10 @@ async def reset_password(
     emails are registered. The email contains a single-purpose reset token
     (not a login token) valid for 30 minutes.
     """
+    rate_limit.enforce(f"email-ip:{rate_limit.client_ip(request)}", rate_limit.EMAIL_REQUESTS_PER_IP)
     user = user_service.get_user_by_email(session=session, email=payload.email.lower())
-    if user:
+    # Per-address cap is silent (same response) so it reveals nothing
+    if user and rate_limit.hit(f"email-to:{user.email}", rate_limit.EMAIL_REQUESTS_PER_ADDRESS):
         token = create_password_reset_token(user.id, user.hashed_password)
         url = f"{settings.FRONTEND_HOST}/reset-password?token={token}"
         background_tasks.add_task(

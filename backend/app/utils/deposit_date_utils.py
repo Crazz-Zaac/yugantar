@@ -1,6 +1,12 @@
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 
+from app.utils.local_time import LOCAL_TZ, to_local
+
+# Due dates are calendar days in the cooperative's timezone (NPT): a deposit
+# due "on the 10th" is on time until 23:59:59 on the 10th in Nepal. Returned
+# datetimes are timezone-aware (stored in UTC by the DB).
+
 
 from app.models.policy.deposit_policy import DepositPolicy, DepositScheduleType
 
@@ -53,8 +59,7 @@ def _calculate_monthly_fixed_day_due_date(
         datetime: The calculated due date for the next deposit.
     """
 
-    if reference_date.tzinfo is None:
-        reference_date = reference_date.replace(tzinfo=timezone.utc)
+    reference_date = to_local(reference_date)
 
     year = reference_date.year
     month = reference_date.month
@@ -70,7 +75,7 @@ def _calculate_monthly_fixed_day_due_date(
     # Handle cases where the due day exceeds the number of days in the month
     try:
         due_date = datetime(
-            year, month, due_day_of_month, 23, 59, 59, tzinfo=timezone.utc
+            year, month, due_day_of_month, 23, 59, 59, tzinfo=LOCAL_TZ
         )
     except ValueError:
         due_date = _get_last_day_of_month(year, month)
@@ -86,12 +91,12 @@ def _get_last_day_of_month(year: int, month: int) -> datetime:
         month (int): The month.
 
     Returns:
-        datetime: The last day of the month at 23:59:59 UTC.
+        datetime: The last day of the month at 23:59:59 local time.
     """
     if month == 12:
-        next_month = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+        next_month = datetime(year + 1, 1, 1, tzinfo=LOCAL_TZ)
     else:
-        next_month = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+        next_month = datetime(year, month + 1, 1, tzinfo=LOCAL_TZ)
 
     last_day = next_month - timedelta(days=1)
     return last_day.replace(hour=23, minute=59, second=59)
@@ -109,8 +114,7 @@ def _calculate_occasional_due_date(
     Returns:
         datetime: The calculated due date for the next deposit.
     """
-    if reference_date.tzinfo is None:
-        reference_date = reference_date.replace(tzinfo=timezone.utc)
+    reference_date = to_local(reference_date)
 
     days_to_add = allowed_months * 30  # Approximate month as 30 days
     due_date = reference_date + timedelta(days=days_to_add)
@@ -180,5 +184,6 @@ def days_until_due(
     if reference_date is None:
         reference_date = datetime.now(timezone.utc)
 
-    delta = due_deposit_date.date() - reference_date.date()
+    # compare calendar days in local time
+    delta = to_local(due_deposit_date).date() - to_local(reference_date).date()
     return delta.days

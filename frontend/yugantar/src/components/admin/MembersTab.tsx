@@ -12,6 +12,7 @@ import { apiClient } from "@/api/api"
 import { RoleModal } from "@/components/RoleModal"
 import { UserForUI } from "@/utils/normalizeUser"
 import type { AccessRole, CooperativeRole } from "@/constants"
+import { formatDate } from "@/lib/datetime"
 
 interface MemberUser {
   id: string
@@ -186,7 +187,7 @@ export function MembersTab() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{getFullName(m)}</p>
                   <p className="text-xs text-muted-foreground">
-                    {m.email} · {m.phone || "no phone"} · registered {new Date(m.joined_at).toLocaleDateString()}
+                    {m.email} · {m.phone || "no phone"} · registered {formatDate(m.joined_at)}
                   </p>
                   <p className={`text-xs ${m.is_verified ? "text-success" : "text-muted-foreground"}`}>
                     {m.is_verified ? "Email verified" : "Email not verified yet"}
@@ -298,7 +299,7 @@ export function MembersTab() {
                           </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {new Date(member.joined_at).toLocaleDateString()}
+                          {formatDate(member.joined_at)}
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{member.phone || "-"}</TableCell>
                         <TableCell><MemberStatusBadge status={status} /></TableCell>

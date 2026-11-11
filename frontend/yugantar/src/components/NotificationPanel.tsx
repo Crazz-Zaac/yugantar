@@ -6,6 +6,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useState, useEffect, useCallback } from "react"
 import { apiClient } from "@/api/api"
 import { useLocation } from "wouter"
+import { formatShortDate, parseUtc } from "@/lib/datetime"
 
 interface ApiNotification {
   id: string
@@ -117,7 +118,7 @@ export function NotificationPanel() {
   }
 
   const formatTime = (iso: string) => {
-    const d = new Date(iso)
+    const d = parseUtc(iso) ?? new Date()
     const now = new Date()
     const diffMs = now.getTime() - d.getTime()
     const diffMins = Math.floor(diffMs / 60_000)
@@ -127,7 +128,7 @@ export function NotificationPanel() {
     if (diffHrs < 24) return `${diffHrs}h ago`
     const diffDays = Math.floor(diffHrs / 24)
     if (diffDays < 7) return `${diffDays}d ago`
-    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    return formatShortDate(iso)
   }
 
   return (

@@ -36,6 +36,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { apiClient } from "@/api/api"
 import ReceiptReviewDialog from "./ReceiptReviewDialog"
 import { useLocation } from "wouter"
+import { formatDate, formatDateTime, fromZoneInputValue, nowZoneInputValue, toZoneInputValue, TIME_ZONE_LABEL } from "@/lib/datetime"
 
 type PolicyStatus = "draft" | "finalized" | "active" | "expired" | "void"
 type DepositScheduleType = "monthly_fixed_day" | "occasional"
@@ -68,21 +69,6 @@ function normalizeOcrResult(raw: Partial<OcrResult> | null | undefined): OcrResu
     date: raw?.date ?? null,
     reference: raw?.reference ?? null,
   }
-}
-
-// ISO (UTC) <-> value for <input type="datetime-local"> in the browser's timezone
-function isoToLocalInput(iso: string | null): string {
-  if (!iso) return ""
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ""
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-  return local.toISOString().slice(0, 16)
-}
-
-function localInputToIso(value: string): string | null {
-  if (!value) return null
-  const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? null : d.toISOString()
 }
 
 // A voucher needs a positive amount and a date that isn't in the future
@@ -148,26 +134,6 @@ function formatRs(paisa: number): string {
 
 function formatRsFromRupees(rupees: number): string {
   return `Rs. ${Number(rupees || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
-}
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—"
-  return new Date(iso).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  })
-}
-
-function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return "—"
-  return new Date(iso).toLocaleString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  })
 }
 
 function depositStatusBadge(status: DepositItem["verification_status"]) {
@@ -892,7 +858,7 @@ export function DepositTab() {
                         </div>
                         <div className="flex flex-col gap-1">
                           <Label htmlFor="voucher-date" className="text-xs font-medium text-muted-foreground">
-                            Deposited Date &amp; Time
+                            Deposited Date &amp; Time ({TIME_ZONE_LABEL})
                           </Label>
                           <div className="relative">
                             <CalendarClock className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -900,9 +866,9 @@ export function DepositTab() {
                               id="voucher-date"
                               type="datetime-local"
                               className="pl-8"
-                              max={isoToLocalInput(new Date().toISOString())}
-                              value={isoToLocalInput(ocrResult.date)}
-                              onChange={(e) => updateVoucher({ date: localInputToIso(e.target.value) })}
+                              max={nowZoneInputValue()}
+                              value={toZoneInputValue(ocrResult.date)}
+                              onChange={(e) => updateVoucher({ date: fromZoneInputValue(e.target.value) })}
                             />
                           </div>
                           {ocrHint(dateEdited, detected?.date ? formatDateTime(detected.date) : "nothing")}

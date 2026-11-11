@@ -32,6 +32,7 @@ from fastapi_mail import NameEmail
 from sqlmodel import Session, select
 
 from app.core.config import settings
+from app.utils.local_time import format_local
 from app.models.notification_model import Notification, NotificationType
 from app.models.policy.base_policy import PolicyStatus
 from app.models.policy.deposit_policy import DepositPolicy
@@ -217,7 +218,7 @@ class PolicySigningService:
         session.add(policy)
 
         label = policy_label(policy_type, policy)
-        deadline_txt = policy.signing_deadline.strftime("%d %b %Y, %H:%M UTC")
+        deadline_txt = format_local(policy.signing_deadline)
         self._notify(
             session,
             background_tasks,

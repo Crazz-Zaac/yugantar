@@ -68,6 +68,7 @@ def set_refresh_cookie(response: Response, token: str) -> None:
         value=token,
         httponly=True,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-        secure=settings.ENVIRONMENT == "production",
+        # Secure (HTTPS-only) everywhere except local http development
+        secure=settings.ENVIRONMENT != "local",
         samesite="lax",
     )

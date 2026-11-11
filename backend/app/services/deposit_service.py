@@ -5,6 +5,7 @@ from sqlmodel import Session, select
 from datetime import datetime, timezone
 
 from app.models.policy.deposit_policy import DepositPolicy
+from app.models.policy.base_policy import PolicyStatus
 from app.models.deposit_model import Deposit, DepositVerificationStatus
 from app.schemas.deposit_schema import (
     DepositCreate,
@@ -19,11 +20,25 @@ from app.utils.deposit_date_utils import (
     days_until_due,
 )
 from app.models.mixins.money import MoneyMixin
-from app.models.fine_model import Fine
+from app.models.fine_model import Fine, FineType
 from app.models.loan_model import Loan
 from app.models.loan_payment import LoanPayment, LoanPaymentStatus
 from app.services.loan_payment_service import LoanPaymentService
 from app.services.duties import Duty, require_duty, denial_reason, may_perform_any
+
+
+def require_active_deposit_policy(session: Session, policy_id) -> DepositPolicy:
+    """Deposits are only accepted under a policy members have adopted (ACTIVE):
+    drafts, policies still being signed, and lapsed/void ones don't apply."""
+    policy = session.get(DepositPolicy, policy_id) if policy_id else None
+    if not policy:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deposit policy not found")
+    if policy.status != PolicyStatus.ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Deposits can only be made under an active deposit policy.",
+        )
+    return policy
 
 
 class DepositService:
@@ -45,30 +60,17 @@ class DepositService:
         deposit_in: DepositCreate,
         user_id: uuid.UUID,
     ) -> Deposit:
-        policy = session.get(DepositPolicy, deposit_in.policy_id)
-        if not policy:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Deposit policy not found",
-            )
+        policy = require_active_deposit_policy(session, deposit_in.policy_id)
 
         now = datetime.now(timezone.utc)
         due_date = calculate_due_date(policy=policy, reference_date=now)
 
-        deposit_data = deposit_in.model_dump(
-            exclude={
-                "receipt_screenshot",
-                "deposited_date",  # we let the service set this
-                "due_deposit_date",
-                "receipt_id",  # we set this later once receipt is created
-            }
-        )
-
-        # we set deposited_date and due_deposit_date explicitly
-        # by excluding them from deposit_data
+        # Only the amount and type come from the member; everything else
+        # (status, reviewer, dates) is decided here.
         new_deposit = Deposit(
-            **deposit_data,
+            policy_id=policy.policy_id,
             user_id=user_id,
+            deposit_type=deposit_in.deposit_type,
             due_deposit_date=due_date,
             deposited_date=now,
             amount_paisa=MoneyMixin.rupees_to_paisa(deposit_in.deposited_amount),
@@ -86,8 +88,8 @@ class DepositService:
             fine = Fine(
                 user_id=user_id,
                 deposit_id=new_deposit.id,
-                amount_rupees=fine_amount,
-                fine_type="LATE_DEPOSIT",
+                amount_paisa=MoneyMixin.rupees_to_paisa(fine_amount),
+                fine_type=FineType.DEPOSIT,
                 date=now,
             )
             session.add(fine)
@@ -128,8 +130,9 @@ class DepositService:
             )
 
         deposit_data = deposit_in.model_dump(exclude_unset=True)
-        for key, value in deposit_data.items():
-            setattr(db_deposit, key, value)
+        if deposit_data.get("deposited_amount") is not None:
+            # stored in paisa; "deposited_amount" isn't a column
+            db_deposit.amount_paisa = MoneyMixin.rupees_to_paisa(deposit_data["deposited_amount"])
 
         session.add(db_deposit)
         session.commit()

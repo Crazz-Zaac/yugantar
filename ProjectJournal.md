@@ -776,3 +776,65 @@ echo "password" > secrets/pgadmin_password.txt"
   - Removed `console.log` of the sign-up request body, **which included the password**.
   - Sign-in shows the reason and offers "Resend verification email".
   - The admin Members tab has a "Registrations awaiting approval" card (Approve/Reject) and a "Pending approval" status/filter.
+
+### 11. Email change without re-verification
+- Fixed as part of 10: changing your email marks the account unverified, emails a link to the new address and ends all sessions until it's verified. Taking another member's email is refused.
+
+### 12. No rate limiting on auth endpoints
+- **Issue:** passwords could be brute-forced, and registration, password reset and verification emails could be spammed.
+- **Fix:** `core/rate_limit.py`, fixed-window counters in Redis (no new dependency):
+  - **Login** (both endpoints, shared): 5 *failed* attempts per account+IP and 30 per IP per 15 min, then 429 with `Retry-After`. A successful login resets the account counter.
+  - **Registration:** 5 per IP per hour.
+  - **Password reset / resend verification:** 10 per IP per hour (429). Emails to one address are capped at 3 per hour, *silently* (same response), so the cap reveals nothing about which emails are registered.
+  - Client IP comes from `request.client.host`. Behind nginx, uvicorn now runs with `--proxy-headers --forwarded-allow-ips=$FORWARDED_ALLOW_IPS` (set it to the nginx address in production).
+
+### 13. Empty/weak SECRET_KEY accepted
+- **Fix:** settings refuse to start if `SECRET_KEY` is shorter than 32 characters or `ALGORITHM` isn't HS256/384/512, in every environment. `ALGORITHM` now defaults to HS256.
+
+### 14. Loan re-application and deposits under non-active policies
+- A member with an **APPROVED** (not yet disbursed) loan could apply again; the check now covers pending, approved and active loans.
+- Deposits (regular and smart, including the preview) are only accepted under an **ACTIVE** deposit policy (`require_active_deposit_policy`). Drafts, policies still being signed and lapsed ones are rejected.
+
+### 15. Deposit input validation
+- `DepositCreate.deposited_amount` must be > 0. `verified_by` / `verification_status` from the client are ignored; the deposit is built explicitly from server-decided values.
+- Found while testing: `POST /deposits/deposit` crashed on **every** call (`verification_status` passed twice), and its late fine used non-existent fields (`amount_rupees`, `fine_type="LATE_DEPOSIT"`). Both fixed. Editing a pending deposit's amount now actually updates `amount_paisa`; before, it set an unused attribute.
+
+### 16. Hardening
+- `entrypoint.sh`: uvicorn `--reload` only when `ENVIRONMENT=local`; `--proxy-headers` for real client IPs. Removed the stray `CMD ["--reload"]` from the production Dockerfile.
+- `/docs`, `/redoc` and `/openapi.json` are disabled when `ENVIRONMENT=production`.
+- Refresh cookie is `Secure` everywhere except local http dev (was production-only, so staging sent it over http).
+- Pinned `redis:7.4` and `dpage/pgadmin4:8.14` (were `latest`). Note: swapping the Redis container logged everyone out once.
+- nginx: Content-Security-Policy (self + Google Fonts), `X-Frame-Options: DENY`, Referrer-Policy, Permissions-Policy, `server_tokens off`; removed the obsolete X-XSS-Protection; HSTS ready to enable once on HTTPS. The production frontend must be built with `VITE_API_BASE=/api/v1` (relative), or the CSP blocks API calls.
+- **Deferred:** moving the access token out of `localStorage` into memory. It touches the whole frontend auth flow and needs testing in a real browser. The CSP above limits what an XSS could do in the meantime.
+
+### 17. Config printed DB details on import
+- Removed the `print()` of DB host/user/name and "Running in Docker?" from `core/config.py`.
+
+### 18. Access token kept in memory (OWASP SPA pattern)
+- **Before:** the 30-minute access token was in `localStorage`, so any injected script could read it and reuse it elsewhere until it expired.
+- **Now** (`frontend/src/api/api.ts`):
+  - The access token lives only in a module variable, gone when the tab closes. The refresh token stays an `httpOnly`, `Secure` cookie that JavaScript never sees.
+  - On page load, `AuthContext.restoreSession()` calls `/auth/refresh` to get a new access token. Any 401 triggers one refresh and a retry.
+  - Refreshes are **single-flight** within a tab, and **serialised across tabs with the Web Locks API** (`navigator.locks`, lock `yugantar-auth-refresh`). The backend rotates the refresh token on every refresh; without the lock, two tabs refreshing together would log one out. With it, the second tab uses the freshly rotated cookie from the shared cookie jar.
+  - Login and logout are broadcast across tabs (`BroadcastChannel('yugantar-auth')`): logging out in one tab logs out all of them, and logging in picks up the session in the others.
+  - Any token left in `localStorage` by the old version is removed. Deleted the unused `api/interceptor.ts`, which wasn't imported anywhere and read the wrong response field.
+- Backend contract checked: the login body carries the access token, the refresh cookie is `httpOnly`, refresh returns a top-level `access_token`, a second refresh with the rotated cookie works, and CORS allows credentials from the dev origin. The cross-tab lock itself needs a real browser to test.
+
+### 19. All dates in UTC, the same for every member
+- **Issue:** timestamps were stored as UTC but returned *without* a timezone (`2026-11-11T09:30:00`). Browsers read them as local time, so members saw different dates and times depending on their device: 5h45 off in Nepal. Notification "x minutes ago" was off too. Each screen also had its own formatter (en-US, en-IN, browser default).
+- **Policy forms bug:** effective dates were filled in as UTC but parsed on submit as browser-local time, so saving shifted them by the browser's offset.
+- **Backend:** `core/utc_datetimes.py` is a SQLAlchemy `load`/`refresh` listener on every table model that marks loaded datetimes as UTC (without marking rows dirty). The API now always sends `…Z`, and Python only compares aware datetimes. No migration needed: columns are `timestamp without time zone`, and the DB session runs in UTC, so aware writes are stored as UTC.
+- **Frontend:** `src/lib/datetime.ts` is the one place for dates.
+  - Everything is displayed in `DISPLAY_TIME_ZONE = "UTC"` and labelled ("11 Nov 2026, 09:30 UTC"), so every member sees the same value regardless of browser timezone (checked under Asia/Kathmandu and America/New_York).
+  - Date/time inputs (deposit voucher date, policy effective dates) are entered in UTC and labelled.
+  - Timestamps without an offset are treated as UTC.
+  - Replaced the formatters in DepositTab, LoansTab, MemberPoliciesTab, MembersTab, NotificationPanel, ReceiptReviewDialog and the policy signing UI.
+- To show Nepal time instead, change `DISPLAY_TIME_ZONE` (and the input helpers) in that one file.
+
+### 19b. Nepal Time (NPT) for everything people see
+- **Decision:** show and enter all dates in **Nepal Time** (NPT, UTC+5:45, no DST), the same for every member wherever they are. Storage and the API stay UTC.
+- **Frontend:** `lib/datetime.ts` now uses `DISPLAY_TIME_ZONE = "Asia/Kathmandu"`, labelled "NPT" (e.g. "12 Nov 2026, 02:15 NPT"). The datetime-local inputs (deposit voucher, policy effective dates) are entered in NPT and converted to UTC with the zone's real offset. Checked identical under browser timezones UTC, Asia/Kathmandu and America/New_York. Replaced the Settings tab's unused placeholder timezone picker (Accra/Lagos/Nairobi) with a read-only "Nepal Time (NPT, UTC+5:45)".
+- **Backend:**
+  - New `COOPERATIVE_TIMEZONE=Asia/Kathmandu` setting and `utils/local_time.py` (`LOCAL_TZ`, `to_local`, `format_local`).
+  - **Deposit due dates are now Nepal calendar days:** due "on the 10th" means until 23:59:59 NPT on the 10th (= 18:14:59 UTC). Before, it was 23:59:59 *UTC*, i.e. 05:44 NPT on the 11th, so a deposit at 00:15 NPT on the 11th used to count as on time and is now late. The month boundary and `days_until_due` follow the Nepal day too. This only affects newly calculated due dates.
+  - Email/notification dates (policy signing deadline) are written in NPT. OCR uses the same shared `LOCAL_TZ` (receipts show Nepal time); accuracy unchanged at 13/13.

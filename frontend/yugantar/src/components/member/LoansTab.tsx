@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/dialog"
 import { apiClient } from "@/api/api"
 import { useLocation } from "wouter"
+import { formatDate } from "@/lib/datetime"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -104,15 +105,6 @@ interface CalculatorResult {
 function formatRs(value: number | string): string {
   const num = typeof value === "string" ? Number(value) : value
   return `Rs. ${num.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
-}
-
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return "—"
-  return new Date(iso).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  })
 }
 
 function StatusBadge({ status }: { status: LoanItem["status"] }) {
