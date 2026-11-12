@@ -44,6 +44,7 @@ services:
       - ../backend:/app
       - upload-data:/tmp/ocr_uploads  # shared volume for uploaded data
       - receipts-data:/data/receipts  # private receipt images (served only via API)
+      - documents-data:/data/documents  # generated records (loan agreement PDFs), kept permanently
     networks:
       - yugantar-network
     restart: unless-stopped
@@ -133,6 +134,7 @@ volumes:
   redis_data:
   upload-data:  # temporary OCR uploads, shared by backend and celery worker
   receipts-data:  # receipt images kept for review (RECEIPT_RETENTION_DAYS); back this up
+  documents-data:  # loan agreement PDFs (permanent records); back this up
   # portainer_data:
 
 networks:

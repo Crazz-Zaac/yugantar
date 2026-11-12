@@ -32,6 +32,9 @@ from app.models.notification_model import Notification, NotificationType
 from app.services.email_notify import send_generic_email
 from app.services.visibility import can_view_deposit
 from app.services.duties import Duty, responsible_users
+from app.models.deposit_model import DepositType
+from datetime import date
+from typing import Optional
 from fastapi_mail import NameEmail
 
 
@@ -252,13 +255,22 @@ def get_my_deposits(
 def get_community_deposits(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
+    member: Optional[str] = Query(None, max_length=100, description="Member name contains"),
+    date_from: Optional[date] = Query(None, description="From this Nepal date (inclusive)"),
+    date_to: Optional[date] = Query(None, description="To this Nepal date (inclusive)"),
+    deposit_type: Optional[DepositType] = Query(None, alias="type"),
     current_user: User = Depends(get_current_active_user),
     session: Session = Depends(get_session),
 ):
+    """Verified deposits across the cooperative, newest first, with filters."""
     return deposit_service.list_community_deposits(
         session=session,
         skip=skip,
         limit=limit,
+        member=member,
+        date_from=date_from,
+        date_to=date_to,
+        deposit_type=deposit_type,
     )
 
 

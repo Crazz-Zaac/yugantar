@@ -82,6 +82,22 @@ class Loan(BaseModel, table=True):
         description="Timestamp when the loan funds were disbursed to the user",
     )
     collateral_details: Optional[str] = Field(max_length=255, nullable=True)
+
+    # Guarantor: a registered member who stands surety for the loan. They
+    # must sign (name + date) before the loan goes to the Treasurer.
+    # guarantor_status: "pending" | "signed" | "declined"
+    guarantor_user_id: Optional[uuid.UUID] = Field(
+        default=None, foreign_key="user.id", nullable=True, index=True
+    )
+    guarantor_status: Optional[str] = Field(default=None, max_length=20, nullable=True)
+    guarantor_signed_name: Optional[str] = Field(default=None, max_length=200, nullable=True)
+    guarantor_signed_at: Optional[datetime] = Field(default=None, nullable=True)
+    guarantor_note: Optional[str] = Field(default=None, max_length=255, nullable=True)
+
+    # Loan agreement PDF, generated once when the loan is approved
+    agreement_file_key: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    agreement_sha256: Optional[str] = Field(default=None, max_length=64, nullable=True)
+    agreement_generated_at: Optional[datetime] = Field(default=None, nullable=True)
     purpose: Optional[str] = Field(
         default=None,
         max_length=255,
@@ -122,7 +138,10 @@ class Loan(BaseModel, table=True):
     )
 
     # Relationships
-    user: "User" = Relationship(back_populates="loans")
+    # Two FKs point at user (applicant, guarantor): name the applicant one
+    user: "User" = Relationship(
+        back_populates="loans", sa_relationship_kwargs={"foreign_keys": "[Loan.user_id]"}
+    )
     deposits: List["Deposit"] = Relationship(back_populates="loan")
     policy: Optional["LoanPolicy"] = Relationship(back_populates="loans")
     payments: List["LoanPayment"] = Relationship(back_populates="loan")

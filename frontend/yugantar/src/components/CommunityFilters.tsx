@@ -1,0 +1,92 @@
+import { Search, SlidersHorizontal, X } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import type { CommunityFilterValues } from "@/lib/communityFilters"
+
+interface Props {
+  values: CommunityFilterValues
+  onChange: (values: CommunityFilterValues) => void
+  /** Optional dropdown, e.g. deposit type or loan status */
+  choice?: { label: string; options: { value: string; label: string }[] }
+  /** Optional extra text search, e.g. loan purpose */
+  text?: { label: string; placeholder: string }
+  resultCount?: number
+}
+
+/** Filter bar for the community tabs: member, date range (NPT) and more. */
+export function CommunityFilters({ values, onChange, choice, text, resultCount }: Props) {
+  const set = (patch: Partial<CommunityFilterValues>) => onChange({ ...values, ...patch })
+  const active = [values.member, values.dateFrom, values.dateTo, values.choice, values.text].filter(Boolean).length
+
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border bg-muted/30 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          Filters
+          {active > 0 && <span className="rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">{active}</span>}
+          {resultCount !== undefined && <span className="font-normal">· {resultCount} shown</span>}
+        </p>
+        {active > 0 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => onChange({ member: "", dateFrom: "", dateTo: "", choice: "", text: "" })}
+          >
+            <X className="mr-1 h-3.5 w-3.5" /> Clear
+          </Button>
+        )}
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="cf-member" className="text-[11px] text-muted-foreground">Member</Label>
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="cf-member"
+              className="h-9 pl-8 text-sm"
+              placeholder="Search by name"
+              value={values.member}
+              onChange={(e) => set({ member: e.target.value })}
+            />
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="cf-from" className="text-[11px] text-muted-foreground">From (NPT)</Label>
+          <Input id="cf-from" type="date" className="h-9 text-sm" value={values.dateFrom} max={values.dateTo || undefined} onChange={(e) => set({ dateFrom: e.target.value })} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="cf-to" className="text-[11px] text-muted-foreground">To (NPT)</Label>
+          <Input id="cf-to" type="date" className="h-9 text-sm" value={values.dateTo} min={values.dateFrom || undefined} onChange={(e) => set({ dateTo: e.target.value })} />
+        </div>
+        {choice && (
+          <div className="flex flex-col gap-1.5">
+            <Label className="text-[11px] text-muted-foreground">{choice.label}</Label>
+            <Select value={values.choice || "all"} onValueChange={(v) => set({ choice: v === "all" ? "" : v })}>
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All</SelectItem>
+                {choice.options.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {text && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="cf-text" className="text-[11px] text-muted-foreground">{text.label}</Label>
+            <Input id="cf-text" className="h-9 text-sm" placeholder={text.placeholder} value={values.text} onChange={(e) => set({ text: e.target.value })} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

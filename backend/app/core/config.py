@@ -174,6 +174,9 @@ class Settings(BaseSettings):
     # Images are deleted this many days after upload (metadata is kept)
     RECEIPT_RETENTION_DAYS: int = 15
 
+    # Generated documents (loan agreement PDFs): private, kept permanently
+    DOCUMENT_STORAGE_DIR: str = "/data/documents"
+
     # The cooperative's timezone: calendar days (deposit due dates) and dates
     # shown in messages use it. Timestamps are still stored/sent in UTC.
     COOPERATIVE_TIMEZONE: str = "Asia/Kathmandu"

@@ -242,3 +242,9 @@ class LoginSuccess(SQLModel):
 class LoginRequest(SQLModel):
     email: EmailStr
     password: str
+
+
+class MemberDirectoryEntry(SQLModel):
+    id: uuid.UUID
+    name: str
+    roles: List[str]

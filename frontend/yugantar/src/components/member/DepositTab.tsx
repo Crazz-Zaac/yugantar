@@ -37,6 +37,8 @@ import { apiClient } from "@/api/api"
 import ReceiptReviewDialog from "./ReceiptReviewDialog"
 import { useSearch } from "wouter"
 import { formatDate, formatDateTime, fromZoneInputValue, nowZoneInputValue, toZoneInputValue, TIME_ZONE_LABEL } from "@/lib/datetime"
+import { CommunityFilters } from "@/components/CommunityFilters"
+import { communityFilterParams, EMPTY_COMMUNITY_FILTERS, type CommunityFilterValues } from "@/lib/communityFilters"
 
 type PolicyStatus = "draft" | "finalized" | "active" | "expired" | "void"
 type DepositScheduleType = "monthly_fixed_day" | "occasional"
@@ -412,17 +414,27 @@ export function DepositTab() {
     }
   }, [])
 
+  const [communityFilters, setCommunityFilters] = useState<CommunityFilterValues>(EMPTY_COMMUNITY_FILTERS)
   const fetchCommunityDeposits = useCallback(async () => {
     setCommunityLoading(true)
     try {
-      const res = await apiClient.get("/deposits/community")
+      const res = await apiClient.get("/deposits/community", {
+        params: { limit: 100, ...communityFilterParams(communityFilters, { choice: "type" }) },
+      })
       setCommunityDeposits((res.data as DepositItem[]).map(mapDepositItem))
     } catch {
       setCommunityDeposits([])
     } finally {
       setCommunityLoading(false)
     }
-  }, [])
+  }, [communityFilters])
+
+  // Re-query when filters change (debounced for typing)
+  useEffect(() => {
+    if (activeTab !== "community") return
+    const timer = setTimeout(fetchCommunityDeposits, 300)
+    return () => clearTimeout(timer)
+  }, [communityFilters, activeTab, fetchCommunityDeposits])
 
   const fetchHistoryDeposits = useCallback(async () => {
     setHistoryLoading(true)
@@ -451,10 +463,10 @@ export function DepositTab() {
 
   useEffect(() => {
     if (activeTab === "my") fetchMyDeposits()
-    if (activeTab === "community") fetchCommunityDeposits()
+    // "community" loads via the debounced filter effect
     if (activeTab === "history") fetchHistoryDeposits()
     if (activeTab === "review") fetchReviewDeposits()
-  }, [activeTab, fetchMyDeposits, fetchCommunityDeposits, fetchHistoryDeposits, fetchReviewDeposits])
+  }, [activeTab, fetchMyDeposits, fetchHistoryDeposits, fetchReviewDeposits])
 
   const addAllocation = () => {
     if (!preview) return
@@ -1233,7 +1245,15 @@ export function DepositTab() {
               <CardTitle className="text-sm font-semibold">Community Deposits</CardTitle>
               <CardDescription>Verified deposits across the cooperative</CardDescription>
             </CardHeader>
-            <CardContent>{renderDepositTable(communityDeposits, communityLoading, true)}</CardContent>
+            <CardContent className="flex flex-col gap-4">
+              <CommunityFilters
+                values={communityFilters}
+                onChange={setCommunityFilters}
+                choice={{ label: "Type", options: [{ value: "current", label: "Current" }, { value: "advance", label: "Advance" }] }}
+                resultCount={communityLoading ? undefined : communityDeposits.length}
+              />
+              {renderDepositTable(communityDeposits, communityLoading, true)}
+            </CardContent>
           </Card>
         </TabsContent>
 

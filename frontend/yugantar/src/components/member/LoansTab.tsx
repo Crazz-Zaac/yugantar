@@ -14,6 +14,8 @@ import {
   BadgeCheck,
   Ban,
   Eye,
+  FileDown,
+  UserCheck,
 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -37,11 +39,15 @@ import {
 } from "@/components/ui/dialog"
 import { apiClient } from "@/api/api"
 import { useSearch } from "wouter"
-import { formatDate } from "@/lib/datetime"
+import { formatDate, formatDateTime } from "@/lib/datetime"
+import { downloadLoanAgreement } from "@/lib/download"
+import { GuaranteeRequests } from "./GuaranteeRequests"
 import { toast } from "sonner"
 import { apiError } from "@/components/policies/signing"
 import { LoanCalculator } from "./LoanCalculator"
 import { latestPolicy } from "@/lib/loanMath"
+import { CommunityFilters } from "@/components/CommunityFilters"
+import { communityFilterParams, EMPTY_COMMUNITY_FILTERS, type CommunityFilterValues } from "@/lib/communityFilters"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -88,6 +94,13 @@ interface LoanItem {
   fund_verified_by: string | null
   fund_verified_at: string | null
   // Set by the backend on the review queue (same rules it enforces)
+  guarantor_user_id?: string | null
+  guarantor_name?: string | null
+  guarantor_status?: "pending" | "signed" | "declined" | null
+  guarantor_signed_name?: string | null
+  guarantor_signed_at?: string | null
+  guarantor_note?: string | null
+  has_agreement?: boolean
   viewer_can_verify_funds?: boolean | null
   viewer_can_decide?: boolean | null
   is_own_application?: boolean | null
@@ -99,6 +112,30 @@ interface LoanItem {
 function formatRs(value: number | string): string {
   const num = typeof value === "string" ? Number(value) : value
   return `Rs. ${num.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
+}
+
+function GuarantorLine({ loan }: { loan: LoanItem }) {
+  const status = loan.guarantor_status
+  return (
+    <span className="flex flex-wrap items-center gap-1.5 text-sm">
+      <UserCheck className="h-4 w-4 text-muted-foreground" />
+      <span className="text-muted-foreground">Guarantor:</span>
+      <span className="font-medium">{loan.guarantor_name}</span>
+      {status === "pending" && (
+        <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning">Waiting for signature</Badge>
+      )}
+      {status === "signed" && (
+        <Badge variant="outline" className="border-success/30 bg-success/10 text-success">
+          Signed as “{loan.guarantor_signed_name}”{loan.guarantor_signed_at ? ` · ${formatDateTime(loan.guarantor_signed_at)}` : ""}
+        </Badge>
+      )}
+      {status === "declined" && (
+        <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-destructive">
+          Declined{loan.guarantor_note ? `: “${loan.guarantor_note}”` : ""}
+        </Badge>
+      )}
+    </span>
+  )
 }
 
 function StatusBadge({ status }: { status: LoanItem["status"] }) {
@@ -187,6 +224,21 @@ export function LoansTab() {
   const [applyError, setApplyError] = useState<string | null>(null)
   const [applySuccess, setApplySuccess] = useState(false)
 
+  // Guarantor: any other active member (required when the policy requires collateral)
+  const [members, setMembers] = useState<{ id: string; name: string; roles: string[] }[]>([])
+  const [guarantorId, setGuarantorId] = useState("")
+  useEffect(() => {
+    let cancelled = false
+    apiClient
+      .get("/users/directory")
+      .then((r) => !cancelled && setMembers(r.data))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const isOfficeBearer = isReviewer
+
   // The application form, so "Apply with these numbers" can scroll to it
   const applyFormRef = useRef<HTMLDivElement>(null)
 
@@ -235,17 +287,27 @@ export function LoansTab() {
     }
   }, [])
 
+  const [communityFilters, setCommunityFilters] = useState<CommunityFilterValues>(EMPTY_COMMUNITY_FILTERS)
   const fetchCommunityLoans = useCallback(async () => {
     setCommunityLoading(true)
     try {
-      const res = await apiClient.get("/loans/community")
+      const res = await apiClient.get("/loans/community", {
+        params: { limit: 100, ...communityFilterParams(communityFilters, { choice: "status", text: "purpose" }) },
+      })
       setCommunityLoans(res.data.loans ?? [])
     } catch {
       /* silent */
     } finally {
       setCommunityLoading(false)
     }
-  }, [])
+  }, [communityFilters])
+
+  // Re-query when filters change (debounced for typing)
+  useEffect(() => {
+    if (activeTab !== "community") return
+    const timer = setTimeout(fetchCommunityLoans, 300)
+    return () => clearTimeout(timer)
+  }, [communityFilters, activeTab, fetchCommunityLoans])
 
   const fetchPendingLoans = useCallback(async () => {
     if (!isReviewer) return
@@ -266,15 +328,19 @@ export function LoansTab() {
 
   useEffect(() => {
     if (activeTab === "my-loans" || activeTab === "history") fetchMyLoans()
-    if (activeTab === "community") fetchCommunityLoans()
+    // "community" loads via the debounced filter effect
     if (activeTab === "review") fetchPendingLoans()
-  }, [activeTab, fetchMyLoans, fetchCommunityLoans, fetchPendingLoans])
+  }, [activeTab, fetchMyLoans, fetchPendingLoans])
 
   // ── Handlers ─────────────────────────────────────────────────────────────
 
   const handleApply = async () => {
     if (!selectedPolicy || !applyAmount || !applyTerm || !applyPurpose) {
       setApplyError("Please fill all required fields.")
+      return
+    }
+    if (selectedPolicy.requires_collateral && !guarantorId) {
+      setApplyError("This policy needs a guarantor: choose a member who will stand surety.")
       return
     }
     setApplyLoading(true)
@@ -288,6 +354,7 @@ export function LoansTab() {
         purpose: applyPurpose,
         collateral_details: applyCollateral || null,
         notes: applyNotes || null,
+        guarantor_user_id: guarantorId || null,
       })
       setApplySuccess(true)
       setApplyAmount("")
@@ -295,6 +362,7 @@ export function LoansTab() {
       setApplyPurpose("")
       setApplyCollateral("")
       setApplyNotes("")
+      setGuarantorId("")
     } catch (err: any) {
       setApplyError(err?.response?.data?.detail ?? "Failed to submit application.")
     } finally {
@@ -372,6 +440,8 @@ export function LoansTab() {
           Apply for loans, track your applications, and view community activity
         </p>
       </div>
+
+      <GuaranteeRequests onChanged={fetchMyLoans} />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className={`h-auto w-full justify-start overflow-x-auto [scrollbar-width:none] [&>button]:shrink-0 sm:grid ${isReviewer ? "sm:max-w-2xl sm:grid-cols-5" : "sm:max-w-xl sm:grid-cols-4"}`}>
@@ -524,14 +594,44 @@ export function LoansTab() {
                         </Select>
                       </div>
 
+                      <div className="flex flex-col gap-2">
+                        <Label htmlFor="guarantor" className="text-xs font-medium">
+                          Guarantor{" "}
+                          {selectedPolicy?.requires_collateral ? (
+                            <span className="text-destructive">*</span>
+                          ) : (
+                            <span className="font-normal text-muted-foreground">(optional)</span>
+                          )}
+                        </Label>
+                        <Select value={guarantorId || "none"} onValueChange={(v) => setGuarantorId(v === "none" ? "" : v)}>
+                          <SelectTrigger id="guarantor">
+                            <SelectValue placeholder="Choose a member" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {!selectedPolicy?.requires_collateral && <SelectItem value="none">No guarantor</SelectItem>}
+                            {members
+                              .filter((m) => m.id !== user?.id)
+                              .map((m) => (
+                                <SelectItem key={m.id} value={m.id}>
+                                  {m.name}
+                                  {m.roles.filter((r) => r !== "member").length > 0 &&
+                                    ` · ${m.roles.filter((r) => r !== "member").map((r) => r[0].toUpperCase() + r.slice(1)).join(", ")}`}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-[11px] text-muted-foreground">
+                          A registered member who stands surety for your loan. They must sign (with their name and the date) before the Treasurer reviews your application.
+                        </p>
+                      </div>
                       {selectedPolicy?.requires_collateral && (
                         <div className="flex flex-col gap-2">
                           <Label htmlFor="collateral" className="text-xs font-medium">
-                            Collateral Details <span className="text-destructive">*</span>
+                            Collateral notes <span className="font-normal text-muted-foreground">(optional)</span>
                           </Label>
                           <Textarea
                             id="collateral"
-                            placeholder="Describe the collateral you are offering…"
+                            placeholder="Anything else you're offering as security…"
                             value={applyCollateral}
                             onChange={(e) => setApplyCollateral(e.target.value)}
                             rows={2}
@@ -561,7 +661,7 @@ export function LoansTab() {
                       {applySuccess && (
                         <div className="rounded-lg border border-success/30 bg-success/10 p-3 text-sm text-success">
                           <CheckCircle2 className="mr-1 inline h-4 w-4" />
-                          Application submitted! The Treasurer will verify fund availability and then the President will review your request.
+                          Application submitted! If you chose a guarantor, they sign first; then the Treasurer verifies funds and the President decides.
                         </div>
                       )}
 
@@ -683,6 +783,18 @@ export function LoansTab() {
                     </div>
                   )}
 
+                  {/* Guarantor + agreement */}
+                  {(loan.guarantor_name || loan.has_agreement) && (
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
+                      {loan.guarantor_name ? <GuarantorLine loan={loan} /> : <span />}
+                      {loan.has_agreement && (
+                        <Button size="sm" variant="outline" onClick={() => downloadLoanAgreement(loan.id).catch(() => toast.error("Couldn't download the agreement."))}>
+                          <FileDown className="mr-2 h-4 w-4" /> Loan agreement (PDF)
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
                   {/* Rejection reason */}
                   {loan.status === "rejected" && loan.rejection_reason && (
                     <div className="mt-4 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
@@ -709,14 +821,28 @@ export function LoansTab() {
               <CardTitle className="text-sm font-semibold">Community Loans</CardTitle>
               <CardDescription>Lending activity across the cooperative</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-col gap-4">
+              <CommunityFilters
+                values={communityFilters}
+                onChange={setCommunityFilters}
+                choice={{
+                  label: "Status",
+                  options: [
+                    { value: "approved", label: "Approved" },
+                    { value: "active", label: "Active" },
+                    { value: "paid", label: "Paid" },
+                  ],
+                }}
+                text={{ label: "Purpose", placeholder: "e.g. school" }}
+                resultCount={communityLoading ? undefined : communityLoans.length}
+              />
               {communityLoading ? (
                 <div className="flex items-center justify-center py-8 text-muted-foreground">
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading…
                 </div>
               ) : communityLoans.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
-                  No community loans yet.
+                  {Object.values(communityFilters).some(Boolean) ? "No loans match these filters." : "No community loans yet."}
                 </p>
               ) : (
                 <div className="overflow-x-auto">
@@ -728,6 +854,8 @@ export function LoansTab() {
                         <TableHead className="text-right text-xs">Amount</TableHead>
                         <TableHead className="text-xs">Maturity</TableHead>
                         <TableHead className="text-xs">Status</TableHead>
+                        <TableHead className="text-xs">Guarantor</TableHead>
+                        <TableHead className="text-xs"><span className="sr-only">Agreement</span></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -743,6 +871,22 @@ export function LoansTab() {
                           </TableCell>
                           <TableCell>
                             <StatusBadge status={loan.status} />
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{loan.guarantor_name ?? "—"}</TableCell>
+                          <TableCell className="text-right">
+                            {loan.has_agreement &&
+                              (isOfficeBearer || loan.user_id === user?.id || loan.guarantor_user_id === user?.id) && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8"
+                                  title="Download the loan agreement (PDF)"
+                                  onClick={() => downloadLoanAgreement(loan.id).catch(() => toast.error("Couldn't download the agreement."))}
+                                >
+                                  <FileDown className="h-4 w-4" />
+                                  <span className="ml-1.5 hidden sm:inline">PDF</span>
+                                </Button>
+                              )}
                           </TableCell>
                         </TableRow>
                       ))}
@@ -924,6 +1068,10 @@ export function LoansTab() {
                                   <span className="text-xs text-muted-foreground italic">
                                     {loan.is_own_application
                                       ? "Your own application: another office bearer handles it"
+                                      : loan.guarantor_status === "pending"
+                                        ? "Waiting for the guarantor to sign"
+                                        : loan.guarantor_user_id === user?.id
+                                          ? "You are the guarantor: another office bearer handles it"
                                       : isVerified
                                         ? "Awaiting approval"
                                         : "Awaiting fund verification"}
@@ -963,6 +1111,12 @@ export function LoansTab() {
                                   <p className="text-xs text-muted-foreground">Start Date</p>
                                   <p className="font-medium">{formatDate(loan.start_date)}</p>
                                 </div>
+                                {loan.guarantor_name && (
+                                  <div className="col-span-2 sm:col-span-3">
+                                    <p className="text-xs text-muted-foreground">Guarantor</p>
+                                    <GuarantorLine loan={loan} />
+                                  </div>
+                                )}
                                 {loan.collateral_details && (
                                   <div className="col-span-2">
                                     <p className="text-xs text-muted-foreground">Collateral</p>

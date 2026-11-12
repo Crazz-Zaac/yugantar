@@ -69,6 +69,18 @@ def is_active_member(user: User) -> bool:
     return not user.disabled and bool(user.is_verified) and bool(user.is_approved)
 
 
+def is_system_admin(user: Optional[User]) -> bool:
+    """Has the ADMIN access role (the system administration account)."""
+    if user is None:
+        return False
+    return "admin" in {str(getattr(r, "value", r)).lower() for r in (user.access_roles or [])}
+
+
+def can_be_guarantor(user: Optional[User]) -> bool:
+    """An active cooperative member who isn't a system admin account."""
+    return user is not None and is_active_member(user) and not is_system_admin(user) and bool(user.cooperative_roles)
+
+
 def is_office_bearer(user: User) -> bool:
     return bool(coop_roles(user) & OFFICE_ROLES)
 

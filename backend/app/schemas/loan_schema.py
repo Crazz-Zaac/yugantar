@@ -30,6 +30,16 @@ class LoanApplicationCreate(SQLModel):
         description="Collateral description if policy requires it",
     )
     notes: Optional[str] = Field(default=None, max_length=500)
+    # A registered member who stands guarantor (required when the policy
+    # requires collateral). They must sign before the Treasurer reviews it.
+    guarantor_user_id: Optional[uuid.UUID] = None
+
+
+class GuaranteeDecision(SQLModel):
+    """The guarantor's answer to a guarantee request."""
+
+    accept: bool
+    note: Optional[str] = Field(default=None, max_length=255)
 
 
 # ----------------------------
@@ -113,6 +123,16 @@ class LoanResponse(SQLModel):
     # Treasurer fund verification
     fund_verified_by: Optional[str] = None
     fund_verified_at: Optional[datetime] = None
+    # Guarantor (a member) and their signature
+    guarantor_user_id: Optional[uuid.UUID] = None
+    guarantor_name: Optional[str] = None
+    guarantor_status: Optional[str] = None  # pending | signed | declined
+    guarantor_signed_name: Optional[str] = None
+    guarantor_signed_at: Optional[datetime] = None
+    guarantor_note: Optional[str] = None
+    # Agreement PDF (generated on approval)
+    has_agreement: bool = False
+    agreement_generated_at: Optional[datetime] = None
     # Only set on the pending-review queue, for the requesting office bearer
     viewer_can_verify_funds: Optional[bool] = None
     viewer_can_decide: Optional[bool] = None

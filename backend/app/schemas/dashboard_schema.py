@@ -39,7 +39,7 @@ class LoanSummaryOut(SQLModel):
 
 
 class ActionItem(SQLModel):
-    kind: Literal["sign_policy", "review_deposits", "review_loans", "review_payments", "authorise_proxy", "pending_deposit"]
+    kind: Literal["sign_policy", "guarantee_request", "review_deposits", "review_loans", "review_payments", "authorise_proxy", "pending_deposit"]
     title: str
     detail: str
     count: int = 1

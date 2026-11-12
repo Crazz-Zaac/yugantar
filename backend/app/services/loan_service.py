@@ -11,6 +11,8 @@ from app.models.policy.loan_policy import LoanPolicy
 from app.models.policy.base_policy import PolicyStatus
 from app.models.user_model import User
 from app.models.mixins.money import MoneyMixin
+from app.services.duties import can_be_guarantor
+from app.utils.local_time import local_day_bounds
 from app.services.duties import Duty, denial_reason
 from app.schemas.loan_schema import (
     LoanApplicationCreate,
@@ -20,7 +22,7 @@ from app.schemas.loan_schema import (
 )
 
 
-def _loan_to_response(loan: Loan, applicant_name: str | None = None) -> LoanResponse:
+def _loan_to_response(loan: Loan, applicant_name: str | None = None, guarantor_name: str | None = None) -> LoanResponse:
     """Convert a Loan ORM object to a LoanResponse dict."""
     return LoanResponse(
         id=loan.id,
@@ -49,7 +51,25 @@ def _loan_to_response(loan: Loan, applicant_name: str | None = None) -> LoanResp
         purpose=loan.purpose,
         fund_verified_by=loan.fund_verified_by,
         fund_verified_at=loan.fund_verified_at,
+        guarantor_user_id=loan.guarantor_user_id,
+        guarantor_name=guarantor_name,
+        guarantor_status=loan.guarantor_status,
+        guarantor_signed_name=loan.guarantor_signed_name,
+        guarantor_signed_at=loan.guarantor_signed_at,
+        guarantor_note=loan.guarantor_note,
+        has_agreement=bool(loan.agreement_file_key),
+        agreement_generated_at=loan.agreement_generated_at,
     )
+
+
+def _full_name(user: "User | None") -> str | None:
+    return f"{user.first_name} {user.last_name}".strip() if user else None
+
+
+def loan_response(session: Session, loan: Loan) -> LoanResponse:
+    """LoanResponse with applicant and guarantor names filled in."""
+    guarantor = session.get(User, loan.guarantor_user_id) if loan.guarantor_user_id else None
+    return _loan_to_response(loan, _full_name(session.get(User, loan.user_id)), _full_name(guarantor))
 
 
 class LoanService:
@@ -92,11 +112,25 @@ class LoanService:
                 detail=f"Requested amount Rs. {amount} exceeds the maximum Rs. {policy.max_loan_amount}.",
             )
 
-        # 3. Collateral check
-        if policy.requires_collateral and not application.collateral_details:
+        # 3. Guarantor: a registered member stands surety (required when the
+        #    policy requires collateral). They sign before the Treasurer reviews.
+        guarantor = None
+        if application.guarantor_user_id is not None:
+            guarantor = session.get(User, application.guarantor_user_id)
+            if not can_be_guarantor(guarantor):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="The guarantor must be an active registered member.",
+                )
+            if guarantor.id == user.id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="You can't be your own guarantor.",
+                )
+        elif policy.requires_collateral:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This policy requires collateral details.",
+                detail="This policy requires a guarantor: choose a member who will stand surety for the loan.",
             )
 
         # 4. One open loan at a time: pending, approved (not yet disbursed) or active
@@ -129,6 +163,8 @@ class LoanService:
             maturity_date=maturity,
             status=LoanStatus.PENDING,
             collateral_details=application.collateral_details,
+            guarantor_user_id=guarantor.id if guarantor else None,
+            guarantor_status="pending" if guarantor else None,
             max_renewals=policy.max_renewals,
             purpose=application.purpose,
         )
@@ -137,8 +173,7 @@ class LoanService:
         session.commit()
         session.refresh(loan)
 
-        full_name = f"{user.first_name} {user.last_name}".strip()
-        return _loan_to_response(loan, applicant_name=full_name)
+        return loan_response(session, loan)
 
     # Get my loans
     def get_my_loans(
@@ -161,7 +196,7 @@ class LoanService:
 
         user = session.get(User, user_id)
         name = f"{user.first_name} {user.last_name}".strip() if user else None
-        return [_loan_to_response(l, applicant_name=name) for l in loans], total
+        return [loan_response(session, l) for l in loans], total
 
     # Get a single loan 
     def get_loan(
@@ -175,9 +210,7 @@ class LoanService:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Loan not found.",
             )
-        user = session.get(User, loan.user_id)
-        name = f"{user.first_name} {user.last_name}".strip() if user else None
-        return _loan_to_response(loan, applicant_name=name)
+        return loan_response(session, loan)
 
     # Get all pending loans (for treasurers/presidents) 
     def get_pending_loans(
@@ -196,16 +229,21 @@ class LoanService:
         for loan in loans:
             user = session.get(User, loan.user_id)
             name = f"{user.first_name} {user.last_name}".strip() if user else None
-            response = _loan_to_response(loan, applicant_name=name)
+            response = loan_response(session, loan)
+            waiting_for_guarantor = loan.guarantor_status == "pending"
+            is_guarantor = viewer is not None and loan.guarantor_user_id == viewer.id
             if viewer is not None:
                 # Same rules the endpoints enforce, so the UI only offers
                 # actions that will succeed (services/duties.py).
                 response.viewer_can_verify_funds = (
-                    not loan.fund_verified_by
+                    not waiting_for_guarantor
+                    and not is_guarantor
+                    and not loan.fund_verified_by
                     and denial_reason(viewer, Duty.VERIFY_LOAN_FUNDS, user) is None
                 )
                 response.viewer_can_decide = (
-                    bool(loan.fund_verified_by)
+                    not is_guarantor
+                    and bool(loan.fund_verified_by)
                     and loan.fund_verified_by != viewer.email
                     and denial_reason(viewer, Duty.DECIDE_LOAN, user) is None
                 )
@@ -219,16 +257,30 @@ class LoanService:
         session: Session,
         skip: int = 0,
         limit: int = 50,
+        member: str | None = None,
+        status_filter: LoanStatus | None = None,
+        purpose: str | None = None,
+        date_from=None,
+        date_to=None,
     ) -> Tuple[List[LoanResponse], int]:
-        base = select(Loan).where(
-            col(Loan.status).in_(
-                [
-                    LoanStatus.APPROVED,
-                    LoanStatus.ACTIVE,
-                    LoanStatus.PAID,
-                ]
+        """Approved/active/paid loans, with optional filters: member name,
+        status, purpose, Nepal-calendar date range (approval date)."""
+        public = [LoanStatus.APPROVED, LoanStatus.ACTIVE, LoanStatus.PAID]
+        base = select(Loan).where(col(Loan.status).in_(public))
+        if status_filter in public:
+            base = base.where(Loan.status == status_filter)
+        if member and member.strip():
+            base = base.join(User, Loan.user_id == User.id).where(
+                (User.first_name + " " + User.last_name).ilike(f"%{member.strip()}%")
             )
-        )
+        if purpose and purpose.strip():
+            base = base.where(col(Loan.purpose).ilike(f"%{purpose.strip()}%"))
+        start, end = local_day_bounds(date_from, date_to)
+        loan_date = func.coalesce(Loan.approved_at, Loan.start_date)
+        if start:
+            base = base.where(loan_date >= start)
+        if end:
+            base = base.where(loan_date < end)
         total = session.exec(select(func.count()).select_from(base.subquery())).one()
         loans = session.exec(
             base.order_by(col(Loan.created_at).desc()).offset(skip).limit(limit)
@@ -237,7 +289,7 @@ class LoanService:
         for loan in loans:
             user = session.get(User, loan.user_id)
             name = f"{user.first_name} {user.last_name}".strip() if user else "Unknown"
-            result.append(_loan_to_response(loan, applicant_name=name))
+            result.append(loan_response(session, loan))
         return result, total
 
     # Treasurer verifies funds 
@@ -362,3 +414,41 @@ class LoanService:
             total_interest_rupees=total_interest.quantize(Decimal("0.01")),
             total_repayment_rupees=total_repayment.quantize(Decimal("0.01")),
         )
+
+
+    # ── Guarantor ────────────────────────────────────────────────────────
+    def guarantee_requests(self, session: Session, user: User) -> List[LoanResponse]:
+        """Loans waiting for this member's signature as guarantor."""
+        loans = session.exec(
+            select(Loan).where(
+                Loan.guarantor_user_id == user.id,
+                Loan.guarantor_status == "pending",
+                Loan.status == LoanStatus.PENDING,
+            )
+        ).all()
+        return [loan_response(session, l) for l in loans]
+
+    def respond_to_guarantee(self, session: Session, loan_id: uuid.UUID, user: User, accept: bool, note: str | None) -> Loan:
+        loan = session.get(Loan, loan_id)
+        if not loan or loan.guarantor_user_id != user.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Guarantee request not found.")
+        if loan.status != LoanStatus.PENDING or loan.guarantor_status != "pending":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This request has already been answered.")
+        now = datetime.now(timezone.utc)
+        loan.guarantor_note = (note or "").strip() or None
+        if accept:
+            loan.guarantor_status = "signed"
+            loan.guarantor_signed_name = f"{user.first_name} {user.last_name}".strip()
+            loan.guarantor_signed_at = now
+        else:
+            # Declining closes the application; the member can apply again
+            # with another guarantor.
+            loan.guarantor_status = "declined"
+            loan.status = LoanStatus.REJECTED
+            loan.rejected_by = f"Guarantor {user.first_name} {user.last_name}".strip()
+            loan.rejected_at = now
+            loan.rejection_reason = "The guarantor declined" + (f": {loan.guarantor_note}" if loan.guarantor_note else ".")
+        session.add(loan)
+        session.commit()
+        session.refresh(loan)
+        return loan

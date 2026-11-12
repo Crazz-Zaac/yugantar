@@ -78,7 +78,9 @@ class User(BaseModel, table=True):
     # Relationships
     deposits: List["Deposit"] = Relationship(back_populates="user")
     # transactions: List["Transaction"] = Relationship(back_populates="user")
-    loans: List["Loan"] = Relationship(back_populates="user")
+    loans: List["Loan"] = Relationship(
+        back_populates="user", sa_relationship_kwargs={"foreign_keys": "[Loan.user_id]"}
+    )
     # payments: List["Payment"] = Relationship(back_populates="user")
     # savings: List["Saving"] = Relationship(back_populates="user")
     fines: List["Fine"] = Relationship(back_populates="user")

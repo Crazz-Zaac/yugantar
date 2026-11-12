@@ -26,6 +26,7 @@ from app.models.loan_payment import LoanPayment, LoanPaymentStatus
 from app.services.loan_payment_service import LoanPaymentService
 from app.services.duties import Duty, require_duty, denial_reason, may_perform_any
 from app.services.policy_lifecycle import require_current_deposit_policy
+from app.utils.local_time import local_day_bounds
 
 
 class DepositService:
@@ -312,14 +313,27 @@ class DepositService:
         session: Session,
         skip: int = 0,
         limit: int = 50,
+        member: Optional[str] = None,
+        date_from=None,
+        date_to=None,
+        deposit_type=None,
     ) -> list[Deposit]:
-        statement = (
-            select(Deposit)
-            .where(Deposit.verification_status == DepositVerificationStatus.VERIFIED)
-            .order_by(Deposit.created_at.desc())
-            .offset(skip)
-            .limit(limit)
-        )
+        """Verified deposits across the cooperative, with optional filters:
+        member name, Nepal-calendar date range, deposit type."""
+        statement = select(Deposit).where(Deposit.verification_status == DepositVerificationStatus.VERIFIED)
+        if member and member.strip():
+            pattern = f"%{member.strip()}%"
+            statement = statement.join(User, Deposit.user_id == User.id).where(
+                (User.first_name + " " + User.last_name).ilike(pattern)
+            )
+        start, end = local_day_bounds(date_from, date_to)
+        if start:
+            statement = statement.where(Deposit.deposited_date >= start)
+        if end:
+            statement = statement.where(Deposit.deposited_date < end)
+        if deposit_type:
+            statement = statement.where(Deposit.deposit_type == deposit_type)
+        statement = statement.order_by(Deposit.deposited_date.desc()).offset(skip).limit(limit)
         return list(session.exec(statement).all())
 
     def list_deposit_history(

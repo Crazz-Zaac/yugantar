@@ -910,3 +910,25 @@ Checked visually with headless screenshots (Playwright/Chromium in a throwaway c
   - The Deposit tab has no policy picker any more; it shows the current policy as fixed facts, or a warning that deposits can't be made if none is in force.
   - The Policies board marks the deposit policies **Current** / **Superseded**; expired ones move to "Not adopted or ended".
 - **Loans:** the calculator and the application form had separate policy choices (chips vs dropdown) that could disagree. There's now **one "Choose a loan policy" step** at the top of the Apply tab (cards, latest first). The calculator is based on that policy, and the form shows it instead of its own dropdown.
+
+### 24. Community filters; loan guarantor signing and agreement PDF
+- **Community filters** (`components/CommunityFilters.tsx`, `lib/communityFilters.ts`):
+  - Both community tabs now have a filter bar: member name, From/To date (Nepal calendar days, converted with `local_day_bounds`), plus a dropdown and optional text search. Results update 300 ms after typing.
+  - Deposits: `GET /deposits/community?member=&date_from=&date_to=&type=current|advance`.
+  - Loans: `GET /loans/community?member=&date_from=&date_to=&status=approved|active|paid&purpose=`. Pending and rejected loans still can't be requested.
+- **Guarantor:**
+  - When applying, a member may choose a guarantor: any other active member, listed by `GET /users/directory`. Accounts with the system **admin** access role are left out of the list and refused as guarantors (`duties.can_be_guarantor`). If the policy requires collateral, a guarantor is required, and the old free-text collateral box becomes optional notes.
+  - The guarantor is notified and sees "A request to be a guarantor" on the Loans tab and Home. They **sign** (their full name and the time are recorded) or **decline** (with an optional note) via `POST /loans/{id}/guarantee`.
+  - Declining closes the application as rejected.
+  - The Treasurer is notified only after the guarantor signs. Fund verification and approval are blocked while the signature is pending (400).
+  - The guarantor can't act on a loan they guarantee (403).
+  - The guarantor can view the loan.
+- **Agreement PDF** (`services/loan_agreement.py`, fpdf2):
+  - On approval, an A4 record is generated once. It lists the borrower, the terms (simple-interest totals), the guarantor's signature with name and date, and who verified funds and approved, with all times in NPT.
+  - It's stored under `DOCUMENT_STORAGE_DIR` (the `documents-data` Docker volume), and its SHA-256 is kept on the loan.
+  - `GET /loans/{id}/agreement` serves it to the applicant, the guarantor and office bearers. Everyone else gets 404.
+  - Treasurers are notified that the agreement is ready. The applicant gets a "Loan agreement (PDF)" button on their loan card. Office bearers, the applicant and the guarantor get a PDF button in the community table.
+- **Migration** `64b90a2ed9f5`: new guarantor and agreement columns on `loan`, with a named FK (`fk_loan_guarantor_user_id_user`).
+- **New dependency:** `fpdf2` (in `pyproject.toml`/`poetry.lock`). The backend and celery images were rebuilt.
+- **Operations:** the `documents-data` volume holds permanent records and must be included in backups.
+- Tests: `test_guarantor` (25 checks) and `test_filters` (11). All 13 suites pass (205 checks).

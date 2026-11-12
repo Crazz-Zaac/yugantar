@@ -21,6 +21,7 @@ PUBLIC_LOAN_STATUSES = {LoanStatus.APPROVED, LoanStatus.ACTIVE, LoanStatus.PAID}
 def can_view_loan(user: User, loan: Loan) -> bool:
     return (
         loan.user_id == user.id
+        or loan.guarantor_user_id == user.id  # asked to (or did) stand surety
         or is_office_bearer(user)
         or loan.status in PUBLIC_LOAN_STATUSES
     )

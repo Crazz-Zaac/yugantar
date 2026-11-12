@@ -208,6 +208,20 @@ class DashboardService:
                 urgent=True,
             ))
 
+        for loan in session.exec(
+            select(Loan).where(Loan.guarantor_user_id == user.id, Loan.guarantor_status == "pending",
+                               Loan.status == LoanStatus.PENDING)
+        ).all():
+            applicant = session.get(User, loan.user_id)
+            actions.append(ActionItem(
+                kind="guarantee_request",
+                title="Sign as guarantor",
+                detail=(f"{applicant.first_name} {applicant.last_name}" if applicant else "A member")
+                + f" asked you to guarantee a loan of Rs. {_rs(loan.principal_paisa):,.0f}. Review and sign, or decline.",
+                link="/dashboard/loans",
+                urgent=True,
+            ))
+
         if is_office_bearer(user):
             if may_perform_any(user, Duty.VERIFY_DEPOSIT):
                 n = len(DepositService().list_pending_review_deposits(session, user, 0, 1000))

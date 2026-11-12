@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Request
 from fastapi_mail import NameEmail
 from fastapi import BackgroundTasks
-from sqlmodel import Session
+from sqlmodel import Session, select
 from uuid import UUID
 from datetime import timedelta
 
@@ -13,6 +13,7 @@ from app.schemas.user_schema import (
     UserUpdate,
     UserResponse,
     UserPublic,
+    MemberDirectoryEntry,
     LoginSuccess,
     TokenResponse,
     LoginRequest,
@@ -35,6 +36,7 @@ from app.services.email_notify import (
     send_registration_notification,
 )
 from app.core.config import settings
+from app.services.duties import can_be_guarantor
 from app.core import rate_limit
 from app.api.v1.endpoints.auth import authenticate_with_rate_limit
 from app.core.refresh_tokens import (
@@ -309,6 +311,25 @@ async def logout_user(
 # -----------------------------
 # Dynamic routes last
 # -----------------------------
+
+
+@router.get("/directory", response_model=list[MemberDirectoryEntry])
+async def member_directory(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    """Active members (name and office), e.g. to choose a loan guarantor.
+    System admin accounts are left out."""
+    members = [u for u in session.exec(select(User)).all() if can_be_guarantor(u)]
+    members.sort(key=lambda u: (u.first_name.lower(), u.last_name.lower()))
+    return [
+        MemberDirectoryEntry(
+            id=u.id,
+            name=f"{u.first_name} {u.last_name}".strip(),
+            roles=[str(getattr(r, "value", r)) for r in (u.cooperative_roles or [])],
+        )
+        for u in members
+    ]
 
 
 @router.get("/{user_id}", response_model=Union[UserResponse, UserPublic])
