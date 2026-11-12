@@ -905,7 +905,7 @@ Checked visually with headless screenshots (Playwright/Chromium in a throwaway c
   - `GET /policies/deposit/current` returns it.
   - The Home "next deposit due" uses it (it used the member's last policy).
   - `expire_ended_policies()` marks ACTIVE policies whose `effective_to` has passed as **EXPIRED**, hourly (in the `close_policy_signings` job) and on every current-policy lookup.
-- **Effect on the dev data:** the Rs. 500 monthly (ended 1 Jun 2026) and Rs. 10,000 occasional (ended 25 Mar 2026) policies are now EXPIRED. **The current deposit policy is Rs. 5,000 monthly** (from 2 Jan 2026 NPT). Rs. 20,000 monthly (from 1 Jan 2026) is still marked active but superseded. Before this, the deposit form defaulted to the ended Rs. 500 policy.
+- **Effect on the dev data:** the Rs. 500 monthly (ended 1 Jun 2026) and Rs. 10,000 occasional (ended 25 Mar 2026) policies are now EXPIRED. **The current deposit policy is Rs. 5,000 monthly** (from 2 Jan 2026 NPT). Rs. 20,000 monthly (from 1 Jan 2026) was superseded and has been expired (end date 12 Nov 2026), so Rs. 5,000 is the only active deposit policy. Before this, the deposit form defaulted to the ended Rs. 500 policy.
 - **Frontend:**
   - The Deposit tab has no policy picker any more; it shows the current policy as fixed facts, or a warning that deposits can't be made if none is in force.
   - The Policies board marks the deposit policies **Current** / **Superseded**; expired ones move to "Not adopted or ended".
