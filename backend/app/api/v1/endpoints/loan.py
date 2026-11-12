@@ -26,9 +26,9 @@ from datetime import date
 from app.models.user_model import User, CooperativeRole
 from app.models.loan_model import Loan, LoanStatus
 from app.services.visibility import can_view_loan
-from app.models.notification_model import Notification, NotificationType
-from app.services.email_notify import send_generic_email
-from fastapi_mail import NameEmail
+from app.models.notification_model import NotificationType
+from app.services.notify import notify
+from app import i18n
 
 
 router = APIRouter(prefix="/loans", tags=["loans"])
@@ -46,36 +46,11 @@ def _notify_treasurers_new_loan(
     """Notify whoever verifies funds for this loan (the Treasurers, or the
     Secretary if the applicant is the Treasurer)."""
     loan = session.get(Loan, loan_id)
-    treasurers = responsible_users(
-        session, Duty.VERIFY_LOAN_FUNDS, loan.user if loan else None
+    treasurers = responsible_users(session, Duty.VERIFY_LOAN_FUNDS, loan.user if loan else None)
+    notify(
+        session, background_tasks, treasurers, "loan_new_application", NotificationType.LOAN_APPLICATION,
+        loan_id=loan_id, commit=True, applicant=applicant_name, amount=amount_rupees, purpose=purpose,
     )
-
-    for treasurer in treasurers:
-        notif = Notification(
-            user_id=treasurer.id,
-            title="New Loan Application",
-            message=(
-                f"{applicant_name} has applied for a loan of Rs. {amount_rupees} "
-                f"for '{purpose}'. Please verify fund availability."
-            ),
-            notification_type=NotificationType.LOAN_APPLICATION,
-            loan_id=loan_id,
-        )
-        session.add(notif)
-
-        background_tasks.add_task(
-            send_generic_email,
-            [NameEmail(name=treasurer.first_name, email=treasurer.email)],
-            "New Loan Application — Yugantar",
-            f"Hello {treasurer.first_name},\n\n"
-            f"{applicant_name} has submitted a loan application.\n\n"
-            f"Amount: Rs. {amount_rupees}\n"
-            f"Purpose: {purpose}\n\n"
-            f"Please log in to verify fund availability.\n\n"
-            f"Best regards,\nYugantar System",
-        )
-
-    session.commit()
 
 
 def _notify_presidents_loan_verified(
@@ -90,34 +65,10 @@ def _notify_presidents_loan_verified(
     if the applicant is the President) that funds were verified."""
     loan = session.get(Loan, loan_id)
     presidents = responsible_users(session, Duty.DECIDE_LOAN, loan.user if loan else None)
-
-    for president in presidents:
-        notif = Notification(
-            user_id=president.id,
-            title="Loan Funds Verified — Awaiting Approval",
-            message=(
-                f"Treasurer {treasurer_name} has verified fund availability for "
-                f"{applicant_name}'s loan of Rs. {amount_rupees}. "
-                f"Please review and approve or reject."
-            ),
-            notification_type=NotificationType.LOAN_FUND_VERIFIED,
-            loan_id=loan_id,
-        )
-        session.add(notif)
-
-        background_tasks.add_task(
-            send_generic_email,
-            [NameEmail(name=president.first_name, email=president.email)],
-            "Loan Awaiting Your Approval — Yugantar",
-            f"Hello {president.first_name},\n\n"
-            f"Treasurer {treasurer_name} has verified fund availability for a loan.\n\n"
-            f"Applicant: {applicant_name}\n"
-            f"Amount: Rs. {amount_rupees}\n\n"
-            f"Please log in to approve or reject.\n\n"
-            f"Best regards,\nYugantar System",
-        )
-
-    session.commit()
+    notify(
+        session, background_tasks, presidents, "loan_funds_verified", NotificationType.LOAN_FUND_VERIFIED,
+        loan_id=loan_id, commit=True, treasurer=treasurer_name, applicant=applicant_name, amount=amount_rupees,
+    )
 
 
 def _notify_applicant_decision(
@@ -132,67 +83,29 @@ def _notify_applicant_decision(
     applicant = session.get(User, loan.user_id)
     if not applicant:
         return
-
-    is_approved = action == "approved"
-    amount_rupees = f"{loan.principal_paisa / 100:,.2f}"
-
-    # If approved, include treasurer contact info
-    extra_msg = ""
-    if is_approved:
-        # Find treasurers for contact info
-        all_users = session.exec(select(User)).all()
-        treasurers = [
-            u
-            for u in all_users
-            if CooperativeRole.TREASURER.value in (u.cooperative_roles or [])
-        ]
-        if treasurers:
-            t = treasurers[0]
-            extra_msg = (
-                f"\n\nTo collect your funds, please contact the Treasurer:\n"
-                f"Name: {t.first_name} {t.last_name}\n"
-                f"Phone: {t.phone}\n"
-                f"Email: {t.email}"
+    amount = loan.principal_paisa / 100
+    if action == "approved":
+        # Include a Treasurer's contact details for collecting the funds
+        treasurer = next(
+            (u for u in session.exec(select(User)).all()
+             if CooperativeRole.TREASURER.value in (u.cooperative_roles or [])),
+            None,
+        )
+        if treasurer:
+            notify(
+                session, background_tasks, [applicant], "loan_approved_contact", NotificationType.LOAN_APPROVED,
+                loan_id=loan.id, commit=True, decider=decider_name, amount=amount,
+                t_name=f"{treasurer.first_name} {treasurer.last_name}", t_phone=treasurer.phone, t_email=treasurer.email,
             )
-
-    message = (
-        f"President {decider_name} has {action} your loan application "
-        f"of Rs. {amount_rupees}."
-    )
-    if rejection_reason:
-        message += f"\nReason: {rejection_reason}"
-    message += extra_msg
-
-    notif = Notification(
-        user_id=applicant.id,
-        title=f"Loan Application {'Approved' if is_approved else 'Rejected'}",
-        message=message,
-        notification_type=(
-            NotificationType.LOAN_APPROVED
-            if is_approved
-            else NotificationType.LOAN_REJECTED
-        ),
-        loan_id=loan.id,
-    )
-    session.add(notif)
-    session.commit()
-
-    email_body = (
-        f"Hello {applicant.first_name},\n\n"
-        f"Your loan application of Rs. {amount_rupees} has been {action} "
-        f"by President {decider_name}."
-    )
-    if rejection_reason:
-        email_body += f"\n\nReason: {rejection_reason}"
-    email_body += extra_msg
-    email_body += "\n\nBest regards,\nYugantar System"
-
-    background_tasks.add_task(
-        send_generic_email,
-        [NameEmail(name=applicant.first_name, email=applicant.email)],
-        f"Loan Application {action.title()} — Yugantar",
-        email_body,
-    )
+        else:
+            notify(session, background_tasks, [applicant], "loan_approved", NotificationType.LOAN_APPROVED,
+                   loan_id=loan.id, commit=True, decider=decider_name, amount=amount)
+    elif rejection_reason:
+        notify(session, background_tasks, [applicant], "loan_rejected_reason", NotificationType.LOAN_REJECTED,
+               loan_id=loan.id, commit=True, decider=decider_name, amount=amount, reason=rejection_reason)
+    else:
+        notify(session, background_tasks, [applicant], "loan_rejected", NotificationType.LOAN_REJECTED,
+               loan_id=loan.id, commit=True, decider=decider_name, amount=amount)
 
 
 def _get_applicant(session: Session, loan_id: UUID) -> User:
@@ -202,16 +115,9 @@ def _get_applicant(session: Session, loan_id: UUID) -> User:
     return loan.user
 
 
-def _notify_user(session: Session, background_tasks: BackgroundTasks, user: User, title: str, message: str,
-                 ntype: NotificationType, loan_id: UUID) -> None:
-    session.add(Notification(user_id=user.id, title=title, message=message, notification_type=ntype, loan_id=loan_id))
-    session.commit()
-    background_tasks.add_task(
-        send_generic_email,
-        [NameEmail(name=user.first_name, email=user.email)],
-        f"{title} — Yugantar",
-        f"Hello {user.first_name},\n\n{message}\n\nPlease log in to the Yugantar portal for details.\n\nBest regards,\nYugantar System",
-    )
+def _notify_user(session: Session, background_tasks: BackgroundTasks, user: User, key: str,
+                 ntype: NotificationType, loan_id: UUID, **args) -> None:
+    notify(session, background_tasks, [user], key, ntype, loan_id=loan_id, commit=True, **args)
 
 
 def _require_guarantor_cleared(loan: Loan, user: User) -> None:
@@ -273,11 +179,8 @@ def apply_for_loan(
         # The guarantor signs first; the Treasurers are told once they have
         guarantor = session.get(User, loan_response.guarantor_user_id)
         _notify_user(
-            session, background_tasks, guarantor,
-            "Guarantee request",
-            f"{applicant_name} has asked you to be the guarantor for a loan of Rs. {amount_str} "
-            f"({application.purpose}). Please review and sign, or decline.",
-            NotificationType.LOAN_APPLICATION, loan_response.id,
+            session, background_tasks, guarantor, "guarantee_request", NotificationType.LOAN_APPLICATION,
+            loan_response.id, applicant=applicant_name, amount=amount_str, purpose=application.purpose,
         )
     else:
         _notify_treasurers_new_loan(
@@ -318,17 +221,15 @@ def respond_to_guarantee(
     amount_str = f"{loan.principal_paisa / 100:,.2f}"
     if body.accept:
         if applicant:
-            _notify_user(session, background_tasks, applicant, "Your guarantor signed",
-                         f"{guarantor_name} signed as guarantor for your loan of Rs. {amount_str}. "
-                         "It now goes to the Treasurer.", NotificationType.LOAN_APPLICATION, loan.id)
+            _notify_user(session, background_tasks, applicant, "guarantor_signed", NotificationType.LOAN_APPLICATION,
+                         loan.id, guarantor=guarantor_name, amount=amount_str)
         _notify_treasurers_new_loan(session, background_tasks, loan_id=loan.id, applicant_name=applicant_name,
                                     amount_rupees=amount_str, purpose=loan.purpose or "Loan")
     elif applicant:
-        _notify_user(session, background_tasks, applicant, "Your guarantor declined",
-                     f"{guarantor_name} declined to be the guarantor for your loan of Rs. {amount_str}"
-                     + (f": {loan.guarantor_note}" if loan.guarantor_note else ".")
-                     + " The application was closed; you can apply again with another guarantor.",
-                     NotificationType.LOAN_REJECTED, loan.id)
+        _notify_user(session, background_tasks, applicant,
+                     "guarantor_declined_note" if loan.guarantor_note else "guarantor_declined",
+                     NotificationType.LOAN_REJECTED, loan.id,
+                     guarantor=guarantor_name, amount=amount_str, note=loan.guarantor_note)
     return loan_service.get_loan(session=session, loan_id=loan.id)
 
 
@@ -535,10 +436,10 @@ def approve_loan(
     )
     applicant = session.get(User, db_loan.user_id)
     for treasurer in responsible_users(session, Duty.VERIFY_LOAN_FUNDS, applicant):
-        _notify_user(session, background_tasks, treasurer, "Loan approved: agreement ready",
-                     f"{president_name} approved the loan of Rs. {db_loan.principal_paisa / 100:,.2f} for "
-                     f"{applicant.first_name if applicant else 'a member'}. The agreement PDF is ready in the Loans tab.",
-                     NotificationType.LOAN_APPROVED, db_loan.id)
+        _notify_user(session, background_tasks, treasurer, "loan_agreement_ready", NotificationType.LOAN_APPROVED,
+                     db_loan.id, president=president_name, amount=db_loan.principal_paisa / 100,
+                     applicant=i18n.both(applicant.first_name, applicant.first_name) if applicant
+                     else i18n.both("a member", "एक सदस्य"))
 
     return loan_service.get_loan(session=session, loan_id=loan.id)
 

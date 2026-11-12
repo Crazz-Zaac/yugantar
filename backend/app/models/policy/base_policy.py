@@ -54,6 +54,11 @@ class BasePolicy(SQLModel, table=False):
         description="Identifier of the user who created the policy",
     )
 
+    # The policy's wording, as edited by the Treasurer (None = generated from the
+    # terms; see services/policy_document.py). Locked once opened for signing.
+    statement_en: Optional[str] = Field(default=None, max_length=2000, nullable=True)
+    statement_ne: Optional[str] = Field(default=None, max_length=3000, nullable=True)
+
     # When an open policy's member signing closes (set when opened for signing)
     signing_deadline: Optional[datetime] = Field(
         default=None,

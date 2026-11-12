@@ -1,3 +1,4 @@
+import { n, roleName, t } from "@/lib/i18n"
 import { useState, useEffect, useCallback, useRef } from "react"
 import {
   CreditCard,
@@ -81,6 +82,9 @@ interface LoanItem {
   created_at: string
   updated_at: string | null
   approved_by: string | null
+  approved_by_name?: string | null
+  rejected_by_name?: string | null
+  fund_verified_by_name?: string | null
   approved_at: string | null
   rejected_by: string | null
   rejected_at: string | null
@@ -119,19 +123,19 @@ function GuarantorLine({ loan }: { loan: LoanItem }) {
   return (
     <span className="flex flex-wrap items-center gap-1.5 text-sm">
       <UserCheck className="h-4 w-4 text-muted-foreground" />
-      <span className="text-muted-foreground">Guarantor:</span>
+      <span className="text-muted-foreground">{t("Guarantor:")}</span>
       <span className="font-medium">{loan.guarantor_name}</span>
       {status === "pending" && (
-        <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning">Waiting for signature</Badge>
+        <Badge variant="outline" className="border-warning/30 bg-warning/10 text-warning">{t("Waiting for signature")}</Badge>
       )}
       {status === "signed" && (
         <Badge variant="outline" className="border-success/30 bg-success/10 text-success">
-          Signed as “{loan.guarantor_signed_name}”{loan.guarantor_signed_at ? ` · ${formatDateTime(loan.guarantor_signed_at)}` : ""}
+          {t("Signed as “{0}”{1}", loan.guarantor_signed_name, loan.guarantor_signed_at ? ` · ${formatDateTime(loan.guarantor_signed_at)}` : "")}
         </Badge>
       )}
       {status === "declined" && (
         <Badge variant="outline" className="border-destructive/30 bg-destructive/10 text-destructive">
-          Declined{loan.guarantor_note ? `: “${loan.guarantor_note}”` : ""}
+          {t("Declined{0}", loan.guarantor_note ? `: “${loan.guarantor_note}”` : "")}
         </Badge>
       )}
     </span>
@@ -171,7 +175,7 @@ function StatusBadge({ status }: { status: LoanItem["status"] }) {
   return (
     <Badge variant="outline" className={`gap-1 text-xs ${c.className}`}>
       <Icon className="h-3 w-3" />
-      {c.label}
+      {t(c.label)}
     </Badge>
   )
 }
@@ -336,11 +340,11 @@ export function LoansTab() {
 
   const handleApply = async () => {
     if (!selectedPolicy || !applyAmount || !applyTerm || !applyPurpose) {
-      setApplyError("Please fill all required fields.")
+      setApplyError(t("Please fill all required fields."))
       return
     }
     if (selectedPolicy.requires_collateral && !guarantorId) {
-      setApplyError("This policy needs a guarantor: choose a member who will stand surety.")
+      setApplyError(t("This policy needs a guarantor: choose a member who will stand surety."))
       return
     }
     setApplyLoading(true)
@@ -364,7 +368,7 @@ export function LoansTab() {
       setApplyNotes("")
       setGuarantorId("")
     } catch (err: any) {
-      setApplyError(err?.response?.data?.detail ?? "Failed to submit application.")
+      setApplyError(err?.response?.data?.detail ?? t("Failed to submit application."))
     } finally {
       setApplyLoading(false)
     }
@@ -378,7 +382,7 @@ export function LoansTab() {
     setApplyTerm(String(months))
     setApplySuccess(false)
     applyFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-    toast.success("Amount and term filled in", { description: "Choose a purpose to finish your application." })
+    toast.success(t("Amount and term filled in"), { description: t("Choose a purpose to finish your application.") })
   }
 
   // ── Review action handlers ──────────────────────────────────────────────
@@ -387,10 +391,10 @@ export function LoansTab() {
     setActionLoadingId(loanId)
     try {
       await apiClient.post(`/loans/${loanId}/verify-funds`, {})
-      toast.success("Funds verified", { description: "The President has been asked to approve the loan." })
+      toast.success(t("Funds verified"), { description: t("The President has been asked to approve the loan.") })
       fetchPendingLoans()
     } catch (err: unknown) {
-      toast.error(apiError(err, "Failed to verify funds."))
+      toast.error(apiError(err, t("Failed to verify funds.")))
     } finally {
       setActionLoadingId(null)
     }
@@ -400,10 +404,10 @@ export function LoansTab() {
     setActionLoadingId(loanId)
     try {
       await apiClient.post(`/loans/${loanId}/approve`, {})
-      toast.success("Loan approved", { description: "The applicant has been notified." })
+      toast.success(t("Loan approved"), { description: t("The applicant has been notified.") })
       fetchPendingLoans()
     } catch (err: unknown) {
-      toast.error(apiError(err, "Failed to approve loan."))
+      toast.error(apiError(err, t("Failed to approve loan.")))
     } finally {
       setActionLoadingId(null)
     }
@@ -418,10 +422,10 @@ export function LoansTab() {
       })
       setRejectDialogLoan(null)
       setRejectReason("")
-      toast.success("Loan rejected", { description: "The applicant has been told the reason." })
+      toast.success(t("Loan rejected"), { description: t("The applicant has been told the reason.") })
       fetchPendingLoans()
     } catch (err: unknown) {
-      toast.error(apiError(err, "Failed to reject loan."))
+      toast.error(apiError(err, t("Failed to reject loan.")))
     } finally {
       setRejectLoading(false)
     }
@@ -435,25 +439,23 @@ export function LoansTab() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Loans</h2>
+        <h2 className="text-lg font-semibold text-foreground">{t("Loans")}</h2>
         <p className="text-sm text-muted-foreground">
-          Apply for loans, track your applications, and view community activity
-        </p>
+          {t("Apply for loans, track your applications, and view community activity")}</p>
       </div>
 
       <GuaranteeRequests onChanged={fetchMyLoans} />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className={`h-auto w-full justify-start overflow-x-auto [scrollbar-width:none] [&>button]:shrink-0 sm:grid ${isReviewer ? "sm:max-w-2xl sm:grid-cols-5" : "sm:max-w-xl sm:grid-cols-4"}`}>
-          <TabsTrigger value="apply">Apply for Loan</TabsTrigger>
-          <TabsTrigger value="my-loans">My Loans</TabsTrigger>
-          <TabsTrigger value="community">Community</TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
+          <TabsTrigger value="apply">{t("Apply for Loan")}</TabsTrigger>
+          <TabsTrigger value="my-loans">{t("My Loans")}</TabsTrigger>
+          <TabsTrigger value="community">{t("Community")}</TabsTrigger>
+          <TabsTrigger value="history">{t("History")}</TabsTrigger>
           {isReviewer && (
             <TabsTrigger value="review" className="gap-1">
               <ClipboardCheck className="h-3.5 w-3.5" />
-              Review
-            </TabsTrigger>
+              {t("Review")}</TabsTrigger>
           )}
         </TabsList>
 
@@ -462,8 +464,8 @@ export function LoansTab() {
           {policies.length > 0 && (
             <>
               {/* One policy choice, shared by the calculator and the application form */}
-              <section className="flex flex-col gap-2" aria-label="Loan policy">
-                <h3 className="text-sm font-semibold">1. Choose a loan policy</h3>
+              <section className="flex flex-col gap-2" aria-label={t("Loan policy")}>
+                <h3 className="text-sm font-semibold">{t("1. Choose a loan policy")}</h3>
                 <div className="grid gap-3 sm:grid-cols-2" role="radiogroup">
                   {[...policies]
                     .sort((a, b) => new Date(b.effective_from).getTime() - new Date(a.effective_from).getTime())
@@ -487,13 +489,11 @@ export function LoansTab() {
                             <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                               {formatRs(p.min_loan_amount)} – {formatRs(p.max_loan_amount)}
                               {p.policy_id === latestPolicy(policies)?.policy_id && (
-                                <span className="rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-medium text-primary">Latest</span>
+                                <span className="rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-medium text-primary">{t("Latest")}</span>
                               )}
                             </span>
                             <span className="block text-xs text-muted-foreground">
-                              {Number(p.interest_rate)}% per year · {p.grace_period_days ?? 0} days' grace ·{" "}
-                              {p.requires_collateral ? "collateral required" : "no collateral"}
-                              {p.emi_applicable ? " · EMI available" : ""}
+                              {t("{0}% per year · {1} days' grace · {2}{3}", Number(p.interest_rate), p.grace_period_days ?? 0, p.requires_collateral ? t("collateral required") : t("no collateral"), p.emi_applicable ? t(" · EMI available") : "")}
                             </span>
                           </span>
                         </button>
@@ -513,40 +513,33 @@ export function LoansTab() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                     <CreditCard className="h-4 w-4" />
-                    Loan Application
-                  </CardTitle>
+                    {t("Loan Application")}</CardTitle>
                   <CardDescription>
-                    Fill in the details below to apply. Approval goes through Treasurer verification → President approval.
-                  </CardDescription>
+                    {t("Fill in the details below to apply. Approval goes through Treasurer verification → President approval.")}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-4">
                   {/* Policy selector */}
                   {policiesLoading ? (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 className="h-4 w-4 animate-spin" /> Loading policies…
-                    </div>
+                      <Loader2 className="h-4 w-4 animate-spin" /> {t(" Loading policies…")}</div>
                   ) : policies.length === 0 ? (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
                       <AlertTriangle className="mr-1 inline h-4 w-4" />
-                      No active loan policy found. Contact your Treasurer.
-                    </div>
+                      {t("No active loan policy found. Contact your Treasurer.")}</div>
                   ) : (
                     <>
                       {selectedPolicy && (
                         <p className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                          Applying under the policy chosen above:{" "}
+                          {t("Applying under the policy chosen above:")}{" "}
                           <span className="font-medium text-foreground">
-                            {formatRs(selectedPolicy.min_loan_amount)} – {formatRs(selectedPolicy.max_loan_amount)} at{" "}
-                            {Number(selectedPolicy.interest_rate)}% per year
-                          </span>
+                            {t("{0} – {1} at {2}% per year", formatRs(selectedPolicy.min_loan_amount), formatRs(selectedPolicy.max_loan_amount), Number(selectedPolicy.interest_rate))}</span>
                         </p>
                       )}
 
                       <div className="grid grid-cols-2 gap-4">
                         <div className="flex flex-col gap-2">
                           <Label htmlFor="loan-amount" className="text-xs font-medium">
-                            Loan Amount (Rs.)
-                          </Label>
+                            {t("Loan Amount (Rs.)")}</Label>
                           <Input
                             id="loan-amount"
                             type="number"
@@ -557,17 +550,15 @@ export function LoansTab() {
                         </div>
                         <div className="flex flex-col gap-2">
                           <Label htmlFor="loan-term" className="text-xs font-medium">
-                            Term
-                          </Label>
+                            {t("Term")}</Label>
                           <Select value={applyTerm} onValueChange={setApplyTerm}>
                             <SelectTrigger id="loan-term">
-                              <SelectValue placeholder="Select" />
+                              <SelectValue placeholder={t("Select")} />
                             </SelectTrigger>
                             <SelectContent>
                               {[...new Set([3, 6, 12, 18, 24, 36, 48, 60, ...(applyTerm ? [Number(applyTerm)] : [])])].sort((a, b) => a - b).map((m) => (
                                 <SelectItem key={m} value={String(m)}>
-                                  {m} months
-                                </SelectItem>
+                                  {t("{0} months", m)}</SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
@@ -576,62 +567,60 @@ export function LoansTab() {
 
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="loan-purpose" className="text-xs font-medium">
-                          Purpose
-                        </Label>
+                          {t("Purpose")}</Label>
                         <Select value={applyPurpose} onValueChange={setApplyPurpose}>
                           <SelectTrigger id="loan-purpose">
-                            <SelectValue placeholder="Select purpose" />
+                            <SelectValue placeholder={t("Select purpose")} />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="Business Expansion">Business Expansion</SelectItem>
-                            <SelectItem value="Agriculture">Agriculture</SelectItem>
-                            <SelectItem value="Housing">Housing</SelectItem>
-                            <SelectItem value="Education">Education</SelectItem>
-                            <SelectItem value="Medical">Medical</SelectItem>
-                            <SelectItem value="Emergency">Emergency</SelectItem>
-                            <SelectItem value="Other">Other</SelectItem>
+                            <SelectItem value="Business Expansion">{t("Business Expansion")}</SelectItem>
+                            <SelectItem value="Agriculture">{t("Agriculture")}</SelectItem>
+                            <SelectItem value="Housing">{t("Housing")}</SelectItem>
+                            <SelectItem value="Education">{t("Education")}</SelectItem>
+                            <SelectItem value="Medical">{t("Medical")}</SelectItem>
+                            <SelectItem value="Emergency">{t("Emergency")}</SelectItem>
+                            <SelectItem value="Other">{t("Other")}</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
 
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="guarantor" className="text-xs font-medium">
-                          Guarantor{" "}
+                          {t("Guarantor")}{" "}
                           {selectedPolicy?.requires_collateral ? (
                             <span className="text-destructive">*</span>
                           ) : (
-                            <span className="font-normal text-muted-foreground">(optional)</span>
+                            <span className="font-normal text-muted-foreground">{t("(optional)")}</span>
                           )}
                         </Label>
                         <Select value={guarantorId || "none"} onValueChange={(v) => setGuarantorId(v === "none" ? "" : v)}>
                           <SelectTrigger id="guarantor">
-                            <SelectValue placeholder="Choose a member" />
+                            <SelectValue placeholder={t("Choose a member")} />
                           </SelectTrigger>
                           <SelectContent>
-                            {!selectedPolicy?.requires_collateral && <SelectItem value="none">No guarantor</SelectItem>}
+                            {!selectedPolicy?.requires_collateral && <SelectItem value="none">{t("No guarantor")}</SelectItem>}
                             {members
                               .filter((m) => m.id !== user?.id)
                               .map((m) => (
                                 <SelectItem key={m.id} value={m.id}>
                                   {m.name}
                                   {m.roles.filter((r) => r !== "member").length > 0 &&
-                                    ` · ${m.roles.filter((r) => r !== "member").map((r) => r[0].toUpperCase() + r.slice(1)).join(", ")}`}
+                                    ` · ${m.roles.filter((r) => r !== "member").map((r) => roleName(r)).join(", ")}`}
                                 </SelectItem>
                               ))}
                           </SelectContent>
                         </Select>
                         <p className="text-[11px] text-muted-foreground">
-                          A registered member who stands surety for your loan. They must sign (with their name and the date) before the Treasurer reviews your application.
-                        </p>
+                          {t("A registered member who stands surety for your loan. They must sign (with their name and the date) before the Treasurer reviews your application.")}</p>
                       </div>
                       {selectedPolicy?.requires_collateral && (
                         <div className="flex flex-col gap-2">
                           <Label htmlFor="collateral" className="text-xs font-medium">
-                            Collateral notes <span className="font-normal text-muted-foreground">(optional)</span>
+                            {t("Collateral notes ")}<span className="font-normal text-muted-foreground">{t("(optional)")}</span>
                           </Label>
                           <Textarea
                             id="collateral"
-                            placeholder="Anything else you're offering as security…"
+                            placeholder={t("Anything else you're offering as security…")}
                             value={applyCollateral}
                             onChange={(e) => setApplyCollateral(e.target.value)}
                             rows={2}
@@ -641,11 +630,10 @@ export function LoansTab() {
 
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="notes" className="text-xs font-medium">
-                          Notes (optional)
-                        </Label>
+                          {t("Notes (optional)")}</Label>
                         <Textarea
                           id="notes"
-                          placeholder="Any additional information…"
+                          placeholder={t("Any additional information…")}
                           value={applyNotes}
                           onChange={(e) => setApplyNotes(e.target.value)}
                           rows={2}
@@ -661,8 +649,7 @@ export function LoansTab() {
                       {applySuccess && (
                         <div className="rounded-lg border border-success/30 bg-success/10 p-3 text-sm text-success">
                           <CheckCircle2 className="mr-1 inline h-4 w-4" />
-                          Application submitted! If you chose a guarantor, they sign first; then the Treasurer verifies funds and the President decides.
-                        </div>
+                          {t("Application submitted! If you chose a guarantor, they sign first; then the Treasurer verifies funds and the President decides.")}</div>
                       )}
 
                       <Button onClick={handleApply} disabled={applyLoading || !selectedPolicy}>
@@ -671,8 +658,7 @@ export function LoansTab() {
                         ) : (
                           <Send className="mr-2 h-4 w-4" />
                         )}
-                        Submit Application
-                      </Button>
+                        {t("Submit Application")}</Button>
                     </>
                   )}
                 </CardContent>
@@ -687,26 +673,25 @@ export function LoansTab() {
                   <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                       <Info className="h-4 w-4" />
-                      Active Policy Details
-                    </CardTitle>
+                      {t("Active Policy Details")}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-2 gap-y-3 text-sm">
-                      <span className="text-muted-foreground">Min Amount</span>
+                      <span className="text-muted-foreground">{t("Min Amount")}</span>
                       <span className="font-medium text-right">{formatRs(selectedPolicy.min_loan_amount)}</span>
-                      <span className="text-muted-foreground">Max Amount</span>
+                      <span className="text-muted-foreground">{t("Max Amount")}</span>
                       <span className="font-medium text-right">{formatRs(selectedPolicy.max_loan_amount)}</span>
-                      <span className="text-muted-foreground">Interest Rate</span>
-                      <span className="font-medium text-right">{Number(selectedPolicy.interest_rate)}% p.a.</span>
-                      <span className="text-muted-foreground">Grace Period</span>
-                      <span className="font-medium text-right">{selectedPolicy.grace_period_days ?? 0} days</span>
-                      <span className="text-muted-foreground">Max Renewals</span>
+                      <span className="text-muted-foreground">{t("Interest Rate")}</span>
+                      <span className="font-medium text-right">{n(Number(selectedPolicy.interest_rate))}% p.a.</span>
+                      <span className="text-muted-foreground">{t("Grace Period")}</span>
+                      <span className="font-medium text-right">{t("{0} days", selectedPolicy.grace_period_days ?? 0)}</span>
+                      <span className="text-muted-foreground">{t("Max Renewals")}</span>
                       <span className="font-medium text-right">{selectedPolicy.max_renewals ?? "N/A"}</span>
-                      <span className="text-muted-foreground">Collateral Required</span>
-                      <span className="font-medium text-right">{selectedPolicy.requires_collateral ? "Yes" : "No"}</span>
-                      <span className="text-muted-foreground">EMI Applicable</span>
-                      <span className="font-medium text-right">{selectedPolicy.emi_applicable ? "Yes" : "No"}</span>
-                      <span className="text-muted-foreground">Effective From</span>
+                      <span className="text-muted-foreground">{t("Collateral Required")}</span>
+                      <span className="font-medium text-right">{selectedPolicy.requires_collateral ? t("Yes") : t("No")}</span>
+                      <span className="text-muted-foreground">{t("EMI Applicable")}</span>
+                      <span className="font-medium text-right">{selectedPolicy.emi_applicable ? t("Yes") : t("No")}</span>
+                      <span className="text-muted-foreground">{t("Effective From")}</span>
                       <span className="font-medium text-right">{formatDate(selectedPolicy.effective_from)}</span>
                     </div>
                   </CardContent>
@@ -720,14 +705,13 @@ export function LoansTab() {
         <TabsContent value="my-loans" className="mt-4 flex flex-col gap-6">
           {myLoansLoading ? (
             <div className="flex items-center justify-center py-12 text-muted-foreground">
-              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading your loans…
-            </div>
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {t(" Loading your loans…")}</div>
           ) : activeLoans.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center text-muted-foreground">
                 <CreditCard className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
-                <p>No active or pending loans</p>
-                <p className="text-xs">Apply for a loan from the "Apply for Loan" tab</p>
+                <p>{t("No active or pending loans")}</p>
+                <p className="text-xs">{t("Apply for a loan from the \"Apply for Loan\" tab")}</p>
               </CardContent>
             </Card>
           ) : (
@@ -737,9 +721,9 @@ export function LoansTab() {
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="text-sm font-semibold">
-                        {loan.purpose ?? "Loan"} – {formatRs(loan.principal_rupees)}
+                        {loan.purpose ?? t("Loan")} – {formatRs(loan.principal_rupees)}
                       </CardTitle>
-                      <CardDescription>Applied {formatDate(loan.created_at)}</CardDescription>
+                      <CardDescription>{t("Applied {0}", formatDate(loan.created_at))}</CardDescription>
                     </div>
                     <StatusBadge status={loan.status} />
                   </div>
@@ -747,19 +731,19 @@ export function LoansTab() {
                 <CardContent>
                   <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
                     <div>
-                      <p className="text-xs text-muted-foreground">Principal</p>
+                      <p className="text-xs text-muted-foreground">{t("Principal")}</p>
                       <p className="font-nums mt-1 text-lg font-bold">{formatRs(loan.principal_rupees)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Interest Rate</p>
-                      <p className="font-nums mt-1 text-lg font-bold">{Number(loan.interest_rate)}% p.a.</p>
+                      <p className="text-xs text-muted-foreground">{t("Interest Rate")}</p>
+                      <p className="font-nums mt-1 text-lg font-bold">{n(Number(loan.interest_rate))}% p.a.</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Total Paid</p>
+                      <p className="text-xs text-muted-foreground">{t("Total Paid")}</p>
                       <p className="font-nums mt-1 text-lg font-bold">{formatRs(loan.total_paid_rupees)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Accrued Interest</p>
+                      <p className="text-xs text-muted-foreground">{t("Accrued Interest")}</p>
                       <p className="font-nums mt-1 text-lg font-bold">{formatRs(loan.accrued_interest_rupees)}</p>
                     </div>
                   </div>
@@ -768,7 +752,7 @@ export function LoansTab() {
                   {loan.status === "active" && Number(loan.principal_rupees) > 0 && (
                     <div className="mt-5">
                       <div className="mb-2 flex justify-between text-xs">
-                        <span className="text-muted-foreground">Repayment Progress</span>
+                        <span className="text-muted-foreground">{t("Repayment Progress")}</span>
                         <span className="font-nums font-medium">
                           {formatRs(loan.total_paid_rupees)} / {formatRs(loan.principal_rupees)}
                         </span>
@@ -788,9 +772,8 @@ export function LoansTab() {
                     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-muted/30 p-3 text-sm">
                       {loan.guarantor_name ? <GuarantorLine loan={loan} /> : <span />}
                       {loan.has_agreement && (
-                        <Button size="sm" variant="outline" onClick={() => downloadLoanAgreement(loan.id).catch(() => toast.error("Couldn't download the agreement."))}>
-                          <FileDown className="mr-2 h-4 w-4" /> Loan agreement (PDF)
-                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => downloadLoanAgreement(loan.id).catch(() => toast.error(t("Couldn't download the agreement.")))}>
+                          <FileDown className="mr-2 h-4 w-4" /> {t(" Loan agreement (PDF)")}</Button>
                       )}
                     </div>
                   )}
@@ -798,15 +781,15 @@ export function LoansTab() {
                   {/* Rejection reason */}
                   {loan.status === "rejected" && loan.rejection_reason && (
                     <div className="mt-4 rounded-lg border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive">
-                      <strong>Rejection reason:</strong> {loan.rejection_reason}
+                      <strong>{t("Rejection reason:")}</strong> {loan.rejection_reason}
                     </div>
                   )}
 
                   <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                    <span>Start: {formatDate(loan.start_date)}</span>
-                    <span>Maturity: {formatDate(loan.maturity_date)}</span>
-                    {loan.disbursed_at && <span>Disbursed: {formatDate(loan.disbursed_at)}</span>}
-                    {loan.approved_by && <span>Approved by: {loan.approved_by}</span>}
+                    <span>{t("Start: {0}", formatDate(loan.start_date))}</span>
+                    <span>{t("Maturity: {0}", formatDate(loan.maturity_date))}</span>
+                    {loan.disbursed_at && <span>{t("Disbursed: {0}", formatDate(loan.disbursed_at))}</span>}
+                    {loan.approved_by && <span>{t("Approved by: {0}", loan.approved_by_name ?? t("an office bearer"))}</span>}
                   </div>
                 </CardContent>
               </Card>
@@ -818,8 +801,8 @@ export function LoansTab() {
         <TabsContent value="community" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-semibold">Community Loans</CardTitle>
-              <CardDescription>Lending activity across the cooperative</CardDescription>
+              <CardTitle className="text-sm font-semibold">{t("Community Loans")}</CardTitle>
+              <CardDescription>{t("Lending activity across the cooperative")}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <CommunityFilters
@@ -838,24 +821,23 @@ export function LoansTab() {
               />
               {communityLoading ? (
                 <div className="flex items-center justify-center py-8 text-muted-foreground">
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading…
-                </div>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {t(" Loading…")}</div>
               ) : communityLoans.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
-                  {Object.values(communityFilters).some(Boolean) ? "No loans match these filters." : "No community loans yet."}
+                  {Object.values(communityFilters).some(Boolean) ? t("No loans match these filters.") : t("No community loans yet.")}
                 </p>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-xs">Member</TableHead>
-                        <TableHead className="text-xs">Purpose</TableHead>
-                        <TableHead className="text-right text-xs">Amount</TableHead>
-                        <TableHead className="text-xs">Maturity</TableHead>
-                        <TableHead className="text-xs">Status</TableHead>
-                        <TableHead className="text-xs">Guarantor</TableHead>
-                        <TableHead className="text-xs"><span className="sr-only">Agreement</span></TableHead>
+                        <TableHead className="text-xs">{t("Member")}</TableHead>
+                        <TableHead className="text-xs">{t("Purpose")}</TableHead>
+                        <TableHead className="text-right text-xs">{t("Amount")}</TableHead>
+                        <TableHead className="text-xs">{t("Maturity")}</TableHead>
+                        <TableHead className="text-xs">{t("Status")}</TableHead>
+                        <TableHead className="text-xs">{t("Guarantor")}</TableHead>
+                        <TableHead className="text-xs"><span className="sr-only">{t("Agreement")}</span></TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -880,11 +862,11 @@ export function LoansTab() {
                                   size="sm"
                                   variant="ghost"
                                   className="h-8"
-                                  title="Download the loan agreement (PDF)"
-                                  onClick={() => downloadLoanAgreement(loan.id).catch(() => toast.error("Couldn't download the agreement."))}
+                                  title={t("Download the loan agreement (PDF)")}
+                                  onClick={() => downloadLoanAgreement(loan.id).catch(() => toast.error(t("Couldn't download the agreement.")))}
                                 >
                                   <FileDown className="h-4 w-4" />
-                                  <span className="ml-1.5 hidden sm:inline">PDF</span>
+                                  <span className="ml-1.5 hidden sm:inline">{t("PDF")}</span>
                                 </Button>
                               )}
                           </TableCell>
@@ -902,29 +884,27 @@ export function LoansTab() {
         <TabsContent value="history" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-semibold">Loan History</CardTitle>
-              <CardDescription>Your completed and rejected loans</CardDescription>
+              <CardTitle className="text-sm font-semibold">{t("Loan History")}</CardTitle>
+              <CardDescription>{t("Your completed and rejected loans")}</CardDescription>
             </CardHeader>
             <CardContent>
               {myLoansLoading ? (
                 <div className="flex items-center justify-center py-8 text-muted-foreground">
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading…
-                </div>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {t(" Loading…")}</div>
               ) : historyLoans.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
-                  No loan history yet.
-                </p>
+                  {t("No loan history yet.")}</p>
               ) : (
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-xs">Purpose</TableHead>
-                        <TableHead className="text-right text-xs">Principal</TableHead>
-                        <TableHead className="text-right text-xs">Total Paid</TableHead>
-                        <TableHead className="text-xs">Applied</TableHead>
-                        <TableHead className="text-xs">Maturity</TableHead>
-                        <TableHead className="text-xs">Status</TableHead>
+                        <TableHead className="text-xs">{t("Purpose")}</TableHead>
+                        <TableHead className="text-right text-xs">{t("Principal")}</TableHead>
+                        <TableHead className="text-right text-xs">{t("Total Paid")}</TableHead>
+                        <TableHead className="text-xs">{t("Applied")}</TableHead>
+                        <TableHead className="text-xs">{t("Maturity")}</TableHead>
+                        <TableHead className="text-xs">{t("Status")}</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -962,23 +942,19 @@ export function LoansTab() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                   <ClipboardCheck className="h-4 w-4" />
-                  Pending Loan Applications
-                </CardTitle>
+                  {t("Pending Loan Applications")}</CardTitle>
                 <CardDescription>
-                  The Treasurer verifies funds, then the President approves or rejects. Nobody handles their own
-                  application, and the same person can't do both steps; the Secretary steps in when needed.
-                </CardDescription>
+                  {t("The Treasurer verifies funds, then the President approves or rejects. Nobody handles their own application, and the same person can't do both steps; the Secretary steps in when needed.")}</CardDescription>
               </CardHeader>
               <CardContent>
                 {pendingLoading ? (
                   <div className="flex items-center justify-center py-8 text-muted-foreground">
-                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Loading applications…
-                  </div>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {t(" Loading applications…")}</div>
                 ) : pendingLoans.length === 0 ? (
                   <div className="py-12 text-center text-muted-foreground">
                     <CheckCircle2 className="mx-auto mb-3 h-10 w-10 text-muted-foreground/40" />
-                    <p>No pending loan applications</p>
-                    <p className="text-xs">All caught up!</p>
+                    <p>{t("No pending loan applications")}</p>
+                    <p className="text-xs">{t("All caught up!")}</p>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-4">
@@ -993,27 +969,25 @@ export function LoansTab() {
                             <div className="flex items-center justify-between">
                               <div className="flex-1">
                                 <CardTitle className="text-sm font-semibold">
-                                  {loan.applicant_name ?? "Unknown"} — {loan.purpose ?? "Loan"}
+                                  {loan.applicant_name ?? t("Unknown")} — {loan.purpose ?? t("Loan")}
                                 </CardTitle>
                                 <CardDescription className="flex items-center gap-3">
                                   <span>{formatRs(loan.principal_rupees)}</span>
                                   <span>•</span>
-                                  <span>{Number(loan.interest_rate)}% p.a.</span>
+                                  <span>{n(Number(loan.interest_rate))}% p.a.</span>
                                   <span>•</span>
-                                  <span>Applied {formatDate(loan.created_at)}</span>
+                                  <span>{t("Applied {0}", formatDate(loan.created_at))}</span>
                                 </CardDescription>
                               </div>
                               <div className="flex items-center gap-2 flex-wrap justify-end">
                                 {isVerified ? (
                                   <Badge variant="outline" className="gap-1 border-blue-500/30 bg-blue-500/10 text-blue-600 text-xs">
                                     <BadgeCheck className="h-3 w-3" />
-                                    Funds Verified
-                                  </Badge>
+                                    {t("Funds Verified")}</Badge>
                                 ) : (
                                   <Badge variant="outline" className="gap-1 border-amber-500/30 bg-amber-500/10 text-amber-600 text-xs">
                                     <Clock className="h-3 w-3" />
-                                    Awaiting Verification
-                                  </Badge>
+                                    {t("Awaiting Verification")}</Badge>
                                 )}
 
                                 {/* Verify Funds: Treasurer (Secretary for the Treasurer's own loan) */}
@@ -1028,8 +1002,7 @@ export function LoansTab() {
                                     ) : (
                                       <BadgeCheck className="mr-2 h-4 w-4" />
                                     )}
-                                    Verify Funds
-                                  </Button>
+                                    {t("Verify Funds")}</Button>
                                 )}
 
                                 {/* Approve / Reject: President (Secretary for the President's own loan) */}
@@ -1046,8 +1019,7 @@ export function LoansTab() {
                                       ) : (
                                         <Gavel className="mr-2 h-4 w-4" />
                                       )}
-                                      Approve
-                                    </Button>
+                                      {t("Approve")}</Button>
                                     <Button
                                       size="sm"
                                       variant="destructive"
@@ -1058,8 +1030,7 @@ export function LoansTab() {
                                       disabled={isThisLoading}
                                     >
                                       <Ban className="mr-2 h-4 w-4" />
-                                      Reject
-                                    </Button>
+                                      {t("Reject")}</Button>
                                   </>
                                 )}
 
@@ -1067,14 +1038,14 @@ export function LoansTab() {
                                 {!loan.viewer_can_verify_funds && !loan.viewer_can_decide && (
                                   <span className="text-xs text-muted-foreground italic">
                                     {loan.is_own_application
-                                      ? "Your own application: another office bearer handles it"
+                                      ? t("Your own application: another office bearer handles it")
                                       : loan.guarantor_status === "pending"
-                                        ? "Waiting for the guarantor to sign"
+                                        ? t("Waiting for the guarantor to sign")
                                         : loan.guarantor_user_id === user?.id
-                                          ? "You are the guarantor: another office bearer handles it"
+                                          ? t("You are the guarantor: another office bearer handles it")
                                       : isVerified
-                                        ? "Awaiting approval"
-                                        : "Awaiting fund verification"}
+                                        ? t("Awaiting approval")
+                                        : t("Awaiting fund verification")}
                                   </span>
                                 )}
 
@@ -1096,38 +1067,38 @@ export function LoansTab() {
                               <Separator className="mb-4" />
                               <div className="grid grid-cols-2 gap-x-8 gap-y-3 text-sm sm:grid-cols-3">
                                 <div>
-                                  <p className="text-xs text-muted-foreground">Principal</p>
+                                  <p className="text-xs text-muted-foreground">{t("Principal")}</p>
                                   <p className="font-nums font-medium">{formatRs(loan.principal_rupees)}</p>
                                 </div>
                                 <div>
-                                  <p className="text-xs text-muted-foreground">Interest Rate</p>
-                                  <p className="font-nums font-medium">{Number(loan.interest_rate)}% p.a.</p>
+                                  <p className="text-xs text-muted-foreground">{t("Interest Rate")}</p>
+                                  <p className="font-nums font-medium">{n(Number(loan.interest_rate))}% p.a.</p>
                                 </div>
                                 <div>
-                                  <p className="text-xs text-muted-foreground">Maturity Date</p>
+                                  <p className="text-xs text-muted-foreground">{t("Maturity Date")}</p>
                                   <p className="font-medium">{formatDate(loan.maturity_date)}</p>
                                 </div>
                                 <div>
-                                  <p className="text-xs text-muted-foreground">Start Date</p>
+                                  <p className="text-xs text-muted-foreground">{t("Start Date")}</p>
                                   <p className="font-medium">{formatDate(loan.start_date)}</p>
                                 </div>
                                 {loan.guarantor_name && (
                                   <div className="col-span-2 sm:col-span-3">
-                                    <p className="text-xs text-muted-foreground">Guarantor</p>
+                                    <p className="text-xs text-muted-foreground">{t("Guarantor")}</p>
                                     <GuarantorLine loan={loan} />
                                   </div>
                                 )}
                                 {loan.collateral_details && (
                                   <div className="col-span-2">
-                                    <p className="text-xs text-muted-foreground">Collateral</p>
+                                    <p className="text-xs text-muted-foreground">{t("Collateral")}</p>
                                     <p className="font-medium">{loan.collateral_details}</p>
                                   </div>
                                 )}
                                 {isVerified && (
                                   <div className="col-span-2 sm:col-span-3">
-                                    <p className="text-xs text-muted-foreground">Funds Verified By</p>
+                                    <p className="text-xs text-muted-foreground">{t("Funds Verified By")}</p>
                                     <p className="font-medium">
-                                      {loan.fund_verified_by} on {formatDate(loan.fund_verified_at)}
+                                      {t("{0} on {1}", loan.fund_verified_by_name ?? t("an office bearer"), formatDate(loan.fund_verified_at))}
                                     </p>
                                   </div>
                                 )}
@@ -1159,15 +1130,12 @@ export function LoansTab() {
       >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Reject Loan Application</DialogTitle>
+            <DialogTitle>{t("Reject Loan Application")}</DialogTitle>
             <DialogDescription>
-              Rejecting {rejectDialogLoan?.applicant_name}'s loan of{" "}
-              {rejectDialogLoan ? formatRs(rejectDialogLoan.principal_rupees) : ""}.
-              Please provide a reason.
-            </DialogDescription>
+              {t("Rejecting {0}'s loan of {1}. Please provide a reason.", rejectDialogLoan?.applicant_name, rejectDialogLoan ? formatRs(rejectDialogLoan.principal_rupees) : "")}</DialogDescription>
           </DialogHeader>
           <Textarea
-            placeholder="Reason for rejection…"
+            placeholder={t("Reason for rejection…")}
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
             rows={3}
@@ -1180,8 +1148,7 @@ export function LoansTab() {
                 setRejectReason("")
               }}
             >
-              Cancel
-            </Button>
+              {t("Cancel")}</Button>
             <Button
               variant="destructive"
               onClick={handleRejectLoan}
@@ -1192,8 +1159,7 @@ export function LoansTab() {
               ) : (
                 <Ban className="mr-2 h-4 w-4" />
               )}
-              Reject Loan
-            </Button>
+              {t("Reject Loan")}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

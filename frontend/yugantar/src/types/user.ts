@@ -13,6 +13,8 @@ export interface User {
   access_roles: string[];
   cooperative_roles: string[];
   joined_at: string;
+  /** Interface and email language (Settings) */
+  preferred_language?: "en" | "ne";
   created_at: string;
   updated_at: string;
 }

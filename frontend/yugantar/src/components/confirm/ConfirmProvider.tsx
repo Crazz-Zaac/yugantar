@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n"
 import { useCallback, useRef, useState } from "react"
 import {
   AlertDialog,
@@ -59,13 +60,13 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
             </div>
           )}
           <AlertDialogFooter>
-            <AlertDialogCancel>{options?.cancelLabel ?? "Cancel"}</AlertDialogCancel>
+            <AlertDialogCancel>{options?.cancelLabel ?? t("Cancel")}</AlertDialogCancel>
             <Button
               variant={options?.destructive ? "destructive" : "default"}
               disabled={noteMissing}
               onClick={() => close({ confirmed: true, note: note.trim() })}
             >
-              {options?.confirmLabel ?? "Confirm"}
+              {options?.confirmLabel ?? t("Confirm")}
             </Button>
           </AlertDialogFooter>
         </AlertDialogContent>

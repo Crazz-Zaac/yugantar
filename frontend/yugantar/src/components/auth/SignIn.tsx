@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n"
 import { useState } from "react"
 import { apiClient } from "@/api/api"
 import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react"
@@ -6,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { ThemeToggle } from "@/components/ThemeToggle"
+import { LanguageToggle } from "@/components/LanguageToggle"
 import { useAuth } from "@/contexts/AuthContext"
 import yugantarLogo from "@/assets/yugantar_logo.svg"
 
@@ -29,7 +31,7 @@ export function SignIn({
     setError("")
 
     if (!email || !password) {
-      setError("Please fill in all fields.")
+      setError(t("Please fill in all fields."))
       return
     }
 
@@ -42,7 +44,7 @@ export function SignIn({
       const message =
         err?.response?.data?.detail ||
         err?.message ||
-        "Invalid email or password. Please try again."
+        t("Invalid email or password. Please try again.")
       setError(message)
     } finally {
       setIsLoading(false)
@@ -56,42 +58,38 @@ export function SignIn({
         <div className="relative z-10">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white">
-              <img src={yugantarLogo} alt="Yugantar" className="h-10 w-10" />
+              <img src={yugantarLogo} alt={t("Yugantar")} className="h-10 w-10" />
             </div>
-            <span className="text-lg font-bold text-sidebar-primary-foreground">Yugantar</span>
+            <span className="text-lg font-bold text-sidebar-primary-foreground">{t("Yugantar")}</span>
           </div>
         </div>
 
         <div className="relative z-10 flex flex-col gap-6">
           <blockquote className="flex flex-col gap-4">
             <p className="text-balance text-2xl font-semibold leading-snug text-sidebar-primary-foreground">
-              Empowering communities through transparent cooperative finance.
-            </p>
+              {t("Empowering communities through transparent cooperative finance.")}</p>
             <p className="text-pretty text-sm leading-relaxed text-sidebar-foreground">
-              Yugantar gives your cooperative the tools to manage savings, loans, and investments
-              with full transparency and trust among members.
-            </p>
+              {t("Yugantar gives your cooperative the tools to manage savings, loans, and investments with full transparency and trust among members.")}</p>
           </blockquote>
 
           <div className="flex gap-8">
             <div>
               <p className="text-2xl font-bold text-primary">2,400+</p>
-              <p className="text-xs text-sidebar-foreground/60">Active Members</p>
+              <p className="text-xs text-sidebar-foreground/60">{t("Active Members")}</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-primary">$12.8M</p>
-              <p className="text-xs text-sidebar-foreground/60">Total Deposits</p>
+              <p className="text-xs text-sidebar-foreground/60">{t("Total Deposits")}</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-primary">99.2%</p>
-              <p className="text-xs text-sidebar-foreground/60">Repayment Rate</p>
+              <p className="text-xs text-sidebar-foreground/60">{t("Repayment Rate")}</p>
             </div>
           </div>
         </div>
 
         <p className="relative z-10 text-xs text-sidebar-foreground/40">
-          &copy; 2026 Yugantar Cooperative. All rights reserved.
-        </p>
+          {t("© 2026 Yugantar Cooperative. All rights reserved.")}</p>
 
         {/* Background decoration */}
         <div className="absolute -bottom-32 -right-32 h-96 w-96 rounded-full bg-primary/5" />
@@ -104,11 +102,12 @@ export function SignIn({
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3 lg:hidden">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white">
-              <img src={yugantarLogo} alt="Yugantar" className="h-10 w-10" />
+              <img src={yugantarLogo} alt={t("Yugantar")} className="h-10 w-10" />
             </div>
-            <span className="text-sm font-bold text-foreground">Yugantar</span>
+            <span className="text-sm font-bold text-foreground">{t("Yugantar")}</span>
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <LanguageToggle />
             <ThemeToggle />
           </div>
         </div>
@@ -117,41 +116,38 @@ export function SignIn({
         <div className="flex flex-1 items-center justify-center px-6 pb-12">
           <div className="w-full max-w-sm">
             <div className="mb-8 flex flex-col gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">Welcome back</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">{t("Welcome back")}</h1>
               <p className="text-sm text-muted-foreground">
-                Sign in to your Yugantar account to continue.
-              </p>
+                {t("Sign in to your Yugantar account to continue.")}</p>
             </div>
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
               {error && (
                 <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive" role="alert">
                   {error}
-                  {error.toLowerCase().includes("verify your email") && email && (
+                  {(error.toLowerCase().includes("verify your email") || error.includes("इमेल ठेगाना प्रमाणित")) && email && (
                     <button
                       type="button"
                       className="mt-1 block text-xs font-medium underline"
                       onClick={() =>
                         apiClient
                           .post("/users/resend-verification", { email })
-                          .then(() => setError("A new verification link has been sent if your email isn't verified yet."))
-                          .catch(() => setError("Could not resend the verification email. Please try again later."))
+                          .then(() => setError(t("A new verification link has been sent if your email isn't verified yet.")))
+                          .catch(() => setError(t("Could not resend the verification email. Please try again later.")))
                       }
                     >
-                      Resend verification email
-                    </button>
+                      {t("Resend verification email")}</button>
                   )}
                 </div>
               )}
 
               <div className="flex flex-col gap-2">
                 <Label htmlFor="email" className="text-sm font-medium text-foreground">
-                  Email address
-                </Label>
+                  {t("Email address")}</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="you@cooperative.org"
+                  placeholder={t("you@cooperative.org")}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-11 bg-background"
@@ -163,20 +159,18 @@ export function SignIn({
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password" className="text-sm font-medium text-foreground">
-                    Password
-                  </Label>
+                    {t("Password")}</Label>
                   <button
                     type="button"
                     className="text-xs font-medium text-primary hover:text-primary/80"
                   >
-                    Forgot password?
-                  </button>
+                    {t("Forgot password?")}</button>
                 </div>
                 <div className="relative">
                   <Input
                     id="password"
                     type={showPassword ? "text" : "password"}
-                    placeholder="Enter your password"
+                    placeholder={t("Enter your password")}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-11 bg-background pr-10"
@@ -187,7 +181,7 @@ export function SignIn({
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-label={showPassword ? t("Hide password") : t("Show password")}
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -202,20 +196,17 @@ export function SignIn({
                   disabled={isLoading}
                 />
                 <Label htmlFor="remember" className="text-sm text-muted-foreground">
-                  Remember me for 30 days
-                </Label>
+                  {t("Remember me for 30 days")}</Label>
               </div>
 
               <Button type="submit" className="h-11 gap-2 font-medium" disabled={isLoading}>
                 {isLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Signing in...
-                  </>
+                    {t("Signing in...")}</>
                 ) : (
                   <>
-                    Sign in
-                    <ArrowRight className="h-4 w-4" />
+                    {t("Sign in")}<ArrowRight className="h-4 w-4" />
                   </>
                 )}
               </Button>
@@ -226,18 +217,17 @@ export function SignIn({
                 <div className="w-full border-t" />
               </div>
               <div className="relative flex justify-center">
-                <span className="bg-background px-3 text-xs text-muted-foreground">Or Sign Up</span>
+                <span className="bg-background px-3 text-xs text-muted-foreground">{t("Or Sign Up")}</span>
               </div>
             </div>
             <p className="mt-8 text-center text-sm text-muted-foreground">
-              {"Don't have an account? "}
+              {t("Don't have an account? ")}
               <button
                 type="button"
                 onClick={onGoToSignUp}
                 className="font-semibold text-primary hover:text-primary/80"
               >
-                Create one
-              </button>
+                {t("Create one")}</button>
             </p>
           </div>
         </div>

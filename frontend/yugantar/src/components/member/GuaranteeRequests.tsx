@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n"
 import { useEffect, useState } from "react"
 import { Handshake, Loader2, PenLine, XCircle } from "lucide-react"
 import { toast } from "sonner"
@@ -48,29 +49,34 @@ export function GuaranteeRequests({ onChanged }: { onChanged?: () => void }) {
     const answer = await confirm(
       accept
         ? {
-            title: `Sign as guarantor for ${loan.applicant_name ?? "this member"}?`,
-            description: `You agree to stand surety for their loan of ${amount}. Your signature is recorded as "${myName}" on ${formatDateTime(new Date().toISOString())} and appears on the loan agreement.`,
-            confirmLabel: "Sign as guarantor",
+            title: t("Sign as guarantor for {0}?", loan.applicant_name ?? t("this member")),
+            description: t(
+              "You agree to stand surety for their loan of {0}. Your signature is recorded as \"{1}\" on {2} and appears on the loan agreement.",
+              amount,
+              myName,
+              formatDateTime(new Date().toISOString()),
+            ),
+            confirmLabel: t("Sign as guarantor"),
           }
         : {
-            title: "Decline to be guarantor?",
-            description: "The application will be closed and the member told. They can apply again with someone else.",
-            confirmLabel: "Decline",
+            title: t("Decline to be guarantor?"),
+            description: t("The application will be closed and the member told. They can apply again with someone else."),
+            confirmLabel: t("Decline"),
             destructive: true,
-            note: { label: "Reason (optional, shared with the member)", placeholder: "e.g. I can't commit this year" },
+            note: { label: t("Reason (optional, shared with the member)"), placeholder: t("e.g. I can't commit this year") },
           },
     )
     if (!answer.confirmed) return
     setBusyId(loan.id)
     try {
       await apiClient.post(`/loans/${loan.id}/guarantee`, { accept, note: accept ? null : answer.note || null })
-      toast.success(accept ? "You signed as guarantor" : "You declined", {
-        description: accept ? "The application now goes to the Treasurer." : "The member has been told.",
+      toast.success(accept ? t("You signed as guarantor") : t("You declined"), {
+        description: accept ? t("The application now goes to the Treasurer.") : t("The member has been told."),
       })
       setReloadKey((k) => k + 1)
       onChanged?.()
     } catch (err) {
-      toast.error(apiError(err, "Couldn't record your answer."))
+      toast.error(apiError(err, t("Couldn't record your answer.")))
     } finally {
       setBusyId(null)
     }
@@ -81,32 +87,27 @@ export function GuaranteeRequests({ onChanged }: { onChanged?: () => void }) {
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2 text-sm font-semibold">
           <Handshake className="h-4 w-4 text-primary" />
-          {requests.length > 1 ? "Requests" : "A request"} to be a guarantor
-        </CardTitle>
+          {requests.length > 1 ? t("Requests") : t("A request")} {t(" to be a guarantor")}</CardTitle>
         <CardDescription>
-          A member chose you as guarantor. The loan only goes to the Treasurer once you sign.
-        </CardDescription>
+          {t("A member chose you as guarantor. The loan only goes to the Treasurer once you sign.")}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {requests.map((loan) => (
           <div key={loan.id} className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-4">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">
-                {loan.applicant_name ?? "A member"} · <span className="font-nums">{formatRs(loan.principal_rupees)}</span>
+                {loan.applicant_name ?? t("A member")} · <span className="font-nums">{formatRs(loan.principal_rupees)}</span>
               </p>
               <p className="text-xs text-muted-foreground">
-                {loan.purpose ?? "Loan"} · {Number(loan.interest_rate)}% per year · until {formatDate(loan.maturity_date)} · asked{" "}
-                {formatDate(loan.created_at)}
+                {t("{0} · {1}% per year · until {2} · asked {3}", loan.purpose ?? t("Loan"), Number(loan.interest_rate), formatDate(loan.maturity_date), formatDate(loan.created_at))}
               </p>
             </div>
             <div className="flex gap-2">
               <Button size="sm" variant="outline" disabled={busyId === loan.id} onClick={() => respond(loan, false)}>
-                <XCircle className="mr-2 h-4 w-4" /> Decline
-              </Button>
+                <XCircle className="mr-2 h-4 w-4" /> {t(" Decline")}</Button>
               <Button size="sm" disabled={busyId === loan.id} onClick={() => respond(loan, true)}>
                 {busyId === loan.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <PenLine className="mr-2 h-4 w-4" />}
-                Sign as guarantor
-              </Button>
+                {t("Sign as guarantor")}</Button>
             </div>
           </div>
         ))}

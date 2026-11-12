@@ -1,3 +1,4 @@
+import { roleName, t } from "@/lib/i18n"
 import { Home, Landmark, CreditCard, ScrollText, Settings, PanelLeftClose, PanelLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
@@ -30,7 +31,7 @@ export function MemberSidebar({
   onToggleCollapse: () => void
 }) {
   const { user } = useAuth()
-  const displayName = user ? `${user.first_name} ${user.last_name}`.trim() : "Member"
+  const displayName = user ? `${user.first_name} ${user.last_name}`.trim() : t("Member")
   const initials = user
     ? `${user.first_name?.[0] ?? ""}${user.last_name?.[0] ?? ""}`.toUpperCase()
     : "M"
@@ -39,10 +40,13 @@ export function MemberSidebar({
     .map((r) => String(r).toLowerCase())
     .filter((r) => r !== "member")
   const memberId = officeRoles.length
-    ? officeRoles.map((r) => r[0].toUpperCase() + r.slice(1)).join(" · ")
-    : "Member"
+    ? officeRoles.map((r) => roleName(r)).join(" · ")
+    : t("Member")
 
   return (
+    // Tooltips are remounted (closed) whenever the sidebar collapses or expands:
+    // hovering links while expanded leaves them "open" with no bubble, and they
+    // would all pop up at once on collapse.
     <TooltipProvider delayDuration={0}>
       <aside
         className={cn(
@@ -53,12 +57,12 @@ export function MemberSidebar({
         {/* Header */}
         <div className={cn("flex items-center py-5", collapsed ? "justify-center px-3" : "gap-3 px-6")}>
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white">
-            <img src={yugantarLogo} alt="Yugantar" className="h-10 w-10" />
+            <img src={yugantarLogo} alt={t("Yugantar")} className="h-10 w-10" />
           </div>
           {!collapsed && (
             <div className="min-w-0 flex-1">
-              <h1 className="text-sm font-bold text-sidebar-primary-foreground">Yugantar</h1>
-              <p className="text-[11px] text-sidebar-foreground/60">Member Portal</p>
+              <h1 className="text-sm font-bold text-sidebar-primary-foreground">{t("Yugantar")}</h1>
+              <p className="text-[11px] text-sidebar-foreground/60">{t("Member Portal")}</p>
             </div>
           )}
         </div>
@@ -70,7 +74,7 @@ export function MemberSidebar({
           <ul className="flex flex-col gap-1" role="list">
             {navItems.map((item) => (
               <li key={item.id}>
-                <Tooltip>
+                <Tooltip key={collapsed ? "collapsed" : "expanded"}>
                   <TooltipTrigger asChild>
                     <button
                       onClick={() => onTabChange(item.id)}
@@ -83,12 +87,12 @@ export function MemberSidebar({
                       )}
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
-                      {!collapsed && <span>{item.label}</span>}
+                      {!collapsed && <span>{t(item.label)}</span>}
                     </button>
                   </TooltipTrigger>
                   {collapsed && (
                     <TooltipContent side="right" sideOffset={8}>
-                      {item.label}
+                      {t(item.label)}
                     </TooltipContent>
                   )}
                 </Tooltip>
@@ -99,7 +103,7 @@ export function MemberSidebar({
 
         {/* Collapse toggle */}
         <div className="px-3 pb-1">
-          <Tooltip>
+          <Tooltip key={collapsed ? "collapsed" : "expanded"}>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
@@ -109,15 +113,14 @@ export function MemberSidebar({
                   collapsed ? "w-full" : "w-8"
                 )}
                 onClick={onToggleCollapse}
-                aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+                aria-label={collapsed ? t("Expand sidebar") : t("Collapse sidebar")}
               >
                 {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
               </Button>
             </TooltipTrigger>
             {collapsed && (
               <TooltipContent side="right" sideOffset={8}>
-                Expand sidebar
-              </TooltipContent>
+                {t("Expand sidebar")}</TooltipContent>
             )}
           </Tooltip>
         </div>
@@ -126,7 +129,7 @@ export function MemberSidebar({
 
         {/* User info */}
         <div className={cn("flex items-center py-4", collapsed ? "justify-center px-3" : "gap-3 px-4")}>
-          <Tooltip>
+          <Tooltip key={collapsed ? "collapsed" : "expanded"}>
             <TooltipTrigger asChild>
               <Avatar className="h-9 w-9 shrink-0 bg-sidebar-accent">
                 <AvatarFallback className="bg-sidebar-accent text-xs font-semibold text-sidebar-foreground">

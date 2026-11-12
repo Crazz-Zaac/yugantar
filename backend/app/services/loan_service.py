@@ -11,7 +11,7 @@ from app.models.policy.loan_policy import LoanPolicy
 from app.models.policy.base_policy import PolicyStatus
 from app.models.user_model import User
 from app.models.mixins.money import MoneyMixin
-from app.services.duties import can_be_guarantor
+from app.services.duties import can_be_guarantor, name_with_role
 from app.utils.local_time import local_day_bounds
 from app.services.duties import Duty, denial_reason
 from app.schemas.loan_schema import (
@@ -66,10 +66,22 @@ def _full_name(user: "User | None") -> str | None:
     return f"{user.first_name} {user.last_name}".strip() if user else None
 
 
+def _name_for_email(session: Session, value: str | None) -> str | None:
+    """ "Name (Role)" of the user with this email; other text (e.g. "Guarantor X") as is."""
+    if not value:
+        return None
+    user = session.exec(select(User).where(User.email == value)).first() if "@" in value else None
+    return name_with_role(user) or (None if "@" in value else value)
+
+
 def loan_response(session: Session, loan: Loan) -> LoanResponse:
-    """LoanResponse with applicant and guarantor names filled in."""
+    """LoanResponse with applicant, guarantor and reviewer names filled in."""
     guarantor = session.get(User, loan.guarantor_user_id) if loan.guarantor_user_id else None
-    return _loan_to_response(loan, _full_name(session.get(User, loan.user_id)), _full_name(guarantor))
+    response = _loan_to_response(loan, _full_name(session.get(User, loan.user_id)), _full_name(guarantor))
+    response.approved_by_name = _name_for_email(session, loan.approved_by)
+    response.rejected_by_name = _name_for_email(session, loan.rejected_by)
+    response.fund_verified_by_name = _name_for_email(session, loan.fund_verified_by)
+    return response
 
 
 class LoanService:

@@ -1,3 +1,5 @@
+import { formatRs } from "@/lib/money"
+import { t, n } from "@/lib/i18n"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { Loader2, PenLine, Search } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -57,7 +59,7 @@ const STATUS_CLASS: Record<Status, string> = {
   void: "border-destructive/30 bg-destructive/10 text-destructive",
 }
 
-const rs = (n: number | string) => `Rs. ${Number(n).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
+const rs = (v: number | string) => formatRs(v)
 
 export function PoliciesTab() {
   const [rows, setRows] = useState<PolicyRow[]>([])
@@ -77,7 +79,7 @@ export function PoliciesTab() {
         ...(dep.data as RawDeposit[]).map((p) => ({
           type: "deposit" as const,
           id: p.policy_id,
-          label: `Deposit policy (${rs(Number(p.amount_paisa) / 100)}, ${p.schedule_type.replace(/_/g, " ")})`,
+          label: t("Deposit policy ({0}, {1})", rs(Number(p.amount_paisa) / 100), t(p.schedule_type === "occasional" ? "occasional" : "monthly")),
           status: p.status,
           effectiveFrom: p.effective_from,
           createdBy: p.created_by,
@@ -85,7 +87,7 @@ export function PoliciesTab() {
         ...(loan.data as RawLoan[]).map((p) => ({
           type: "loan" as const,
           id: p.policy_id,
-          label: `Loan policy (${rs(p.min_loan_amount)}–${rs(p.max_loan_amount)}, ${Number(p.interest_rate)}%)`,
+          label: t("Loan policy ({0}–{1}, {2}%)", rs(p.min_loan_amount), rs(p.max_loan_amount), Number(p.interest_rate)),
           status: p.status,
           effectiveFrom: p.effective_from,
           createdBy: p.created_by,
@@ -108,7 +110,7 @@ export function PoliciesTab() {
       summaries.forEach((s) => s && (map[s.policy_id] = s))
       setProgress(map)
     } catch (err) {
-      setError(apiError(err, "Could not load policies."))
+      setError(apiError(err, t("Could not load policies.")))
     } finally {
       setLoading(false)
     }
@@ -135,12 +137,9 @@ export function PoliciesTab() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Policies</h2>
+        <h2 className="text-lg font-semibold text-foreground">{t("Policies")}</h2>
         <p className="text-sm text-muted-foreground">
-          The Treasurer drafts policies; members then have one week to sign, and a policy takes effect only if every member has signed by the deadline. In extreme cases you can
-          sign on behalf of an absent member, after consulting them and with the President's, Treasurer's and
-          Secretary's authorisation.
-        </p>
+          {t("The Treasurer drafts policies; members then have one week to sign, and a policy takes effect only if every member has signed by the deadline. In extreme cases you can sign on behalf of an absent member, after consulting them and with the President's, Treasurer's and Secretary's authorisation.")}</p>
       </div>
 
       <ProxyRequestsPanel mode="admin" refreshKey={proxyRefresh} onChanged={load} />
@@ -149,14 +148,14 @@ export function PoliciesTab() {
         <CardHeader className="gap-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <CardTitle className="text-sm font-semibold">All policies</CardTitle>
-              <CardDescription>{filtered.length} shown</CardDescription>
+              <CardTitle className="text-sm font-semibold">{t("All policies")}</CardTitle>
+              <CardDescription>{t("{0} shown", filtered.length)}</CardDescription>
             </div>
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 className="pl-8"
-                placeholder="Search policies"
+                placeholder={t("Search policies")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -171,7 +170,7 @@ export function PoliciesTab() {
                 className="h-7 text-xs"
                 onClick={() => setStatusFilter(s)}
               >
-                {s === "all" ? "All" : STATUS_LABEL[s]} ({counts[s] ?? 0})
+                {s === "all" ? t("All") : t(STATUS_LABEL[s])} ({n(counts[s] ?? 0)})
               </Button>
             ))}
           </div>
@@ -182,11 +181,11 @@ export function PoliciesTab() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="text-xs">Policy</TableHead>
-                  <TableHead className="text-xs">Status</TableHead>
-                  <TableHead className="text-xs">Signatures</TableHead>
-                  <TableHead className="text-xs">Created by</TableHead>
-                  <TableHead className="w-28 text-xs">Actions</TableHead>
+                  <TableHead className="text-xs">{t("Policy")}</TableHead>
+                  <TableHead className="text-xs">{t("Status")}</TableHead>
+                  <TableHead className="text-xs">{t("Signatures")}</TableHead>
+                  <TableHead className="text-xs">{t("Created by")}</TableHead>
+                  <TableHead className="w-28 text-xs">{t("Actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -199,8 +198,7 @@ export function PoliciesTab() {
                 ) : filtered.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
-                      No policies.
-                    </TableCell>
+                      {t("No policies.")}</TableCell>
                   </TableRow>
                 ) : (
                   filtered.map((r) => {
@@ -210,19 +208,18 @@ export function PoliciesTab() {
                         <TableCell className="text-sm">{r.label}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className={`text-xs ${STATUS_CLASS[r.status]}`}>
-                            {STATUS_LABEL[r.status]}
+                            {t(STATUS_LABEL[r.status])}
                           </Badge>
                         </TableCell>
                         <TableCell className="min-w-40">
                           {p ? (
                             <div className="flex flex-col gap-1">
                               <span className="text-xs">
-                                {p.approved}/{p.required} signed
-                                {p.rejected > 0 && <span className="text-destructive"> · {p.rejected} rejected</span>}
+                                {p.approved}/{p.required} {t(" signed")}{p.rejected > 0 && <span className="text-destructive"> {t(" · {0} rejected", p.rejected)}</span>}
                               </span>
                               <Progress value={p.required ? (p.approved / p.required) * 100 : 0} className="h-1.5" />
                               {p.signing_deadline && (
-                                <span className="text-xs text-muted-foreground">{timeLeft(p.signing_deadline) ?? "closing"}</span>
+                                <span className="text-xs text-muted-foreground">{timeLeft(p.signing_deadline) ?? t("closing")}</span>
                               )}
                             </div>
                           ) : (
@@ -239,8 +236,7 @@ export function PoliciesTab() {
                               onClick={() => setTarget({ type: r.type, id: r.id, label: r.label })}
                             >
                               <PenLine className="mr-1.5 h-3.5 w-3.5" />
-                              Signatures
-                            </Button>
+                              {t("Signatures")}</Button>
                           )}
                         </TableCell>
                       </TableRow>
@@ -258,7 +254,7 @@ export function PoliciesTab() {
         onClose={() => setTarget(null)}
         onChanged={() => {
           load()
-          setProxyRefresh((n) => n + 1)
+          setProxyRefresh((k) => k + 1)
         }}
         canRequestProxy
       />

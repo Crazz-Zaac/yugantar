@@ -1,6 +1,6 @@
 import uuid
 from sqlmodel import SQLModel, Field
-from sqlalchemy import Column, String
+from sqlalchemy import JSON, Column, String
 from datetime import datetime, timezone
 from typing import Optional
 from enum import Enum
@@ -48,6 +48,11 @@ class Notification(SQLModel, table=True):
 
     # For loan workflow notifications, link to the loan
     loan_id: Optional[uuid.UUID] = Field(default=None, nullable=True)
+
+    # Message catalogue key and values (app/i18n.py): the title/message are
+    # rendered in the reader's language. title/message keep the English text.
+    i18n_key: Optional[str] = Field(default=None, max_length=60, nullable=True)
+    i18n_args: Optional[dict] = Field(default=None, sa_column=Column(JSON, nullable=True))
 
     is_read: bool = Field(default=False)
 

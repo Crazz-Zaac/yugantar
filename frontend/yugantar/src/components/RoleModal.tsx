@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n"
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -63,8 +64,7 @@ export function RoleModal({ isOpen, onClose, user, onSave }: RoleModalProps) {
         <div className="flex items-center justify-between p-6 border-b border-border">
           <div>
             <h2 className="text-xl font-semibold text-foreground">
-              Edit User Roles
-            </h2>
+              {t("Edit User Roles")}</h2>
             <p className="text-sm text-muted-foreground mt-1">
               {user.first_name} {user.last_name} ({user.email})
             </p>
@@ -83,11 +83,9 @@ export function RoleModal({ isOpen, onClose, user, onSave }: RoleModalProps) {
           <div className="space-y-3">
             <div>
               <h3 className="font-semibold text-foreground mb-1">
-                Access Role
-              </h3>
+                {t("Access Role")}</h3>
               <p className="text-sm text-muted-foreground">
-                Select one system access level for this user
-              </p>
+                {t("Select one system access level for this user")}</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {ACCESS_ROLES.map(role => (
@@ -121,11 +119,9 @@ export function RoleModal({ isOpen, onClose, user, onSave }: RoleModalProps) {
           <div className="space-y-3">
             <div>
               <h3 className="font-semibold text-foreground mb-1">
-                Cooperative Role
-              </h3>
+                {t("Cooperative Role")}</h3>
               <p className="text-sm text-muted-foreground">
-                Select one cooperative position for this user
-              </p>
+                {t("Select one cooperative position for this user")}</p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {COOPERATIVE_ROLES.map(role => (
@@ -159,10 +155,9 @@ export function RoleModal({ isOpen, onClose, user, onSave }: RoleModalProps) {
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 p-6 border-t border-border">
           <Button variant="outline" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
+            {t("Cancel")}</Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Saving..." : "Save Changes"}
+            {saving ? t("Saving...") : t("Save Changes")}
           </Button>
         </div>
       </div>

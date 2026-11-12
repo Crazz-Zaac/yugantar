@@ -1,7 +1,7 @@
+import { t } from "@/lib/i18n"
 import { Bell, AlertTriangle, CheckCircle2, Info, ShieldAlert, FileCheck, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { useState, useEffect, useCallback } from "react"
 import { apiClient } from "@/api/api"
@@ -47,12 +47,12 @@ export function NotificationPanel() {
     if (open) fetchNotifications()
   }, [open, fetchNotifications])
 
-  const unreadCount = items.filter((n) => !n.is_read).length
+  const unreadCount = items.filter((item) => !item.is_read).length
 
   const markAllRead = async () => {
     try {
       await apiClient.patch("/notifications/read-all")
-      setItems((prev) => prev.map((n) => ({ ...n, is_read: true })))
+      setItems((prev) => prev.map((item) => ({ ...item, is_read: true })))
     } catch {
       // silent
     }
@@ -61,7 +61,7 @@ export function NotificationPanel() {
   const markRead = async (id: string) => {
     try {
       await apiClient.patch(`/notifications/${id}/read`)
-      setItems((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)))
+      setItems((prev) => prev.map((item) => (item.id === id ? { ...item, is_read: true } : item)))
     } catch {
       // silent
     }
@@ -122,19 +122,19 @@ export function NotificationPanel() {
     const now = new Date()
     const diffMs = now.getTime() - d.getTime()
     const diffMins = Math.floor(diffMs / 60_000)
-    if (diffMins < 1) return "Just now"
-    if (diffMins < 60) return `${diffMins}m ago`
+    if (diffMins < 1) return t("Just now")
+    if (diffMins < 60) return t("{0}m ago", diffMins)
     const diffHrs = Math.floor(diffMins / 60)
-    if (diffHrs < 24) return `${diffHrs}h ago`
+    if (diffHrs < 24) return t("{0}h ago", diffHrs)
     const diffDays = Math.floor(diffHrs / 24)
-    if (diffDays < 7) return `${diffDays}d ago`
+    if (diffDays < 7) return t("{0}d ago", diffDays)
     return formatShortDate(iso)
   }
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg" aria-label="Notifications">
+        <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg" aria-label={t("Notifications")}>
           <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
             <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
@@ -146,24 +146,23 @@ export function NotificationPanel() {
       <PopoverContent className="w-96 p-0" align="end">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">Notifications</h3>
+            <h3 className="text-sm font-semibold text-foreground">{t("Notifications")}</h3>
             {unreadCount > 0 && (
               <Badge variant="secondary" className="text-xs">
-                {unreadCount} new
-              </Badge>
+                {t("{0} new", unreadCount)}</Badge>
             )}
           </div>
           {unreadCount > 0 && (
             <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={markAllRead}>
-              Mark all read
-            </Button>
+              {t("Mark all read")}</Button>
           )}
         </div>
-        <ScrollArea className="max-h-80">
+        {/* Native scrolling: Radix ScrollArea's viewport can't size itself against a max-height */}
+        <div className="max-h-[min(24rem,70vh)] overflow-y-auto overscroll-contain">
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
               <Bell className="mb-2 h-8 w-8 opacity-40" />
-              <p className="text-sm">No notifications</p>
+              <p className="text-sm">{t("No notifications")}</p>
             </div>
           ) : (
             <div className="divide-y">
@@ -187,7 +186,7 @@ export function NotificationPanel() {
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </PopoverContent>
     </Popover>
   )

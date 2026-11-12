@@ -13,6 +13,17 @@ export async function downloadFile(url: string, filename: string): Promise<void>
   setTimeout(() => URL.revokeObjectURL(href), 1000)
 }
 
+/** A policy's adoption record (letterhead PDF); any member, once adopted. */
+export const downloadPolicyRecord = (type: "deposit" | "loan", policyId: string, reference?: string | null) =>
+  downloadFile(
+    `/policies/${type}/${policyId}/record`,
+    `${reference ? reference.replaceAll("/", "-") : `policy-record-${policyId.split("-")[0].toUpperCase()}`}.pdf`,
+  )
+
+/** Preview of a policy's record while signing is open (watermarked, not stored). */
+export const downloadPolicyPreview = (type: "deposit" | "loan", policyId: string) =>
+  downloadFile(`/policies/${type}/${policyId}/record/preview`, `policy-preview-${policyId.split("-")[0].toUpperCase()}.pdf`)
+
 /** Loan agreement PDF for a loan (applicant, guarantor, office bearers). */
 export const downloadLoanAgreement = (loanId: string) =>
   downloadFile(`/loans/${loanId}/agreement`, `loan-agreement-LN-${loanId.split("-")[0].toUpperCase()}.pdf`)

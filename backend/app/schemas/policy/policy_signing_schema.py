@@ -15,6 +15,13 @@ from app.models.policy.policy_signature import ProxyRequestStatus, SignatureStat
 class SignRequest(SQLModel):
     decision: SignatureStatus  # "approved" or "rejected"
     reason: Optional[str] = Field(default=None, max_length=500)
+    # Hand signature as a data URL (data:image/png;base64,...), drawn or uploaded
+    signature_image: Optional[str] = None
+
+
+class OpenForSigningRequest(SQLModel):
+    """The Treasurer signs when opening a policy; optional hand signature."""
+    signature_image: Optional[str] = None
 
 
 class ProxyRequestCreate(SQLModel):
@@ -77,13 +84,35 @@ class SignatureOut(UTCOut):
     signed_at: Optional[datetime] = None
     reason: Optional[str] = None
     counted: bool = True  # False if the member has since been disabled
+    has_signature_image: bool = False  # a hand signature is on file
     proxy: Optional[ProxyRequestOut] = None  # set when signed on their behalf
+
+
+class PolicyTermOut(SQLModel):
+    label: str
+    value: str
+
+
+class StatementPreview(SQLModel):
+    """Generated wording for a policy being drafted."""
+    statement_en: str
+    statement_ne: str
 
 
 class SigningSummary(UTCOut):
     policy_type: str
     policy_id: uuid.UUID
     label: str
+    # What the policy says (the same wording as the PDF record)
+    title: str = ""
+    statement: str = ""
+    statement_ne: str = ""  # Nepali wording
+    statement_custom: bool = False  # the Treasurer edited the wording
+    terms: List[PolicyTermOut] = []
+    # Adoption record (PDF): available once adopted; reference set once generated
+    record_available: bool = False
+    preview_available: bool = False  # open for signing: a watermarked preview PDF
+    record_reference: Optional[str] = None
     status: PolicyStatus
     signing_deadline: Optional[datetime] = None
     deadline_passed: bool = False

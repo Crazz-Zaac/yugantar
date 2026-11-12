@@ -1,4 +1,5 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import { getLang } from "@/lib/i18n";
 import { ENV } from '@/config/env';
 
 /*
@@ -88,6 +89,8 @@ export function onAuthBroadcast(handler: (message: AuthBroadcast) => void): () =
 // ─── Interceptors ──────────────────────────────────────────────────────────
 
 apiClient.interceptors.request.use((config) => {
+  // Server texts (errors, notifications) in the interface language
+  config.headers["X-Language"] = getLang();
   const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;

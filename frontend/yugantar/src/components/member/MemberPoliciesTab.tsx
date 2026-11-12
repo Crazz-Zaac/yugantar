@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react"
+import { t } from "@/lib/i18n"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import {
     Plus,
     AlertCircle,
@@ -39,9 +40,12 @@ import PolicySigningDialog from "@/components/policies/PolicySigningDialog"
 import ProxyRequestsPanel from "@/components/policies/ProxyRequestsPanel"
 import { PolicyBoard } from "@/components/policies/PolicyBoard"
 import type { SigningTarget } from "@/components/policies/signing"
-import { fromZoneInputValue, nowZoneInputValue, toZoneInputValue, TIME_ZONE_LABEL } from "@/lib/datetime"
+import { formatDateTime, fromZoneInputValue, nowZoneInputValue, toZoneInputValue, TIME_ZONE_LABEL } from "@/lib/datetime"
+import { SignatureDialog } from "@/components/signature/SignatureDialog"
+import { PolicyWordingEditor, type Wording } from "@/components/policies/PolicyWordingEditor"
 import { toast } from "sonner"
-import { useConfirm } from "@/components/confirm/confirmContext"
+import { formatRs } from "@/lib/money"
+import { apiError } from "@/components/policies/signing"
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -56,6 +60,8 @@ interface DepositPolicy {
     due_day_of_month: number | null
     allowed_months: number | null
     max_occurrences: number | null
+    statement_en?: string | null
+    statement_ne?: string | null
     status: PolicyStatus
     effective_from: string
     effective_to: string | null
@@ -76,6 +82,8 @@ interface LoanPolicy {
     requires_collateral: boolean
     status: PolicyStatus
     emi_applicable: boolean
+    statement_en?: string | null
+    statement_ne?: string | null
     effective_from: string
     effective_to: string | null
     created_by: string | null
@@ -87,6 +95,55 @@ interface LoanPolicy {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 // ─── Deposit Policy Form Defaults ────────────────────────────────────────────
+
+/** "= Rs 250 on a Rs 5,000 deposit": the fine is a one-off % of the deposit amount. */
+function LateFineHint({ amount, percent }: { amount: string; percent: string }) {
+    const a = Number(amount)
+    const p = Number(percent)
+    if (!amount || !percent || !Number.isFinite(a) || !Number.isFinite(p) || a <= 0 || p < 0) {
+        return <p className="text-[11px] text-muted-foreground">{t("A one-off % of the deposit amount.")}</p>
+    }
+    return (
+        <p className="text-[11px] text-muted-foreground">
+            = <span className="font-nums font-semibold text-foreground">{formatRs(Math.round(a * p) / 100)}</span> {t(" on a")}{" "}
+            {formatRs(a)} {t(" deposit")}</p>
+    )
+}
+
+type DepositForm = typeof emptyDepositForm
+type LoanForm = typeof emptyLoanForm
+
+/** The deposit policy terms as the API expects them. */
+function depositPayload(form: DepositForm): Record<string, unknown> {
+    const payload: Record<string, unknown> = {
+        amount_paisa: Math.round(Number(form.amount_paisa) * 100),
+        late_deposit_fine: Number(form.late_deposit_fine),
+        schedule_type: form.schedule_type,
+        effective_from: form.effective_from ? fromZoneInputValue(form.effective_from) : undefined,
+        effective_to: form.effective_to ? fromZoneInputValue(form.effective_to) : null,
+    }
+    if (form.due_day_of_month) payload.due_day_of_month = Number(form.due_day_of_month)
+    if (form.allowed_months) payload.allowed_months = Number(form.allowed_months)
+    if (form.max_occurrences) payload.max_occurrences = Number(form.max_occurrences)
+    return payload
+}
+
+/** The loan policy terms as the API expects them. */
+function loanPayload(form: LoanForm): Record<string, unknown> {
+    return {
+        max_loan_amount: Number(form.max_loan_amount),
+        min_loan_amount: Number(form.min_loan_amount),
+        interest_rate: Number(form.interest_rate),
+        grace_period_days: Number(form.grace_period_days),
+        max_renewals: Number(form.max_renewals),
+        requires_collateral: form.requires_collateral,
+        emi_applicable: form.emi_applicable,
+        effective_from: form.effective_from ? fromZoneInputValue(form.effective_from) : undefined,
+        effective_to: form.effective_to ? fromZoneInputValue(form.effective_to) : null,
+    }
+}
+
+const AUTO_WORDING: Wording = { en: null, ne: null }
 
 const emptyDepositForm = {
     amount_paisa: "",
@@ -137,14 +194,30 @@ export function MemberPoliciesTab() {
     const [depositForm, setDepositForm] = useState(emptyDepositForm)
     const [loanForm, setLoanForm] = useState(emptyLoanForm)
     const [submitting, setSubmitting] = useState(false)
-    const confirm = useConfirm()
+    const [depositWording, setDepositWording] = useState<Wording>(AUTO_WORDING)
+    const [loanWording, setLoanWording] = useState<Wording>(AUTO_WORDING)
+    // Terms for the live wording preview (null until the key numbers are filled in)
+    const depositPreview = useMemo(
+        () => (Number(depositForm.amount_paisa) > 0 ? depositPayload(depositForm) : null),
+        [depositForm],
+    )
+    const loanPreview = useMemo(
+        () =>
+            Number(loanForm.min_loan_amount) > 0 && Number(loanForm.max_loan_amount) > 0 && loanForm.interest_rate !== ""
+                ? loanPayload(loanForm)
+                : null,
+        [loanForm],
+    )
     const [signingTarget, setSigningTarget] = useState<SigningTarget | null>(null)
     const [boardReloadKey, setBoardReloadKey] = useState(0)
     const [deleteConfirm, setDeleteConfirm] = useState<{ type: "deposit" | "loan"; id: string } | null>(null)
 
     // Fetch
+    // Only the first load shows the full-page spinner. Later refreshes (after
+    // signing, opening, editing) keep the page mounted: swapping it for the
+    // spinner unmounted the open signing dialog, which then re-opened ("blinked")
+    // and lost its "You signed" confirmation.
     const fetchPolicies = useCallback(async () => {
-        setLoading(true)
         setError(null)
         try {
             const [depRes, loanRes] = await Promise.all([
@@ -155,7 +228,7 @@ export function MemberPoliciesTab() {
             setLoanPolicies(loanRes.data)
             setBoardReloadKey((k) => k + 1)
         } catch {
-            setError("Failed to load policies. Please try again.")
+            setError(t("Failed to load policies. Please try again."))
         } finally {
             setLoading(false)
         }
@@ -170,6 +243,7 @@ export function MemberPoliciesTab() {
     const openDepositCreate = () => {
         setEditingDeposit(null)
         setDepositForm(emptyDepositForm)
+        setDepositWording(AUTO_WORDING)
         setDepositDialogOpen(true)
     }
 
@@ -185,29 +259,18 @@ export function MemberPoliciesTab() {
             effective_from: toZoneInputValue(p.effective_from),
             effective_to: toZoneInputValue(p.effective_to),
         })
+        setDepositWording({ en: p.statement_en ?? null, ne: p.statement_ne ?? null })
         setDepositDialogOpen(true)
     }
 
     const submitDeposit = async () => {
         setSubmitting(true)
         try {
-            const payload: Record<string, unknown> = {
-                amount_paisa: Math.round(Number(depositForm.amount_paisa) * 100),
-                late_deposit_fine: Number(depositForm.late_deposit_fine),
-                schedule_type: depositForm.schedule_type,
-                effective_from: depositForm.effective_from
-                    ? fromZoneInputValue(depositForm.effective_from)
-                    : undefined,
-                effective_to: depositForm.effective_to
-                    ? fromZoneInputValue(depositForm.effective_to)
-                    : null,
+            const payload = {
+                ...depositPayload(depositForm),
+                statement_en: depositWording.en?.trim() || null,
+                statement_ne: depositWording.ne?.trim() || null,
             }
-            if (depositForm.due_day_of_month)
-                payload.due_day_of_month = Number(depositForm.due_day_of_month)
-            if (depositForm.allowed_months)
-                payload.allowed_months = Number(depositForm.allowed_months)
-            if (depositForm.max_occurrences)
-                payload.max_occurrences = Number(depositForm.max_occurrences)
 
             if (editingDeposit) {
                 await apiClient.put(`/policies/deposit/${editingDeposit.policy_id}`, {
@@ -218,9 +281,13 @@ export function MemberPoliciesTab() {
                 await apiClient.post("/policies/deposit", payload)
             }
             setDepositDialogOpen(false)
+            toast.success(editingDeposit ? t("Deposit policy updated") : t("Deposit policy created"), {
+                description: t("It's a draft until you open it for member signatures."),
+            })
             fetchPolicies()
-        } catch {
-            setError("Failed to save deposit policy.")
+        } catch (err) {
+            // Shown as a toast: the page's error banner is hidden behind the open dialog
+            toast.error(apiError(err, t("Failed to save deposit policy.")))
         } finally {
             setSubmitting(false)
         }
@@ -231,6 +298,7 @@ export function MemberPoliciesTab() {
     const openLoanCreate = () => {
         setEditingLoan(null)
         setLoanForm(emptyLoanForm)
+        setLoanWording(AUTO_WORDING)
         setLoanDialogOpen(true)
     }
 
@@ -247,26 +315,17 @@ export function MemberPoliciesTab() {
             effective_from: toZoneInputValue(p.effective_from),
             effective_to: toZoneInputValue(p.effective_to),
         })
+        setLoanWording({ en: p.statement_en ?? null, ne: p.statement_ne ?? null })
         setLoanDialogOpen(true)
     }
 
     const submitLoan = async () => {
         setSubmitting(true)
         try {
-            const payload: Record<string, unknown> = {
-                max_loan_amount: Number(loanForm.max_loan_amount),
-                min_loan_amount: Number(loanForm.min_loan_amount),
-                interest_rate: Number(loanForm.interest_rate),
-                grace_period_days: Number(loanForm.grace_period_days),
-                max_renewals: Number(loanForm.max_renewals),
-                requires_collateral: loanForm.requires_collateral,
-                emi_applicable: loanForm.emi_applicable,
-                effective_from: loanForm.effective_from
-                    ? fromZoneInputValue(loanForm.effective_from)
-                    : undefined,
-                effective_to: loanForm.effective_to
-                    ? fromZoneInputValue(loanForm.effective_to)
-                    : null,
+            const payload = {
+                ...loanPayload(loanForm),
+                statement_en: loanWording.en?.trim() || null,
+                statement_ne: loanWording.ne?.trim() || null,
             }
 
             if (editingLoan) {
@@ -278,9 +337,12 @@ export function MemberPoliciesTab() {
                 await apiClient.post("/policies/loan", payload)
             }
             setLoanDialogOpen(false)
+            toast.success(editingLoan ? t("Loan policy updated") : t("Loan policy created"), {
+                description: t("It's a draft until you open it for member signatures."),
+            })
             fetchPolicies()
-        } catch {
-            setError("Failed to save loan policy.")
+        } catch (err) {
+            toast.error(apiError(err, t("Failed to save loan policy.")))
         } finally {
             setSubmitting(false)
         }
@@ -297,7 +359,9 @@ export function MemberPoliciesTab() {
             fetchPolicies()
         } catch {
             setError(
-                `Failed to delete ${deleteConfirm.type} policy. Active policies and policies that have taken effect cannot be deleted.`
+                deleteConfirm.type === "deposit"
+                    ? t("Failed to delete deposit policy. Active policies and policies that have taken effect cannot be deleted.")
+                    : t("Failed to delete loan policy. Active policies and policies that have taken effect cannot be deleted.")
             )
             setDeleteConfirm(null)
         } finally {
@@ -307,21 +371,21 @@ export function MemberPoliciesTab() {
 
     // ─── Sign & open for member signatures (Treasurer) ────────────────
 
-    const openForSigning = async (type: "deposit" | "loan", policyId: string) => {
-        const answer = await confirm({
-            title: "Sign and open for signing?",
-            description:
-                "Your signature is recorded and every member is asked to sign within one week. The policy can't be edited unless you withdraw it.",
-            confirmLabel: "Sign & open",
-        })
-        if (!answer.confirmed) return
+    // The Treasurer signs by hand (draw or upload), then the policy opens for members
+    const [openingPolicy, setOpeningPolicy] = useState<{ type: "deposit" | "loan"; id: string } | null>(null)
+    const openForSigning = (type: "deposit" | "loan", policyId: string) => setOpeningPolicy({ type, id: policyId })
+    const confirmOpenForSigning = async (signature: string) => {
+        if (!openingPolicy) return false
         setSubmitting(true)
         try {
-            await apiClient.post(`/policies/${type}/${policyId}/submit`)
-            toast.success("Policy opened for signing", { description: "Members have one week to sign." })
+            await apiClient.post(`/policies/${openingPolicy.type}/${openingPolicy.id}/submit`, { signature_image: signature })
+            toast.success(t("Policy signed and opened"), { description: t("Members have one week to sign.") })
+            setOpeningPolicy(null)
             fetchPolicies()
-        } catch {
-            setError(`Failed to open the ${type} policy for signing.`)
+            return true
+        } catch (err) {
+            toast.error(apiError(err, openingPolicy.type === "deposit" ? t("Failed to open the deposit policy for signing.") : t("Failed to open the loan policy for signing.")))
+            return false
         } finally {
             setSubmitting(false)
         }
@@ -333,7 +397,7 @@ export function MemberPoliciesTab() {
         return (
             <div className="flex items-center justify-center py-20">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                <span className="ml-2 text-sm text-muted-foreground">Loading policies...</span>
+                <span className="ml-2 text-sm text-muted-foreground">{t("Loading policies...")}</span>
             </div>
         )
     }
@@ -343,11 +407,11 @@ export function MemberPoliciesTab() {
             {/* Header */}
             <div className="flex items-start justify-between">
                 <div>
-                    <h2 className="text-lg font-semibold text-foreground">Policies</h2>
+                    <h2 className="text-lg font-semibold text-foreground">{t("Policies")}</h2>
                     <p className="text-sm text-muted-foreground">
                         {canManage
-                            ? "Create cooperative deposit & loan policies and open them for member signatures"
-                            : "View cooperative policies and sign the ones open for signing"}
+                            ? t("Create cooperative deposit & loan policies and open them for member signatures")
+                            : t("View cooperative policies and sign the ones open for signing")}
                     </p>
                 </div>
                 {canManage && (
@@ -355,19 +419,16 @@ export function MemberPoliciesTab() {
                         <DropdownMenuTrigger asChild>
                             <Button>
                                 <Plus className="mr-2 h-4 w-4" />
-                                Create Policy
-                                <ChevronDown className="ml-2 h-4 w-4" />
+                                {t("Create Policy")}<ChevronDown className="ml-2 h-4 w-4" />
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={openDepositCreate}>
                                 <Landmark className="mr-2 h-4 w-4" />
-                                Deposit Policy
-                            </DropdownMenuItem>
+                                {t("Deposit Policy")}</DropdownMenuItem>
                             <DropdownMenuItem onClick={openLoanCreate}>
                                 <CreditCard className="mr-2 h-4 w-4" />
-                                Loan Policy
-                            </DropdownMenuItem>
+                                {t("Loan Policy")}</DropdownMenuItem>
                         </DropdownMenuContent>
                     </DropdownMenu>
                 )}
@@ -378,8 +439,8 @@ export function MemberPoliciesTab() {
                     <Info className="h-4 w-4 shrink-0 text-primary" />
                     <p className="text-sm text-primary">
                         {canManage
-                            ? "New policies start as Draft. When ready, sign and open it for signing: members then have one week, and it takes effect only if every member has signed by the deadline. You can withdraw or revise it."
-                            : "Each new policy is open for signing for one week and takes effect only if every member has signed by then. Use \"Review & sign\" to sign or reject it (you can change your decision until the deadline) and to see everyone's decisions."}
+                            ? t("New policies start as Draft. When ready, sign and open it for signing: members then have one week, and it takes effect only if every member has signed by the deadline. You can withdraw or revise it.")
+                            : t("Each new policy is open for signing for one week and takes effect only if every member has signed by then. Use \"Review & sign\" to sign or reject it (you can change your decision until the deadline) and to see everyone's decisions.")}
                     </p>
                 </CardContent>
             </Card>
@@ -392,8 +453,7 @@ export function MemberPoliciesTab() {
                         <AlertCircle className="h-4 w-4 text-destructive" />
                         <p className="text-sm text-destructive">{error}</p>
                         <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setError(null)}>
-                            Dismiss
-                        </Button>
+                            {t("Dismiss")}</Button>
                     </CardContent>
                 </Card>
             )}
@@ -418,17 +478,17 @@ export function MemberPoliciesTab() {
             <Dialog open={depositDialogOpen} onOpenChange={setDepositDialogOpen}>
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
-                        <DialogTitle>{editingDeposit ? "Edit Deposit Policy" : "Create Deposit Policy"}</DialogTitle>
+                        <DialogTitle>{editingDeposit ? t("Edit Deposit Policy") : t("Create Deposit Policy")}</DialogTitle>
                         <DialogDescription>
                             {editingDeposit
-                                ? "Update the deposit policy details below"
-                                : "Fill in the details to create a new deposit policy"}
+                                ? t("Update the deposit policy details below")
+                                : t("Fill in the details to create a new deposit policy")}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto pt-2">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Amount (Rs)</Label>
+                                <Label className="text-xs font-medium">{t("Amount (Rs)")}</Label>
                                 <Input
                                     type="number"
                                     placeholder="e.g. 500"
@@ -437,7 +497,7 @@ export function MemberPoliciesTab() {
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Late Fine (%)</Label>
+                                <Label className="text-xs font-medium">{t("Late Fine (%)")}</Label>
                                 <Input
                                     type="number"
                                     step="0.01"
@@ -445,12 +505,13 @@ export function MemberPoliciesTab() {
                                     value={depositForm.late_deposit_fine}
                                     onChange={(e) => setDepositForm((f) => ({ ...f, late_deposit_fine: e.target.value }))}
                                 />
+                                <LateFineHint amount={depositForm.amount_paisa} percent={depositForm.late_deposit_fine} />
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Schedule Type</Label>
+                                <Label className="text-xs font-medium">{t("Schedule Type")}</Label>
                                 <Select
                                     value={depositForm.schedule_type}
                                     onValueChange={(v) =>
@@ -461,13 +522,13 @@ export function MemberPoliciesTab() {
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="monthly_fixed_day">Monthly Fixed Day</SelectItem>
-                                        <SelectItem value="occasional">Occasional</SelectItem>
+                                        <SelectItem value="monthly_fixed_day">{t("Monthly Fixed Day")}</SelectItem>
+                                        <SelectItem value="occasional">{t("Occasional")}</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Due Day of Month</Label>
+                                <Label className="text-xs font-medium">{t("Due Day of Month")}</Label>
                                 <Input
                                     type="number"
                                     min={1}
@@ -481,19 +542,19 @@ export function MemberPoliciesTab() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Allowed Months</Label>
+                                <Label className="text-xs font-medium">{t("Allowed Months")}</Label>
                                 <Input
                                     type="number"
-                                    placeholder="Optional"
+                                    placeholder={t("Optional")}
                                     value={depositForm.allowed_months}
                                     onChange={(e) => setDepositForm((f) => ({ ...f, allowed_months: e.target.value }))}
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Max Occurrences</Label>
+                                <Label className="text-xs font-medium">{t("Max Occurrences")}</Label>
                                 <Input
                                     type="number"
-                                    placeholder="Optional"
+                                    placeholder={t("Optional")}
                                     value={depositForm.max_occurrences}
                                     onChange={(e) => setDepositForm((f) => ({ ...f, max_occurrences: e.target.value }))}
                                 />
@@ -502,7 +563,7 @@ export function MemberPoliciesTab() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Effective From ({TIME_ZONE_LABEL})</Label>
+                                <Label className="text-xs font-medium">{t("Effective From ({0})", TIME_ZONE_LABEL)}</Label>
                                 <Input
                                     type="datetime-local"
                                     value={depositForm.effective_from}
@@ -510,7 +571,7 @@ export function MemberPoliciesTab() {
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Effective To ({TIME_ZONE_LABEL})</Label>
+                                <Label className="text-xs font-medium">{t("Effective To ({0})", TIME_ZONE_LABEL)}</Label>
                                 <Input
                                     type="datetime-local"
                                     value={depositForm.effective_to}
@@ -519,16 +580,22 @@ export function MemberPoliciesTab() {
                             </div>
                         </div>
 
+                        <PolicyWordingEditor
+                            type="deposit"
+                            payload={depositPreview}
+                            value={depositWording}
+                            onChange={setDepositWording}
+                        />
+
                         {!editingDeposit && (
                             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                 <Info className="h-3.5 w-3.5" />
-                                Policy will be created as Draft. You can edit it and submit for President review when ready.
-                            </p>
+                                {t("Saved as a draft. You can edit it until you sign and open it for member signatures.")}</p>
                         )}
 
                         <Button onClick={submitDeposit} disabled={submitting}>
                             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {editingDeposit ? "Update Policy" : "Create Policy"}
+                            {editingDeposit ? t("Update Policy") : t("Create Policy")}
                         </Button>
                     </div>
                 </DialogContent>
@@ -538,17 +605,17 @@ export function MemberPoliciesTab() {
             <Dialog open={loanDialogOpen} onOpenChange={setLoanDialogOpen}>
                 <DialogContent className="max-w-2xl">
                     <DialogHeader>
-                        <DialogTitle>{editingLoan ? "Edit Loan Policy" : "Create Loan Policy"}</DialogTitle>
+                        <DialogTitle>{editingLoan ? t("Edit Loan Policy") : t("Create Loan Policy")}</DialogTitle>
                         <DialogDescription>
                             {editingLoan
-                                ? "Update the loan policy details below"
-                                : "Fill in the details to create a new loan policy"}
+                                ? t("Update the loan policy details below")
+                                : t("Fill in the details to create a new loan policy")}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto pt-2">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Min Loan Amount (Rs)</Label>
+                                <Label className="text-xs font-medium">{t("Min Loan Amount (Rs)")}</Label>
                                 <Input
                                     type="number"
                                     placeholder="e.g. 1000"
@@ -557,7 +624,7 @@ export function MemberPoliciesTab() {
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Max Loan Amount (Rs)</Label>
+                                <Label className="text-xs font-medium">{t("Max Loan Amount (Rs)")}</Label>
                                 <Input
                                     type="number"
                                     placeholder="e.g. 100000"
@@ -569,7 +636,7 @@ export function MemberPoliciesTab() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Interest Rate (%)</Label>
+                                <Label className="text-xs font-medium">{t("Interest Rate (%)")}</Label>
                                 <Input
                                     type="number"
                                     step="0.01"
@@ -579,7 +646,7 @@ export function MemberPoliciesTab() {
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Grace Period (days)</Label>
+                                <Label className="text-xs font-medium">{t("Grace Period (days)")}</Label>
                                 <Input
                                     type="number"
                                     placeholder="e.g. 15"
@@ -591,7 +658,7 @@ export function MemberPoliciesTab() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Max Renewals</Label>
+                                <Label className="text-xs font-medium">{t("Max Renewals")}</Label>
                                 <Input
                                     type="number"
                                     placeholder="e.g. 3"
@@ -607,20 +674,20 @@ export function MemberPoliciesTab() {
                                     checked={loanForm.requires_collateral}
                                     onCheckedChange={(v) => setLoanForm((f) => ({ ...f, requires_collateral: v }))}
                                 />
-                                <Label className="text-xs font-medium">Requires Collateral</Label>
+                                <Label className="text-xs font-medium">{t("Requires Collateral")}</Label>
                             </div>
                             <div className="flex items-center gap-2">
                                 <Switch
                                     checked={loanForm.emi_applicable}
                                     onCheckedChange={(v) => setLoanForm((f) => ({ ...f, emi_applicable: v }))}
                                 />
-                                <Label className="text-xs font-medium">EMI Applicable</Label>
+                                <Label className="text-xs font-medium">{t("EMI Applicable")}</Label>
                             </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Effective From ({TIME_ZONE_LABEL})</Label>
+                                <Label className="text-xs font-medium">{t("Effective From ({0})", TIME_ZONE_LABEL)}</Label>
                                 <Input
                                     type="datetime-local"
                                     value={loanForm.effective_from}
@@ -628,7 +695,7 @@ export function MemberPoliciesTab() {
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">Effective To ({TIME_ZONE_LABEL})</Label>
+                                <Label className="text-xs font-medium">{t("Effective To ({0})", TIME_ZONE_LABEL)}</Label>
                                 <Input
                                     type="datetime-local"
                                     value={loanForm.effective_to}
@@ -637,16 +704,22 @@ export function MemberPoliciesTab() {
                             </div>
                         </div>
 
+                        <PolicyWordingEditor
+                            type="loan"
+                            payload={loanPreview}
+                            value={loanWording}
+                            onChange={setLoanWording}
+                        />
+
                         {!editingLoan && (
                             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                 <Info className="h-3.5 w-3.5" />
-                                Policy will be created as Draft. You can edit it and submit for President review when ready.
-                            </p>
+                                {t("Saved as a draft. You can edit it until you sign and open it for member signatures.")}</p>
                         )}
 
                         <Button onClick={submitLoan} disabled={submitting}>
                             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {editingLoan ? "Update Policy" : "Create Policy"}
+                            {editingLoan ? t("Update Policy") : t("Create Policy")}
                         </Button>
                     </div>
                 </DialogContent>
@@ -656,23 +729,29 @@ export function MemberPoliciesTab() {
             <Dialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
                 <DialogContent className="max-w-sm">
                     <DialogHeader>
-                        <DialogTitle>Delete Policy</DialogTitle>
+                        <DialogTitle>{t("Delete Policy")}</DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to delete this {deleteConfirm?.type} policy? This action cannot
-                            be undone. Note: active policies and policies that have taken effect cannot be deleted.
-                        </DialogDescription>
+                            {t("Are you sure you want to delete this {0} policy? This action cannot be undone. Note: active policies and policies that have taken effect cannot be deleted.", deleteConfirm?.type)}</DialogDescription>
                     </DialogHeader>
                     <div className="flex justify-end gap-2 pt-2">
                         <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
-                            Cancel
-                        </Button>
+                            {t("Cancel")}</Button>
                         <Button variant="destructive" onClick={confirmDelete} disabled={submitting}>
                             {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Delete
-                        </Button>
+                            {t("Delete")}</Button>
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <SignatureDialog
+                open={!!openingPolicy}
+                title={t("Sign and open for signing")}
+                description={t("Your hand signature is recorded on the policy and printed on its adoption record. Every member is then asked to sign within one week. The policy can't be edited unless you withdraw it.")}
+                signingAs={user ? t("Signing as {0} (Treasurer) · {1}", `${user.first_name} ${user.last_name}`, formatDateTime(new Date().toISOString())) : undefined}
+                confirmLabel={t("Sign & open")}
+                onCancel={() => setOpeningPolicy(null)}
+                onConfirm={confirmOpenForSigning}
+            />
 
             <PolicySigningDialog
                 target={signingTarget}

@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n"
 import { useState, useMemo } from "react"
 import { useLocation } from "wouter"
 import { AdminSidebar } from "./AdminSidebar"
@@ -6,6 +7,7 @@ import { MembersTab } from "./MembersTab"
 import { ActivityTab } from "./ActivityTab"
 import { PoliciesTab } from "./PoliciesTab"
 import { ThemeToggle } from "@/components/ThemeToggle"
+import { LanguageToggle } from "@/components/LanguageToggle"
 import { NotificationPanel } from "@/components/NotificationPanel"
 import { Button } from "@/components/ui/button"
 import { Menu, LogOut } from "lucide-react"
@@ -96,13 +98,14 @@ export function AdminDashboard({
         {/* Top bar */}
         <header className="flex h-14 shrink-0 items-center justify-between border-b bg-card px-4 lg:px-6">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="h-9 w-9 lg:hidden" onClick={() => setSidebarOpen(true)} aria-label="Open menu">
+            <Button variant="ghost" size="icon" className="h-9 w-9 lg:hidden" onClick={() => setSidebarOpen(true)} aria-label={t("Open menu")}>
               <Menu className="h-5 w-5" />
             </Button>
-            <h2 className="text-sm font-semibold text-foreground">{tabTitles[activeTab]}</h2>
+            <h2 className="text-sm font-semibold text-foreground">{t(tabTitles[activeTab])}</h2>
           </div>
           <div className="flex items-center gap-1">
             <NotificationPanel />
+            <LanguageToggle />
             <ThemeToggle />
             <Separator orientation="vertical" className="mx-1 h-6" />
             <TooltipProvider delayDuration={300}>
@@ -113,12 +116,12 @@ export function AdminDashboard({
                     size="icon"
                     className="h-9 w-9 rounded-lg text-muted-foreground hover:text-destructive"
                     onClick={onLogout}
-                    aria-label="Log out"
+                    aria-label={t("Log out")}
                   >
                     <LogOut className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Log out</TooltipContent>
+                <TooltipContent>{t("Log out")}</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>

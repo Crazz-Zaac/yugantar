@@ -1,3 +1,4 @@
+import { enumLabel, t } from "@/lib/i18n"
 import { useEffect, useMemo, useState } from "react"
 import { AlertCircle, CreditCard, FileSignature, Landmark, RefreshCw, Search, UserPlus, Wallet } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -27,7 +28,7 @@ const TYPES: { id: EventType; label: string; icon: typeof Landmark; className: s
   { id: "policy", label: "Policies", icon: FileSignature, className: "bg-warning/15 text-warning-foreground dark:text-warning" },
   { id: "member", label: "Members", icon: UserPlus, className: "bg-muted text-muted-foreground" },
 ]
-const TYPE = Object.fromEntries(TYPES.map((t) => [t.id, t])) as Record<EventType, (typeof TYPES)[number]>
+const TYPE = Object.fromEntries(TYPES.map((ty) => [ty.id, ty])) as Record<EventType, (typeof TYPES)[number]>
 
 const time = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Kathmandu", hour: "2-digit", minute: "2-digit", hour12: false })
 
@@ -78,28 +79,27 @@ export function ActivityTab() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Activity log</h2>
+        <h2 className="text-lg font-semibold text-foreground">{t("Activity log")}</h2>
         <p className="text-sm text-muted-foreground">
-          Registrations, deposits, loans, payments and policy signatures across the cooperative. Times in {TIME_ZONE_LABEL}.
-        </p>
+          {t("Registrations, deposits, loans, payments and policy signatures across the cooperative. Times in {0}.", TIME_ZONE_LABEL)}</p>
       </div>
 
       {/* Category counts double as filters */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        {TYPES.map((t) => (
+        {TYPES.map((ty) => (
           <button
-            key={t.id}
+            key={ty.id}
             type="button"
-            onClick={() => setType(type === t.id ? "all" : t.id)}
-            aria-pressed={type === t.id}
-            className={`flex items-center gap-3 rounded-xl border bg-card p-3 text-left transition-colors hover:bg-muted/50 ${type === t.id ? "border-primary ring-1 ring-primary" : ""}`}
+            onClick={() => setType(type === ty.id ? "all" : ty.id)}
+            aria-pressed={type === ty.id}
+            className={`flex items-center gap-3 rounded-xl border bg-card p-3 text-left transition-colors hover:bg-muted/50 ${type === ty.id ? "border-primary ring-1 ring-primary" : ""}`}
           >
-            <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${t.className}`}>
-              <t.icon className="h-4 w-4" />
+            <span className={`flex h-9 w-9 items-center justify-center rounded-lg ${ty.className}`}>
+              <ty.icon className="h-4 w-4" />
             </span>
             <span>
-              <span className="block font-nums text-lg font-semibold leading-tight">{events ? counts[t.id] ?? 0 : "–"}</span>
-              <span className="block text-xs text-muted-foreground">{t.label}</span>
+              <span className="block font-nums text-lg font-semibold leading-tight">{events ? counts[ty.id] ?? 0 : "–"}</span>
+              <span className="block text-xs text-muted-foreground">{t(ty.label)}</span>
             </span>
           </button>
         ))}
@@ -109,30 +109,29 @@ export function ActivityTab() {
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
           <div>
             <CardTitle className="text-sm font-semibold">
-              {type === "all" ? "All activity" : TYPE[type].label}
+              {type === "all" ? t("All activity") : t(TYPE[type].label)}
             </CardTitle>
-            <CardDescription>{groups.reduce((n, g) => n + g.items.length, 0)} events</CardDescription>
+            <CardDescription>{t("{0} events", groups.reduce((sum, g) => sum + g.items.length, 0))}</CardDescription>
           </div>
           <div className="relative w-full sm:w-72">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input className="h-9 pl-9 text-sm" placeholder="Search by name or action" value={query} onChange={(e) => setQuery(e.target.value)} />
+            <Input className="h-9 pl-9 text-sm" placeholder={t("Search by name or action")} value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
         </CardHeader>
         <CardContent>
           {error ? (
             <div className="flex flex-col items-center gap-3 py-10 text-center">
               <AlertCircle className="h-7 w-7 text-destructive" />
-              <p className="text-sm">Couldn't load the activity log.</p>
+              <p className="text-sm">{t("Couldn't load the activity log.")}</p>
               <Button variant="outline" size="sm" onClick={() => { setError(false); setReloadKey((k) => k + 1) }}>
-                <RefreshCw className="mr-2 h-4 w-4" /> Try again
-              </Button>
+                <RefreshCw className="mr-2 h-4 w-4" /> {t(" Try again")}</Button>
             </div>
           ) : !events ? (
             <div className="flex flex-col gap-3">
               {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 rounded-lg" />)}
             </div>
           ) : groups.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">No activity matches.</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">{t("No activity matches.")}</p>
           ) : (
             <div className="flex flex-col gap-6">
               {groups.map((g) => (
@@ -140,12 +139,12 @@ export function ActivityTab() {
                   <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{g.day}</h3>
                   <ol className="flex flex-col divide-y rounded-lg border">
                     {g.items.map((e, i) => {
-                      const t = TYPE[e.type]
+                      const ty = TYPE[e.type]
                       const at = parseUtc(e.at)
                       return (
                         <li key={i} className="flex items-start gap-3 p-3">
-                          <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${t.className}`}>
-                            <t.icon className="h-4 w-4" />
+                          <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${ty.className}`}>
+                            <ty.icon className="h-4 w-4" />
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="text-sm">
@@ -157,7 +156,7 @@ export function ActivityTab() {
                             {e.amount != null && <span className="font-nums text-sm font-medium">{formatRs(e.amount)}</span>}
                             {e.status && (
                               <Badge variant="outline" className={`text-[10px] capitalize ${statusClass(e.status)}`}>
-                                {e.status}
+                                {enumLabel(e.status)}
                               </Badge>
                             )}
                           </div>

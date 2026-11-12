@@ -19,6 +19,7 @@ from app.core.document_storage import document_storage
 from app.models.loan_model import Loan
 from app.models.policy.loan_policy import LoanPolicy
 from app.models.user_model import User
+from app.services.duties import name_with_role
 from app.utils.local_time import format_local
 
 
@@ -93,7 +94,7 @@ def build_agreement_pdf(session: Session, loan: Loan) -> bytes:
     applicant = session.get(User, loan.user_id)
     guarantor = session.get(User, loan.guarantor_user_id) if loan.guarantor_user_id else None
     policy = session.get(LoanPolicy, loan.policy_id) if loan.policy_id else None
-    by_email = lambda email: _name(session.exec(select(User).where(User.email == email)).first()) if email else "-"
+    by_email = lambda email: (name_with_role(session.exec(select(User).where(User.email == email)).first()) or "-") if email else "-"
 
     months = _term_months(loan)
     principal = Decimal(loan.principal_paisa) / 100

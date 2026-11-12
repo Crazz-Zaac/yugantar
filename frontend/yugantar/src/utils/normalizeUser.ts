@@ -54,6 +54,7 @@ export function denormalizeUser(userForUI: Partial<UserForUI>): Partial<User> {
   if (userForUI.address !== undefined) apiData.address = userForUI.address;
   if (userForUI.date_of_birth !== undefined) apiData.date_of_birth = userForUI.date_of_birth || null;
   if (userForUI.gender !== undefined) apiData.gender = userForUI.gender as "male" | "female" | "other";
+  if (userForUI.preferred_language !== undefined) apiData.preferred_language = userForUI.preferred_language;
 
   return apiData;
 }

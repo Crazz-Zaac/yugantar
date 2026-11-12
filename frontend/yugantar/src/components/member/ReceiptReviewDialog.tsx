@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n"
 import { useEffect, useState } from "react"
 import { AlertTriangle, ImageOff, Loader2 } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -78,7 +79,7 @@ export default function ReceiptReviewDialog({ receiptId, onClose }: Props) {
           if (!cancelled) setImageGone(true)
         }
       } catch {
-        if (!cancelled) setError("Could not load the receipt.")
+        if (!cancelled) setError(t("Could not load the receipt."))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -93,16 +94,16 @@ export default function ReceiptReviewDialog({ receiptId, onClose }: Props) {
 
   const warnings: string[] = []
   if (details) {
-    if (details.ocr_status === "failed") warnings.push("OCR couldn't read this voucher; all values were entered manually.")
+    if (details.ocr_status === "failed") warnings.push(t("OCR couldn't read this voucher; all values were entered manually."))
     if (details.amount_differs_from_ocr)
-      warnings.push(`Amount was changed: OCR read ${rs(details.ocr_amount)}, submitted ${rs(details.submitted_amount)}.`)
+      warnings.push(t("Amount was changed: OCR read {0}, submitted {1}.", rs(details.ocr_amount), rs(details.submitted_amount)))
     if (details.date_differs_from_ocr)
-      warnings.push(`Date was changed: OCR read ${formatDateTime(details.ocr_date)}, submitted ${formatDateTime(details.submitted_date)}.`)
+      warnings.push(t("Date was changed: OCR read {0}, submitted {1}.", formatDateTime(details.ocr_date), formatDateTime(details.submitted_date)))
     for (const dup of details.duplicates) {
       warnings.push(
         dup.match === "same_image"
-          ? `The same image was already used for ${dup.depositor_name ?? "another member"}'s deposit of ${formatDateTime(dup.deposited_date)}.`
-          : `The same bank reference appears on ${dup.depositor_name ?? "another member"}'s deposit of ${formatDateTime(dup.deposited_date)}.`,
+          ? t("The same image was already used for {0}'s deposit of {1}.", dup.depositor_name ?? t("another member"), formatDateTime(dup.deposited_date))
+          : t("The same bank reference appears on {0}'s deposit of {1}.", dup.depositor_name ?? t("another member"), formatDateTime(dup.deposited_date)),
       )
     }
   }
@@ -111,11 +112,11 @@ export default function ReceiptReviewDialog({ receiptId, onClose }: Props) {
     <Dialog open={!!receiptId} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Deposit receipt</DialogTitle>
+          <DialogTitle>{t("Deposit receipt")}</DialogTitle>
           <DialogDescription>
             {details
-              ? `Uploaded ${formatDateTime(details.uploaded_at)} · image kept until ${formatDateTime(details.expires_at)}`
-              : "Voucher image and OCR check"}
+              ? t("Uploaded {0} · image kept until {1}", formatDateTime(details.uploaded_at), formatDateTime(details.expires_at))
+              : t("Voucher image and OCR check")}
           </DialogDescription>
         </DialogHeader>
 
@@ -130,12 +131,11 @@ export default function ReceiptReviewDialog({ receiptId, onClose }: Props) {
           <div className="grid gap-4 md:grid-cols-[1fr_minmax(0,16rem)]">
             <div className="flex min-h-48 items-center justify-center rounded-md border bg-muted/30">
               {imageUrl ? (
-                <img src={imageUrl} alt="Deposit voucher" className="max-h-[70vh] w-auto rounded-md object-contain" />
+                <img src={imageUrl} alt={t("Deposit voucher")} className="max-h-[70vh] w-auto rounded-md object-contain" />
               ) : imageGone ? (
                 <div className="flex flex-col items-center gap-2 p-6 text-center text-sm text-muted-foreground">
                   <ImageOff className="h-6 w-6" />
-                  The image was deleted after the retention period.
-                </div>
+                  {t("The image was deleted after the retention period.")}</div>
               ) : null}
             </div>
 
@@ -151,17 +151,17 @@ export default function ReceiptReviewDialog({ receiptId, onClose }: Props) {
                 </div>
               )}
               <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
-                <dt className="text-muted-foreground">Submitted</dt>
+                <dt className="text-muted-foreground">{t("Submitted")}</dt>
                 <dd className="font-mono font-semibold">{rs(details.submitted_amount)}</dd>
-                <dt className="text-muted-foreground">OCR amount</dt>
+                <dt className="text-muted-foreground">{t("OCR amount")}</dt>
                 <dd className="font-mono">{rs(details.ocr_amount)}</dd>
-                <dt className="text-muted-foreground">Bank charge</dt>
+                <dt className="text-muted-foreground">{t("Bank charge")}</dt>
                 <dd className="font-mono">{rs(details.ocr_charge)}</dd>
-                <dt className="text-muted-foreground">Submitted date</dt>
+                <dt className="text-muted-foreground">{t("Submitted date")}</dt>
                 <dd>{formatDateTime(details.submitted_date)}</dd>
-                <dt className="text-muted-foreground">OCR date</dt>
+                <dt className="text-muted-foreground">{t("OCR date")}</dt>
                 <dd>{formatDateTime(details.ocr_date)}</dd>
-                <dt className="text-muted-foreground">Reference</dt>
+                <dt className="text-muted-foreground">{t("Reference")}</dt>
                 <dd className="break-all font-mono">{details.ocr_reference ?? "—"}</dd>
               </dl>
             </div>

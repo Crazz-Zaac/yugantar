@@ -32,6 +32,9 @@ class LoanPolicyCreate(SQLModel):
 
     effective_from: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     effective_to: Optional[datetime] = None
+    # Custom wording (None/empty = generated automatically from the terms)
+    statement_en: Optional[str] = Field(default=None, max_length=2000)
+    statement_ne: Optional[str] = Field(default=None, max_length=3000)
     created_by: Optional[str] = None
 
 
@@ -52,6 +55,9 @@ class LoanPolicyUpdate(SQLModel):
     requires_collateral: Optional[bool] = None
     effective_from: Optional[datetime] = None
     effective_to: Optional[datetime] = None
+    # Custom wording (None/empty = generated automatically from the terms)
+    statement_en: Optional[str] = Field(default=None, max_length=2000)
+    statement_ne: Optional[str] = Field(default=None, max_length=3000)
     updated_by: Optional[str] = None
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -76,6 +82,8 @@ class LoanPolicyResponse(SQLModel):
 
     effective_from: datetime
     effective_to: Optional[datetime]
+    statement_en: Optional[str] = None
+    statement_ne: Optional[str] = None
 
     created_by: Optional[str]
     updated_by: Optional[str] = None

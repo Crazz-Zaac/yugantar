@@ -7,7 +7,7 @@ from fastapi import (
     Query,
     BackgroundTasks,
 )
-from sqlmodel import Session, select
+from sqlmodel import Session
 from uuid import UUID
 
 from app.core.db import get_session
@@ -27,15 +27,14 @@ from app.schemas.smart_deposit_schema import (
     SmartDepositResponse,
 )
 from app.api.dependencies.auth import get_current_active_user
-from app.models.user_model import User, CooperativeRole
-from app.models.notification_model import Notification, NotificationType
-from app.services.email_notify import send_generic_email
+from app.models.user_model import User
+from app.models.notification_model import NotificationType
+from app.services.notify import notify
 from app.services.visibility import can_view_deposit
 from app.services.duties import Duty, responsible_users
 from app.models.deposit_model import DepositType
 from datetime import date
 from typing import Optional
-from fastapi_mail import NameEmail
 
 
 router = APIRouter(prefix="/deposits", tags=["deposits"])
@@ -51,33 +50,11 @@ def _notify_treasurers_new_deposit(
 ) -> None:
     """Notify whoever verifies this deposit (the Treasurers, or the Secretary
     if the depositor is the Treasurer)."""
-    depositor_name = f"{depositor.first_name} {depositor.last_name}".strip()
-    treasurers = responsible_users(session, Duty.VERIFY_DEPOSIT, depositor)
-
-    for treasurer in treasurers:
-        session.add(
-            Notification(
-                user_id=treasurer.id,
-                title="New Deposit Requires Verification",
-                message=(
-                    f"{depositor_name} submitted a deposit of Rs. {amount_rupees}. "
-                    "Please review and verify/reject it."
-                ),
-                notification_type=NotificationType.DEPOSIT_SUBMITTED,
-            )
-        )
-
-        background_tasks.add_task(
-            send_generic_email,
-            [NameEmail(name=treasurer.first_name, email=treasurer.email)],
-            "Deposit Submitted — Verification Required",
-            f"Hello {treasurer.first_name},\n\n"
-            f"{depositor_name} submitted a deposit of Rs. {amount_rupees}.\n"
-            "Please review it in the Deposit Review tab and mark it as verified or rejected.\n\n"
-            "Best regards,\nYugantar System",
-        )
-
-    session.commit()
+    notify(
+        session, background_tasks, responsible_users(session, Duty.VERIFY_DEPOSIT, depositor),
+        "deposit_submitted", NotificationType.DEPOSIT_SUBMITTED, commit=True,
+        depositor=f"{depositor.first_name} {depositor.last_name}".strip(), amount=amount_rupees,
+    )
 
 
 def _notify_depositor_review_outcome(
@@ -89,36 +66,12 @@ def _notify_depositor_review_outcome(
     depositor = session.get(User, deposit.user_id)
     if not depositor:
         return
-
     is_verified = deposit.verification_status == DepositVerificationStatus.VERIFIED
-    amount_rupees = f"{deposit.amount_rupees:,.2f}"
-    action_label = "verified" if is_verified else "rejected"
-
-    session.add(
-        Notification(
-            user_id=depositor.id,
-            title=f"Deposit {action_label.title()}",
-            message=(
-                f"Your deposit of Rs. {amount_rupees} has been {action_label} "
-                f"by {reviewer_name}."
-            ),
-            notification_type=(
-                NotificationType.DEPOSIT_VERIFIED
-                if is_verified
-                else NotificationType.DEPOSIT_REJECTED
-            ),
-        )
-    )
-    session.commit()
-
-    background_tasks.add_task(
-        send_generic_email,
-        [NameEmail(name=depositor.first_name, email=depositor.email)],
-        f"Deposit {action_label.title()} — Yugantar",
-        f"Hello {depositor.first_name},\n\n"
-        f"Your deposit of Rs. {amount_rupees} has been {action_label} "
-        f"by {reviewer_name}.\n\n"
-        "Best regards,\nYugantar System",
+    notify(
+        session, background_tasks, [depositor],
+        "deposit_verified" if is_verified else "deposit_rejected",
+        NotificationType.DEPOSIT_VERIFIED if is_verified else NotificationType.DEPOSIT_REJECTED,
+        commit=True, amount=deposit.amount_rupees, reviewer=reviewer_name,
     )
 
 

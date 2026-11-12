@@ -1,3 +1,4 @@
+import { t } from "@/lib/i18n"
 import { createContext, useContext, useState } from "react";
 import { getAllUsers, updateUserRolesApi } from "@/services/user.service";
 import type { AccessRole, CooperativeRole } from "@/constants";
@@ -78,7 +79,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       const user = await getUserById(userId);
       return normalizeUser(user);
     } catch (err) {
-      setError("Failed to fetch user");
+      setError(t("Failed to fetch user"));
       return null;
     }
   };
@@ -94,7 +95,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         )
       );
     } catch (err) {
-      setError("Failed to update user");
+      setError(t("Failed to update user"));
       throw err;
     }
   };
@@ -111,7 +112,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       );
       return normalizedUser;
     } catch (err) {
-      setError("Failed to toggle user disabled status");
+      setError(t("Failed to toggle user disabled status"));
       return null;
     }
   };
@@ -138,7 +139,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
       });
     } catch (err) {
       console.error("❌ Delete failed:", err);
-      setError("Failed to delete user");
+      setError(t("Failed to delete user"));
       throw err;
     }
   };
@@ -159,7 +160,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         prevUsers.map(user => (user.id === userId ? normalizedUser : user))
       );
     } catch (err) {
-      setError("Failed to update user roles");
+      setError(t("Failed to update user roles"));
       throw err;
     }
   };

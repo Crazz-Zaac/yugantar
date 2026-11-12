@@ -1,4 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Query
+from app import i18n
 from fastapi_mail import NameEmail
 
 from app.services.email_notify import send_generic_email
@@ -181,17 +182,12 @@ async def approve_user(
     session.commit()
     session.refresh(user)
 
-    next_step = (
-        "You can now log in."
-        if user.is_verified
-        else "Please also verify your email address using the link we sent you; then you can log in."
+    subject, body = i18n.render_email(
+        "membership_approved" if user.is_verified else "membership_approved_verify",
+        user.preferred_language, user.first_name,
     )
     background_tasks.add_task(
-        send_generic_email,
-        [NameEmail(name=user.first_name, email=user.email)],
-        "Your Yugantar membership was approved",
-        f"Hello {user.first_name},\n\nYour registration has been approved. {next_step}\n\n"
-        "Best regards,\nYugantar System",
+        send_generic_email, [NameEmail(name=user.first_name, email=user.email)], subject, body
     )
     return user
 
@@ -213,15 +209,10 @@ async def reject_registration(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This member is already approved; disable the account instead.",
         )
-    email, first_name = user.email, user.first_name
+    email, first_name, lang = user.email, user.first_name, user.preferred_language
     session.delete(user)
     session.commit()
     revoke_all_refresh_tokens(user_id)
-    background_tasks.add_task(
-        send_generic_email,
-        [NameEmail(name=first_name, email=email)],
-        "Your Yugantar registration",
-        f"Hello {first_name},\n\nYour registration was not approved. If you think this is a mistake, "
-        "please contact the cooperative's administrator.\n\nBest regards,\nYugantar System",
-    )
+    subject, body = i18n.render_email("registration_rejected", lang, first_name)
+    background_tasks.add_task(send_generic_email, [NameEmail(name=first_name, email=email)], subject, body)
     return None

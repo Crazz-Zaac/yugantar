@@ -1,5 +1,7 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from app import i18n
+from app.services.notify import notification_text
 from sqlmodel import Session, select
 from uuid import UUID
 
@@ -18,6 +20,7 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
     status_code=status.HTTP_200_OK,
 )
 def list_notifications(
+    request: Request,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -29,8 +32,12 @@ def list_notifications(
         .where(Notification.user_id == current_user.id)
         .order_by(Notification.created_at.desc())
     )
-    notifications = session.exec(statement).all()
-    return notifications
+    lang = i18n.request_lang(request)
+    out = []
+    for n in session.exec(statement).all():
+        title, message = notification_text(n, lang)
+        out.append(NotificationResponse.model_validate(n).model_copy(update={"title": title, "message": message}))
+    return out
 
 
 @router.patch(

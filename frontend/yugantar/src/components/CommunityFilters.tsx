@@ -1,3 +1,4 @@
+import { t, n } from "@/lib/i18n"
 import { Search, SlidersHorizontal, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,9 +26,8 @@ export function CommunityFilters({ values, onChange, choice, text, resultCount }
       <div className="flex items-center justify-between gap-2">
         <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
           <SlidersHorizontal className="h-3.5 w-3.5" />
-          Filters
-          {active > 0 && <span className="rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">{active}</span>}
-          {resultCount !== undefined && <span className="font-normal">· {resultCount} shown</span>}
+          {t("Filters")}{active > 0 && <span className="rounded-full bg-primary/10 px-1.5 text-[10px] font-semibold text-primary">{n(active)}</span>}
+          {resultCount !== undefined && <span className="font-normal">{t("· {0} shown", resultCount)}</span>}
         </p>
         {active > 0 && (
           <Button
@@ -36,44 +36,43 @@ export function CommunityFilters({ values, onChange, choice, text, resultCount }
             className="h-7 text-xs"
             onClick={() => onChange({ member: "", dateFrom: "", dateTo: "", choice: "", text: "" })}
           >
-            <X className="mr-1 h-3.5 w-3.5" /> Clear
-          </Button>
+            <X className="mr-1 h-3.5 w-3.5" /> {t(" Clear")}</Button>
         )}
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="cf-member" className="text-[11px] text-muted-foreground">Member</Label>
+          <Label htmlFor="cf-member" className="text-[11px] text-muted-foreground">{t("Member")}</Label>
           <div className="relative">
             <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               id="cf-member"
               className="h-9 pl-8 text-sm"
-              placeholder="Search by name"
+              placeholder={t("Search by name")}
               value={values.member}
               onChange={(e) => set({ member: e.target.value })}
             />
           </div>
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="cf-from" className="text-[11px] text-muted-foreground">From (NPT)</Label>
+          <Label htmlFor="cf-from" className="text-[11px] text-muted-foreground">{t("From (NPT)")}</Label>
           <Input id="cf-from" type="date" className="h-9 text-sm" value={values.dateFrom} max={values.dateTo || undefined} onChange={(e) => set({ dateFrom: e.target.value })} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="cf-to" className="text-[11px] text-muted-foreground">To (NPT)</Label>
+          <Label htmlFor="cf-to" className="text-[11px] text-muted-foreground">{t("To (NPT)")}</Label>
           <Input id="cf-to" type="date" className="h-9 text-sm" value={values.dateTo} min={values.dateFrom || undefined} onChange={(e) => set({ dateTo: e.target.value })} />
         </div>
         {choice && (
           <div className="flex flex-col gap-1.5">
-            <Label className="text-[11px] text-muted-foreground">{choice.label}</Label>
+            <Label className="text-[11px] text-muted-foreground">{t(choice.label)}</Label>
             <Select value={values.choice || "all"} onValueChange={(v) => set({ choice: v === "all" ? "" : v })}>
               <SelectTrigger className="h-9 text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
+                <SelectItem value="all">{t("All")}</SelectItem>
                 {choice.options.map((o) => (
                   <SelectItem key={o.value} value={o.value}>
-                    {o.label}
+                    {t(o.label)}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -82,8 +81,8 @@ export function CommunityFilters({ values, onChange, choice, text, resultCount }
         )}
         {text && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cf-text" className="text-[11px] text-muted-foreground">{text.label}</Label>
-            <Input id="cf-text" className="h-9 text-sm" placeholder={text.placeholder} value={values.text} onChange={(e) => set({ text: e.target.value })} />
+            <Label htmlFor="cf-text" className="text-[11px] text-muted-foreground">{t(text.label)}</Label>
+            <Input id="cf-text" className="h-9 text-sm" placeholder={t(text.placeholder)} value={values.text} onChange={(e) => set({ text: e.target.value })} />
           </div>
         )}
       </div>

@@ -4,6 +4,7 @@ from sqlmodel import SQLModel
 from .policy.deposit_policy import DepositPolicy
 from .policy.loan_policy import LoanPolicy
 from .policy.policy_signature import PolicySignature, PolicyProxyRequest, PolicyProxyAuthorisation
+from .policy.policy_record import PolicyRecord
 
 # Import other models
 from .base import BaseModel

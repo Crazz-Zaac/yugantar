@@ -15,7 +15,13 @@ Lifecycle:
 
 Required signers are a snapshot, taken when the policy is opened, of every
 active account holding a cooperative role (member, secretary, treasurer,
-president). Signers who are later disabled no longer count.
+president). System admin accounts never sign: admin is an extra access role
+(the person signs from their member account). Signers who are later disabled
+no longer count.
+
+When a policy is adopted, its adoption record (PDF on letterhead, with a
+reference number and the list of members who approved it) is generated; see
+services/policy_document.py.
 
 Proxy signing (extreme cases only): an Admin, after consulting an absent
 member (e.g. by phone), files a proxy request. It is applied only once the
@@ -28,12 +34,10 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import BackgroundTasks, HTTPException, status
-from fastapi_mail import NameEmail
 from sqlmodel import Session, select
 
 from app.core.config import settings
-from app.utils.local_time import format_local
-from app.models.notification_model import Notification, NotificationType
+from app.models.notification_model import NotificationType
 from app.models.policy.base_policy import PolicyStatus
 from app.models.policy.deposit_policy import DepositPolicy
 from app.models.policy.loan_policy import LoanPolicy
@@ -48,11 +52,15 @@ from app.models.user_model import AccessRole, CooperativeRole, User
 from app.schemas.policy.policy_signing_schema import (
     ProxyAuthorisationOut,
     ProxyRequestOut,
+    PolicyTermOut,
     SignatureOut,
     SigningSummary,
 )
-from app.services.duties import coop_roles, is_active_member
-from app.services.email_notify import send_generic_email
+from app.services.duties import coop_roles, is_active_member, is_system_admin
+from app.services import policy_document
+from app.services.notify import notify
+from app import i18n
+from app.services.signature_image import delete_signature, save_signature
 
 POLICY_MODELS = {"deposit": DepositPolicy, "loan": LoanPolicy}
 AUTHORISER_ROLES = [
@@ -76,6 +84,12 @@ def is_admin(user: User) -> bool:
     return AccessRole.ADMIN.value in {
         str(getattr(r, "value", r)).lower() for r in (user.access_roles or [])
     }
+
+
+def label_both(policy_type: str, policy) -> dict:
+    """The policy label in English and Nepali, for notifications."""
+    en = policy_label(policy_type, policy)
+    return i18n.both(en, i18n._label_ne(en))
 
 
 def policy_label(policy_type: str, policy) -> str:
@@ -104,8 +118,18 @@ class PolicySigningService:
 
     @staticmethod
     def signer_pool(session: Session) -> list[User]:
-        """Every active (enabled, verified, approved) account holding a cooperative role."""
-        return [u for u in session.exec(select(User)).all() if is_active_member(u) and coop_roles(u)]
+        """Every active (enabled, verified, approved) account holding a cooperative
+        role, except system admin accounts."""
+        return [
+            u for u in session.exec(select(User)).all()
+            if is_active_member(u) and coop_roles(u) and not is_system_admin(u)
+        ]
+
+    @staticmethod
+    def _is_signer(user: Optional[User]) -> bool:
+        """Rows of system admin accounts (from policies opened before they were
+        excluded) are ignored."""
+        return user is not None and not is_system_admin(user)
 
     @staticmethod
     def _signatures(session: Session, policy_type: str, policy_id: uuid.UUID) -> list[PolicySignature]:
@@ -147,32 +171,14 @@ class PolicySigningService:
         session: Session,
         background_tasks: Optional[BackgroundTasks],
         users: list[User],
-        title: str,
-        message: str,
+        key: str,
         ntype: NotificationType,
         policy_type: str,
         policy_id: uuid.UUID,
+        **args,
     ) -> None:
-        for user in users:
-            session.add(
-                Notification(
-                    user_id=user.id,
-                    title=title,
-                    message=message,
-                    notification_type=ntype,
-                    policy_id=policy_id,
-                    policy_type=policy_type,
-                )
-            )
-            if background_tasks is not None and user.email:
-                background_tasks.add_task(
-                    send_generic_email,
-                    [NameEmail(name=user.first_name, email=user.email)],
-                    f"{title} — Yugantar",
-                    f"Hello {user.first_name},\n\n{message}\n\n"
-                    "Please log in to the Yugantar portal for details.\n\n"
-                    "Best regards,\nYugantar System",
-                )
+        """In-app notification + email, in each reader's language (app/i18n.py)."""
+        notify(session, background_tasks, users, key, ntype, policy_type=policy_type, policy_id=policy_id, **args)
 
     # ------------------------------------------------------------------
     # Treasurer: open / withdraw
@@ -184,6 +190,7 @@ class PolicySigningService:
         policy_type: str,
         policy_id: uuid.UUID,
         treasurer: User,
+        signature_image: Optional[str] = None,
     ):
         policy = self.get_policy(session, policy_type, policy_id)
         if policy.status != PolicyStatus.DRAFT:
@@ -192,8 +199,9 @@ class PolicySigningService:
                 detail=f"Only draft policies can be opened for signing. Current status: {policy.status.value}",
             )
 
-        for old in self._signatures(session, policy_type, policy_id):
-            session.delete(old)
+        self._delete_rows(session, self._signatures(session, policy_type, policy_id))
+        session.flush()
+        sig_key, sig_sha = save_signature(signature_image) if signature_image else (None, None)
 
         now = _now()
         signers = self.signer_pool(session)
@@ -208,6 +216,8 @@ class PolicySigningService:
                     status=SignatureStatus.APPROVED if is_treasurer else SignatureStatus.PENDING,
                     signer_name=full_name(user) if is_treasurer else None,
                     signed_at=now if is_treasurer else None,
+                    signature_file_key=sig_key if is_treasurer else None,
+                    signature_sha256=sig_sha if is_treasurer else None,
                 )
             )
 
@@ -217,19 +227,17 @@ class PolicySigningService:
         policy.updated_at = now
         session.add(policy)
 
-        label = policy_label(policy_type, policy)
-        deadline_txt = format_local(policy.signing_deadline)
         self._notify(
             session,
             background_tasks,
             [u for u in signers if u.id != treasurer.id],
-            "New policy needs your signature",
-            f"{full_name(treasurer)} (Treasurer) has signed and opened a new {label} for signing. "
-            f"Please sign or reject it by {deadline_txt}. It takes effect only if every member has "
-            "signed by then; you can change your decision until the deadline.",
+            "policy_open_for_signing",
             NotificationType.POLICY_APPROVAL,
             policy_type,
             policy_id,
+            treasurer=full_name(treasurer),
+            label=label_both(policy_type, policy),
+            deadline=policy.signing_deadline,
         )
         session.commit()
         session.refresh(policy)
@@ -246,8 +254,7 @@ class PolicySigningService:
                 detail=f"Only open or lapsed policies can be revised. Current status: {policy.status.value}",
             )
 
-        for sig in self._signatures(session, policy_type, policy_id):
-            session.delete(sig)
+        self._delete_rows(session, self._signatures(session, policy_type, policy_id))
         session.flush()
         for req in self._proxy_requests(session, policy_type, policy_id, ProxyRequestStatus.PENDING):
             req.status = ProxyRequestStatus.CANCELLED
@@ -275,6 +282,7 @@ class PolicySigningService:
         user: User,
         decision: SignatureStatus,
         reason: Optional[str],
+        signature_image: Optional[str] = None,
     ) -> SigningSummary:
         policy = self.get_policy(session, policy_type, policy_id)
         self._require_open(policy)
@@ -287,13 +295,23 @@ class PolicySigningService:
             (s for s in self._signatures(session, policy_type, policy_id) if s.user_id == user.id),
             None,
         )
+        if is_system_admin(user):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="System admin accounts don't sign policies. Please sign from your member account.",
+            )
         if row is None:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="You are not one of the required signers for this policy.",
             )
 
+        # Hand signature (validated before anything changes)
+        new_signature = save_signature(signature_image) if decision == SignatureStatus.APPROVED and signature_image else None
         self._record(row, user, decision, reason, proxy_request_id=None)
+        if new_signature:
+            delete_signature(row.signature_file_key)
+            row.signature_file_key, row.signature_sha256 = new_signature
         session.add(row)
 
         if decision == SignatureStatus.REJECTED:
@@ -303,14 +321,23 @@ class PolicySigningService:
                     session,
                     background_tasks,
                     [creator],
-                    "Policy rejected by a member",
-                    f"{full_name(user)} rejected the {policy_label(policy_type, policy)}: {reason}",
+                    "policy_rejected_by_member",
                     NotificationType.POLICY_REJECTED,
                     policy_type,
                     policy_id,
+                    member=full_name(user),
+                    label=label_both(policy_type, policy),
+                    reason=reason,
                 )
         session.commit()
         return self.summary(session, policy_type, policy_id, user)
+
+    @staticmethod
+    def _delete_rows(session: Session, rows: list[PolicySignature]) -> None:
+        """Delete signature rows and their hand-signature images."""
+        for row in rows:
+            delete_signature(row.signature_file_key)
+            session.delete(row)
 
     @staticmethod
     def _record(row: PolicySignature, user: User, decision, reason, proxy_request_id) -> None:
@@ -319,6 +346,10 @@ class PolicySigningService:
         row.signed_at = _now()
         row.reason = (reason or "").strip() or None
         row.proxy_request_id = proxy_request_id
+        if decision != SignatureStatus.APPROVED:
+            # A rejection carries no hand signature
+            delete_signature(row.signature_file_key)
+            row.signature_file_key = row.signature_sha256 = None
 
     @staticmethod
     def _creator(session: Session, policy) -> Optional[User]:
@@ -341,7 +372,10 @@ class PolicySigningService:
         if policy.status != PolicyStatus.FINALIZED or not self._deadline_passed(policy):
             return False
         rows = self._signatures(session, policy_type, policy.policy_id)
-        counted = [r for r in rows if (u := session.get(User, r.user_id)) and not u.disabled]
+        counted = [
+            r for r in rows
+            if (u := session.get(User, r.user_id)) and not u.disabled and self._is_signer(u)
+        ]
         adopted = bool(counted) and all(r.status == SignatureStatus.APPROVED for r in counted)
 
         policy.status = PolicyStatus.ACTIVE if adopted else PolicyStatus.VOID
@@ -352,24 +386,22 @@ class PolicySigningService:
             req.resolved_at = _now()
             session.add(req)
 
-        label = policy_label(policy_type, policy)
         if adopted:
-            title, ntype = "Policy adopted", NotificationType.POLICY_APPROVED
-            message = f"The {label} was signed by every member by the deadline and is now active."
+            key, ntype = "policy_adopted", NotificationType.POLICY_APPROVED
+            args = {"label": label_both(policy_type, policy)}
         else:
             missing = sum(r.status == SignatureStatus.PENDING for r in counted)
             rejected = sum(r.status == SignatureStatus.REJECTED for r in counted)
-            title, ntype = "Policy not adopted", NotificationType.POLICY_REJECTED
-            message = (
-                f"The {label} was not adopted: at the deadline {rejected} member(s) had rejected it "
-                f"and {missing} had not signed. The Treasurer can revise it and open it again."
-            )
+            key, ntype = "policy_not_adopted", NotificationType.POLICY_REJECTED
+            args = {"label": label_both(policy_type, policy), "rejected": rejected, "missing": missing}
         self._notify(
             session, background_tasks,
             [u for r in counted if (u := session.get(User, r.user_id))],
-            title, message, ntype, policy_type, policy.policy_id,
+            key, ntype, policy_type, policy.policy_id, **args,
         )
         session.commit()
+        if adopted:
+            policy_document.try_create_record(session, policy_type, policy)
         return True
 
     def close_due_policies(self, session: Session, background_tasks: Optional[BackgroundTasks] = None) -> int:
@@ -392,6 +424,8 @@ class PolicySigningService:
         out: list[SignatureOut] = []
         for r in rows:
             user = session.get(User, r.user_id)
+            if not self._is_signer(user) and user is not None:
+                continue
             proxy = session.get(PolicyProxyRequest, r.proxy_request_id) if r.proxy_request_id else None
             out.append(
                 SignatureOut(
@@ -402,16 +436,28 @@ class PolicySigningService:
                     signed_at=r.signed_at,
                     reason=r.reason,
                     counted=bool(user and not user.disabled),
+                    has_signature_image=bool(r.signature_file_key),
                     proxy=self._proxy_out(session, proxy, viewer) if proxy else None,
                 )
             )
         out.sort(key=lambda s: (s.status != SignatureStatus.APPROVED, s.name.lower()))
         counted = [s for s in out if s.counted]
+        record = policy_document.get_record(session, policy_type, policy_id)
         mine = next((s for s in out if viewer and s.user_id == viewer.id), None)
         return SigningSummary(
             policy_type=policy_type,
             policy_id=policy_id,
             label=policy_label(policy_type, policy),
+            title=policy_document.policy_title(policy_type, policy),
+            statement=policy_document.statement_en(policy_type, policy),
+            statement_ne=policy_document.statement_ne(policy_type, policy),
+            statement_custom=bool(
+                policy_document._custom(policy.statement_en) or policy_document._custom(policy.statement_ne)
+            ),
+            terms=[PolicyTermOut(label=k, value=v) for k, v in policy_document.policy_terms(policy_type, policy)],
+            record_available=policy.status in policy_document.ADOPTED_STATUSES,
+            preview_available=policy.status == PolicyStatus.FINALIZED and not self._deadline_passed(policy),
+            record_reference=record.reference if record else None,
             status=policy.status,
             signing_deadline=policy.signing_deadline,
             deadline_passed=self._deadline_passed(policy),
@@ -481,7 +527,7 @@ class PolicySigningService:
             None,
         )
         signer = session.get(User, signer_user_id)
-        if row is None or signer is None or signer.disabled:
+        if row is None or signer is None or signer.disabled or not self._is_signer(signer):
             raise HTTPException(status_code=400, detail="That member is not a required signer of this policy.")
         if any(
             r.signer_user_id == signer_user_id
@@ -507,17 +553,19 @@ class PolicySigningService:
         )
         session.add(req)
         authorisers = {u.id: u for holders in plan.values() for u in holders}
-        verb = "approve" if decision == SignatureStatus.APPROVED else "reject"
         self._notify(
             session,
             background_tasks,
             list(authorisers.values()),
-            "Proxy signature needs your authorisation",
-            f"Admin {full_name(admin)} asks to {verb} the {policy_label(policy_type, policy)} on behalf of "
-            f"{full_name(signer)}. Consultation: {req.consultation_note}",
+            "proxy_request",
             NotificationType.POLICY_APPROVAL,
             policy_type,
             policy_id,
+            admin=full_name(admin),
+            verb=i18n.both("approve", "स्वीकृत") if decision == SignatureStatus.APPROVED else i18n.both("reject", "अस्वीकृत"),
+            label=label_both(policy_type, policy),
+            signer=full_name(signer),
+            note=req.consultation_note,
         )
         session.commit()
         session.refresh(req)
@@ -576,10 +624,9 @@ class PolicySigningService:
             session.add(req)
             if admin:
                 self._notify(
-                    session, background_tasks, [admin], "Proxy signature declined",
-                    f"{full_name(user)} declined your request to sign the {policy_label(req.policy_type, policy)} "
-                    f"on behalf of {full_name(signer)}.",
+                    session, background_tasks, [admin], "proxy_declined",
                     NotificationType.GENERAL, req.policy_type, req.policy_id,
+                    member=full_name(user), label=label_both(req.policy_type, policy), signer=full_name(signer),
                 )
             session.commit()
             return self._proxy_out(session, req, user)
@@ -598,14 +645,14 @@ class PolicySigningService:
             req.status = ProxyRequestStatus.APPLIED
             req.resolved_at = _now()
             session.add(req)
-            verb = "approved" if req.decision == SignatureStatus.APPROVED else "rejected"
             self._notify(
-                session, background_tasks, [signer],
-                "A policy was signed on your behalf",
-                f"Admin {full_name(admin)} {verb} the {policy_label(req.policy_type, policy)} on your behalf, "
-                f"as agreed with you ({req.consultation_note}), authorised by the office bearers. "
-                "You can change your response yourself while the policy is open.",
+                session, background_tasks, [signer], "proxy_applied",
                 NotificationType.GENERAL, req.policy_type, req.policy_id,
+                admin=full_name(admin),
+                verb=i18n.both("approved", "स्वीकृत") if req.decision == SignatureStatus.APPROVED
+                else i18n.both("rejected", "अस्वीकृत"),
+                label=label_both(req.policy_type, policy),
+                note=req.consultation_note,
             )
             session.commit()
         else:

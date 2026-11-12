@@ -1,3 +1,4 @@
+import { n, t } from "@/lib/i18n"
 import { useEffect, useState } from "react"
 import { useLocation } from "wouter"
 import { AlertCircle, ArrowRight, CreditCard, FileSignature, Landmark, PiggyBank, RefreshCw, UserCheck, Users } from "lucide-react"
@@ -100,10 +101,9 @@ export function OverviewTab() {
       <Card>
         <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
           <AlertCircle className="h-8 w-8 text-destructive" />
-          <p className="text-sm">Couldn't load the overview.</p>
+          <p className="text-sm">{t("Couldn't load the overview.")}</p>
           <Button variant="outline" size="sm" onClick={load}>
-            <RefreshCw className="mr-2 h-4 w-4" /> Try again
-          </Button>
+            <RefreshCw className="mr-2 h-4 w-4" /> {t(" Try again")}</Button>
         </CardContent>
       </Card>
     )
@@ -133,14 +133,14 @@ export function OverviewTab() {
   const attention = [
     data.members_pending_approval > 0 && {
       icon: UserCheck,
-      title: `${data.members_pending_approval} registration${data.members_pending_approval === 1 ? "" : "s"} awaiting your approval`,
-      detail: "New members can sign in only after you approve them.",
+      title: data.members_pending_approval === 1 ? t("{0} registration awaiting your approval", 1) : t("{0} registrations awaiting your approval", data.members_pending_approval),
+      detail: t("New members can sign in only after you approve them."),
       link: "/admin/members",
     },
     ...data.open_policies.map((p) => ({
       icon: FileSignature,
-      title: `${p.label}: ${p.approved}/${p.required} signed`,
-      detail: `${p.rejected ? `${p.rejected} rejected · ` : ""}Signing closes ${formatDateTime(p.deadline)}`,
+      title: t("{0}: {1}/{2} signed", p.label, p.approved, p.required),
+      detail: (p.rejected ? t("{0} rejected · ", p.rejected) : "") + t("Signing closes {0}", formatDateTime(p.deadline)),
       link: "/admin/policies",
       progress: p.required ? (p.approved / p.required) * 100 : 0,
     })),
@@ -150,30 +150,29 @@ export function OverviewTab() {
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <Kpi
-          label="Members"
-          value={String(data.members_active)}
+          label={t("Members")}
+          value={n(data.members_active)}
           icon={Users}
           hint={
             <>
-              {data.members_new_this_month} new this month
-              {data.members_pending_approval > 0 && <span className="text-warning-foreground dark:text-warning"> · {data.members_pending_approval} awaiting approval</span>}
+              {n(data.members_new_this_month)} {t(" new this month")}{data.members_pending_approval > 0 && <span className="text-warning-foreground dark:text-warning"> {t(" · {0} awaiting approval", data.members_pending_approval)}</span>}
             </>
           }
         />
-        <Kpi label="Total savings" value={formatRs(data.savings_total)} icon={PiggyBank} hint={`${formatRs(data.deposits_this_month)} deposited this month`} />
-        <Kpi label="Loans outstanding" value={formatRs(data.loans_outstanding)} icon={CreditCard} hint={`${data.active_loans} active loan${data.active_loans === 1 ? "" : "s"}`} />
+        <Kpi label={t("Total savings")} value={formatRs(data.savings_total)} icon={PiggyBank} hint={t("{0} deposited this month", formatRs(data.deposits_this_month))} />
+        <Kpi label={t("Loans outstanding")} value={formatRs(data.loans_outstanding)} icon={CreditCard} hint={data.active_loans === 1 ? t("{0} active loan", 1) : t("{0} active loans", data.active_loans)} />
         <Kpi
-          label="With office bearers"
-          value={String(data.pending_deposits + data.pending_loan_applications)}
+          label={t("With office bearers")}
+          value={n(data.pending_deposits + data.pending_loan_applications)}
           icon={Landmark}
-          hint={`${data.pending_deposits} deposit${data.pending_deposits === 1 ? "" : "s"} · ${data.pending_loan_applications} loan application${data.pending_loan_applications === 1 ? "" : "s"}`}
+          hint={t("{0} deposits · {1} loan applications", data.pending_deposits, data.pending_loan_applications)}
         />
       </div>
 
       {attention.length > 0 && (
         <Card className="border-primary/30 bg-gradient-to-br from-primary/[0.06] to-transparent">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Needs attention</CardTitle>
+            <CardTitle className="text-sm font-semibold">{t("Needs attention")}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col divide-y">
             {attention.map((a, i) => (
@@ -196,8 +195,8 @@ export function OverviewTab() {
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Deposits and loans</CardTitle>
-            <CardDescription>Verified deposits and loans disbursed per month</CardDescription>
+            <CardTitle className="text-sm font-semibold">{t("Deposits and loans")}</CardTitle>
+            <CardDescription>{t("Verified deposits and loans disbursed per month")}</CardDescription>
           </CardHeader>
           <CardContent className="h-72 pl-0">
             <ResponsiveContainer width="100%" height="100%">
@@ -215,8 +214,8 @@ export function OverviewTab() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Members</CardTitle>
-            <CardDescription>Active members over the last 12 months</CardDescription>
+            <CardTitle className="text-sm font-semibold">{t("Members")}</CardTitle>
+            <CardDescription>{t("Active members over the last 12 months")}</CardDescription>
           </CardHeader>
           <CardContent className="h-72 pl-0">
             <ResponsiveContainer width="100%" height="100%">
@@ -241,11 +240,11 @@ export function OverviewTab() {
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
           <div>
-            <CardTitle className="text-sm font-semibold">Recent registrations</CardTitle>
-            <CardDescription>Newest accounts first</CardDescription>
+            <CardTitle className="text-sm font-semibold">{t("Recent registrations")}</CardTitle>
+            <CardDescription>{t("Newest accounts first")}</CardDescription>
           </div>
           <Button variant="ghost" size="sm" onClick={() => navigate("/admin/members")}>
-            All members <ArrowRight className="ml-1.5 h-4 w-4" />
+            {t("All members ")}<ArrowRight className="ml-1.5 h-4 w-4" />
           </Button>
         </CardHeader>
         <CardContent>
@@ -261,7 +260,7 @@ export function OverviewTab() {
                 </span>
                 <span className="text-xs text-muted-foreground">{formatDate(m.joined_at)}</span>
                 <Badge variant="outline" className={`text-[11px] ${STATUS[m.status].className}`}>
-                  {STATUS[m.status].label}
+                  {t(STATUS[m.status].label)}
                 </Badge>
               </li>
             ))}

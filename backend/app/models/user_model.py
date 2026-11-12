@@ -73,6 +73,8 @@ class User(BaseModel, table=True):
     approved_at: Optional[datetime] = Field(default=None, nullable=True)
 
     disabled: bool = Field(default=False)
+    # UI / email language: "en" (default) or "ne". Changed in Settings.
+    preferred_language: str = Field(default="en", max_length=5, nullable=False)
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Relationships

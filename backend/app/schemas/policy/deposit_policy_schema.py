@@ -28,6 +28,9 @@ class DepositPolicyCreate(SQLModel):
     # at server start-up)
     effective_from: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     effective_to: Optional[datetime] = None
+    # Custom wording (None/empty = generated automatically from the terms)
+    statement_en: Optional[str] = Field(default=None, max_length=2000)
+    statement_ne: Optional[str] = Field(default=None, max_length=3000)
 
     created_by: Optional[str] = None
 
@@ -59,8 +62,12 @@ class DepositPolicyUpdate(SQLModel):
 
     effective_from: Optional[datetime] = None
     effective_to: Optional[datetime] = None
+    # Custom wording (None/empty = generated automatically from the terms)
+    statement_en: Optional[str] = Field(default=None, max_length=2000)
+    statement_ne: Optional[str] = Field(default=None, max_length=3000)
 
     updated_by: Optional[str] = None
+    change_reason: Optional[str] = None  # required by the endpoint, for the audit log
 
 
 # -----------------------------
@@ -80,6 +87,8 @@ class DepositPolicyResponse(SQLModel):
     signing_deadline: Optional[datetime] = None
     effective_from: datetime
     effective_to: Optional[datetime] = None
+    statement_en: Optional[str] = None
+    statement_ne: Optional[str] = None
 
     created_by: Optional[str] = None
     created_at: datetime

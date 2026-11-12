@@ -5,6 +5,7 @@ from .penalty_policy import PenaltyPolicy
 from .interest_policy import InterestPolicy
 from .investment_policy import InvestmentPolicy
 from .policy_change_log import PolicyChangeLog, ChangeType
+from .policy_record import PolicyRecord
 from .policy_signature import (
     PolicySignature,
     PolicyProxyRequest,
@@ -14,6 +15,7 @@ from .policy_signature import (
 )
 
 __all__ = [
+    "PolicyRecord",
     "BasePolicy",
     "DepositPolicy",
     "LoanPolicy",

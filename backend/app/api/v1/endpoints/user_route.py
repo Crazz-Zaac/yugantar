@@ -87,6 +87,7 @@ async def register_user(
         [NameEmail(name=new_user.first_name, email=new_user.email)],
         new_user.first_name + " " + new_user.last_name,
         verification_link,
+        new_user.preferred_language,
     )
     return new_user
 
@@ -168,6 +169,7 @@ def _send_verification(background_tasks: BackgroundTasks, user: User) -> None:
         [NameEmail(name=user.first_name, email=user.email)],
         f"{user.first_name} {user.last_name}".strip(),
         link,
+        user.preferred_language,
     )
 
 
@@ -229,6 +231,7 @@ async def reset_password(
             send_password_reset_email,
             email_to=[NameEmail(name=user.first_name, email=user.email)],
             reset_link=url,
+            lang=user.preferred_language,
         )
 
     return {"msg": "If an account exists for this email, a reset link has been sent."}

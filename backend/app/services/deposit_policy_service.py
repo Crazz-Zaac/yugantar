@@ -65,7 +65,7 @@ class DepositPolicyService(PolicyService):
                 detail="Change reason must be provided for policy updates",
             )
 
-        policy_data = policy_in.model_dump(exclude_unset=True)
+        policy_data = policy_in.model_dump(exclude_unset=True, exclude={"status", "change_reason", "updated_by", "updated_at"})
         updated_policy = PolicyService.update_policy(
             db_session=session,
             policy_class=DepositPolicy,

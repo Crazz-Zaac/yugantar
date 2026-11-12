@@ -37,6 +37,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# API error messages in the reader's language (X-Language header; app/i18n.py)
+from fastapi import Request  # noqa: E402
+from fastapi.exception_handlers import http_exception_handler  # noqa: E402
+from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
+from app import i18n  # noqa: E402
+
+
+@app.exception_handler(StarletteHTTPException)
+async def translated_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    lang = i18n.request_lang(request)
+    if lang != "en" and isinstance(exc.detail, str):
+        exc = StarletteHTTPException(exc.status_code, i18n.translate_text(exc.detail, lang), exc.headers)
+    return await http_exception_handler(request, exc)
+
+
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
 app.include_router(user_route.router, prefix="/api/v1")

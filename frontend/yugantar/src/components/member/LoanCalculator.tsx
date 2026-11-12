@@ -1,3 +1,4 @@
+import { t, n } from "@/lib/i18n"
 import { useMemo, useState } from "react"
 import { ArrowRight, CalendarCheck, Calculator, ChevronDown, Info, ShieldCheck, Sparkles } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -63,8 +64,8 @@ export function LoanCalculator({ policy, onApply }: Props) {
 
   const commitAmountText = () => {
     if (amountText === null) return
-    const n = Number(amountText.replace(/[^\d.]/g, ""))
-    if (Number.isFinite(n) && n > 0) setAmount(Math.min(max, Math.max(min, Math.round(n))))
+    const num = Number(amountText.replace(/[^\d.]/g, ""))
+    if (Number.isFinite(num) && num > 0) setAmount(Math.min(max, Math.max(min, Math.round(num))))
     setAmountText(null)
   }
 
@@ -77,17 +78,14 @@ export function LoanCalculator({ policy, onApply }: Props) {
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <Calculator className="h-4 w-4" />
               </span>
-              Loan calculator
-            </CardTitle>
+              {t("Loan calculator")}</CardTitle>
             <CardDescription className="mt-1">
-              See what a loan costs before you apply. Figures update as you move the sliders.
-            </CardDescription>
+              {t("See what a loan costs before you apply. Figures update as you move the sliders.")}</CardDescription>
           </div>
         </div>
 
         <p className="text-xs text-muted-foreground">
-          Based on the loan policy you chose above: {formatRs(min)} – {formatRs(max)} at {rate}% per year.
-        </p>
+          {t("Based on the loan policy you chose above: {0} – {1} at {2}% per year.", formatRs(min), formatRs(max), rate)}</p>
       </CardHeader>
 
       <CardContent className="grid gap-0 p-0 lg:grid-cols-[1fr_1.1fr]">
@@ -96,10 +94,9 @@ export function LoanCalculator({ policy, onApply }: Props) {
           <div className="flex flex-col gap-3">
             <div className="flex items-end justify-between gap-3">
               <Label htmlFor="calc-amount" className="text-sm font-medium">
-                How much do you need?
-              </Label>
+                {t("How much do you need?")}</Label>
               <div className="relative w-36">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">Rs.</span>
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{t("Rs.")}</span>
                 <Input
                   id="calc-amount"
                   inputMode="numeric"
@@ -112,7 +109,7 @@ export function LoanCalculator({ policy, onApply }: Props) {
               </div>
             </div>
             <Slider
-              aria-label="Loan amount"
+              aria-label={t("Loan amount")}
               min={min}
               max={max}
               step={amountStep(min, max)}
@@ -131,8 +128,7 @@ export function LoanCalculator({ policy, onApply }: Props) {
           <div className="flex flex-col gap-3">
             <div className="flex items-end justify-between gap-3">
               <Label htmlFor="calc-months" className="text-sm font-medium">
-                Repay over
-              </Label>
+                {t("Repay over")}</Label>
               <div className="relative w-36">
                 <Input
                   id="calc-months"
@@ -142,15 +138,15 @@ export function LoanCalculator({ policy, onApply }: Props) {
                   className="h-9 pr-16 text-right font-nums font-semibold"
                   value={months}
                   onChange={(e) => {
-                    const n = Math.round(Number(e.target.value))
-                    if (n >= 1) setMonths(Math.min(MAX_MONTHS, n))
+                    const num = Math.round(Number(e.target.value))
+                    if (num >= 1) setMonths(Math.min(MAX_MONTHS, num))
                   }}
                 />
-                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">months</span>
+                <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">{t("months")}</span>
               </div>
             </div>
             <Slider
-              aria-label="Loan term in months"
+              aria-label={t("Loan term in months")}
               min={1}
               max={MAX_SLIDER_MONTHS}
               step={1}
@@ -167,7 +163,7 @@ export function LoanCalculator({ policy, onApply }: Props) {
                     months === m ? "border-primary bg-primary/10 font-medium text-primary" : "hover:bg-muted"
                   }`}
                 >
-                  {m < 12 ? `${m} months` : `${m / 12} year${m === 12 ? "" : "s"}`}
+                  {m < 12 ? t("{0} months", m) : m === 12 ? t("{0} year", 1) : t("{0} years", m / 12)}
                 </button>
               ))}
             </div>
@@ -175,7 +171,7 @@ export function LoanCalculator({ policy, onApply }: Props) {
 
           {policy.emi_applicable && (
             <div className="flex flex-col gap-2">
-              <Label className="text-sm font-medium">Repayment method</Label>
+              <Label className="text-sm font-medium">{t("Repayment method")}</Label>
               <div className="grid grid-cols-2 gap-1 rounded-lg bg-muted p-1" role="radiogroup">
                 {(
                   [
@@ -193,7 +189,7 @@ export function LoanCalculator({ policy, onApply }: Props) {
                       method === id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    {label}
+                    {t(label)}
                   </button>
                 ))}
               </div>
@@ -204,20 +200,18 @@ export function LoanCalculator({ policy, onApply }: Props) {
             <li className="flex gap-2">
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               {effectiveMethod === "simple"
-                ? `${rate}% per year simple interest on the full amount, charged monthly.`
-                : `${rate}% per year on the remaining balance; each instalment is the same.`}
+                ? t("{0}% per year simple interest on the full amount, charged monthly.", rate)
+                : t("{0}% per year on the remaining balance; each instalment is the same.", rate)}
             </li>
             {!!policy.grace_period_days && (
               <li className="flex gap-2">
                 <CalendarCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                {policy.grace_period_days} days' grace before late penalties apply.
-              </li>
+                {n(policy.grace_period_days)} {t(" days' grace before late penalties apply.")}</li>
             )}
             {policy.requires_collateral && (
               <li className="flex gap-2">
                 <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                This policy requires collateral.
-              </li>
+                {t("This policy requires collateral.")}</li>
             )}
           </ul>
         </div>
@@ -225,14 +219,14 @@ export function LoanCalculator({ policy, onApply }: Props) {
         {/* ── Results ────────────────────────────────────────── */}
         <div className="flex flex-col gap-5 border-t bg-muted/30 p-5 sm:p-6 lg:border-l lg:border-t-0">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Monthly instalment</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t("Monthly instalment")}</p>
             <p className="mt-1 font-nums text-3xl font-semibold tracking-tight sm:text-4xl" aria-live="polite">
               {formatRs(quote.monthlyPayment)}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {effectiveMethod === "simple"
-                ? `${formatRs(quote.schedule[0]?.principal ?? 0)} principal + ${formatRs(quote.monthlyInterest)} interest, for ${quote.months} months`
-                : `for ${quote.months} months`}
+                ? t("{0} principal + {1} interest, for {2} months", formatRs(quote.schedule[0]?.principal ?? 0), formatRs(quote.monthlyInterest), quote.months)
+                : t("for {0} months", quote.months)}
             </p>
           </div>
 
@@ -245,18 +239,16 @@ export function LoanCalculator({ policy, onApply }: Props) {
             <dl className="grid grid-cols-3 gap-3 text-sm">
               <div>
                 <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="h-2 w-2 rounded-full bg-chart-1" /> You borrow
-                </dt>
+                  <span className="h-2 w-2 rounded-full bg-chart-1" /> {t(" You borrow")}</dt>
                 <dd className="font-nums font-medium">{formatRs(quote.amount)}</dd>
               </div>
               <div>
                 <dt className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <span className="h-2 w-2 rounded-full bg-chart-3" /> Total interest
-                </dt>
+                  <span className="h-2 w-2 rounded-full bg-chart-3" /> {t(" Total interest")}</dt>
                 <dd className="font-nums font-medium">{formatRs(quote.totalInterest)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">Total to repay</dt>
+                <dt className="text-xs text-muted-foreground">{t("Total to repay")}</dt>
                 <dd className="font-nums font-semibold">{formatRs(quote.totalRepayable)}</dd>
               </div>
             </dl>
@@ -265,7 +257,7 @@ export function LoanCalculator({ policy, onApply }: Props) {
           <div className="flex items-center gap-2 rounded-lg border bg-card p-3 text-xs">
             <Sparkles className="h-4 w-4 shrink-0 text-primary" />
             <span>
-              If paid out today, the loan would be repaid by <span className="font-medium">{formatDate(addMonths(quote.months))}</span>.
+              {t("If paid out today, the loan would be repaid by ")}<span className="font-medium">{formatDate(addMonths(quote.months))}</span>.
             </span>
           </div>
 
@@ -273,8 +265,7 @@ export function LoanCalculator({ policy, onApply }: Props) {
           <Collapsible open={scheduleOpen} onOpenChange={setScheduleOpen}>
             <CollapsibleTrigger asChild>
               <button type="button" className="flex w-full items-center justify-between text-sm font-medium">
-                Repayment schedule
-                <ChevronDown className={`h-4 w-4 transition-transform ${scheduleOpen ? "rotate-180" : ""}`} />
+                {t("Repayment schedule")}<ChevronDown className={`h-4 w-4 transition-transform ${scheduleOpen ? "rotate-180" : ""}`} />
               </button>
             </CollapsibleTrigger>
             <CollapsibleContent>
@@ -282,11 +273,11 @@ export function LoanCalculator({ policy, onApply }: Props) {
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 bg-muted/80 text-muted-foreground backdrop-blur">
                     <tr>
-                      <th className="px-3 py-2 text-left font-medium">Month</th>
-                      <th className="px-3 py-2 text-right font-medium">Principal</th>
-                      <th className="px-3 py-2 text-right font-medium">Interest</th>
-                      <th className="px-3 py-2 text-right font-medium">Pay</th>
-                      <th className="px-3 py-2 text-right font-medium">Owed after</th>
+                      <th className="px-3 py-2 text-left font-medium">{t("Month")}</th>
+                      <th className="px-3 py-2 text-right font-medium">{t("Principal")}</th>
+                      <th className="px-3 py-2 text-right font-medium">{t("Interest")}</th>
+                      <th className="px-3 py-2 text-right font-medium">{t("Pay")}</th>
+                      <th className="px-3 py-2 text-right font-medium">{t("Owed after")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y font-nums">
@@ -307,11 +298,9 @@ export function LoanCalculator({ policy, onApply }: Props) {
 
           <div className="mt-auto flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Badge variant="outline" className="w-fit text-[11px] font-normal text-muted-foreground">
-              Estimate · final terms are set when the loan is approved
-            </Badge>
+              {t("Estimate · final terms are set when the loan is approved")}</Badge>
             <Button onClick={() => onApply(policy.policy_id, quote.amount, quote.months)}>
-              Apply with these numbers
-              <ArrowRight className="ml-2 h-4 w-4" />
+              {t("Apply with these numbers")}<ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </div>
         </div>

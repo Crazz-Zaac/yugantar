@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 import { Toaster } from "@components/ui/sonner";
 import { ConfirmProvider } from "@/components/confirm/ConfirmProvider";
 import { TooltipProvider } from "@components/ui/tooltip";
@@ -105,12 +106,14 @@ function App() {
         disableTransitionOnChange
       >
         <AuthProvider>
-          <TooltipProvider>
-            <ConfirmProvider>
-              <Toaster richColors closeButton position="top-right" />
-              <Router />
-            </ConfirmProvider>
-          </TooltipProvider>
+          <LanguageProvider>
+            <TooltipProvider>
+              <ConfirmProvider>
+                <Toaster richColors closeButton position="top-right" />
+                <Router />
+              </ConfirmProvider>
+            </TooltipProvider>
+          </LanguageProvider>
         </AuthProvider>
       </ThemeProvider>
     </ErrorBoundary>

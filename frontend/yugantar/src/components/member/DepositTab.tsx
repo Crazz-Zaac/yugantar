@@ -1,3 +1,4 @@
+import { enumLabel, n, t } from "@/lib/i18n"
 import { useState, useEffect, useRef, useCallback } from "react"
 import {
   Upload,
@@ -58,9 +59,9 @@ interface DepositPolicy {
 /** "Due on day 10 each month" / "Within 3 months" */
 function scheduleText(p: DepositPolicy): string {
   if (p.schedule_type === "monthly_fixed_day") {
-    return p.due_day_of_month ? `Due on day ${p.due_day_of_month} each month` : "Monthly (due day not set)"
+    return p.due_day_of_month ? t("Due on day {0} each month", p.due_day_of_month) : t("Monthly (due day not set)")
   }
-  return p.allowed_months ? `Within ${p.allowed_months} month${p.allowed_months === 1 ? "" : "s"}` : "Occasional (period not set)"
+  return p.allowed_months ? (p.allowed_months === 1 ? t("Within {0} month", 1) : t("Within {0} months", p.allowed_months)) : t("Occasional (period not set)")
 }
 
 interface OcrResult {
@@ -152,23 +153,20 @@ function depositStatusBadge(status: DepositItem["verification_status"]) {
     return (
       <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-success text-xs">
         <CheckCircle2 className="h-3 w-3" />
-        Verified
-      </Badge>
+        {t("Verified")}</Badge>
     )
   }
   if (status === "rejected") {
     return (
       <Badge variant="outline" className="gap-1 border-destructive/30 bg-destructive/10 text-destructive text-xs">
         <AlertCircle className="h-3 w-3" />
-        Rejected
-      </Badge>
+        {t("Rejected")}</Badge>
     )
   }
   return (
     <Badge variant="outline" className="gap-1 border-amber-500/30 bg-amber-500/10 text-amber-600 text-xs">
       <Clock className="h-3 w-3" />
-      Pending
-    </Badge>
+      {t("Pending")}</Badge>
   )
 }
 
@@ -181,7 +179,7 @@ function categoryLabel(category: SplitCategory): string {
     loan_interest: "Loan Interest",
     loan_renewal: "Loan Renewal",
   }
-  return map[category]
+  return t(map[category])
 }
 
 const OCR_POLL_INTERVAL = 2000
@@ -320,7 +318,7 @@ export function DepositTab() {
           return (taskResult?.data ?? taskResult) as OcrResult
         }
         if (data.status === "failed") {
-          throw new Error(data.message || "OCR processing failed")
+          throw new Error(data.message || t("OCR processing failed"))
         }
         await new Promise((r) => setTimeout(r, OCR_POLL_INTERVAL))
         return poll()
@@ -331,7 +329,7 @@ export function DepositTab() {
       setOcrDetected(result)
     } catch (err: unknown) {
       setOcrError(
-        `${err instanceof Error ? err.message : "OCR processing failed"} You can enter the voucher details manually below.`,
+        (err instanceof Error ? err.message : t("OCR processing failed")) + " " + t("You can enter the voucher details manually below."),
       )
       // Fall back to manual entry so the member isn't stuck
       setOcrResult({ ...EMPTY_OCR_RESULT })
@@ -377,7 +375,7 @@ export function DepositTab() {
       })
       setAllocations([])
     } catch (err: unknown) {
-      setPreviewError(err instanceof Error ? err.message : "Failed to compute deposit preview")
+      setPreviewError(err instanceof Error ? err.message : t("Failed to compute deposit preview"))
     } finally {
       setPreviewLoading(false)
     }
@@ -548,7 +546,7 @@ export function DepositTab() {
         clearFile()
       }, 2500)
     } catch (err: unknown) {
-      setSubmitError(err instanceof Error ? err.message : "Failed to submit deposit")
+      setSubmitError(err instanceof Error ? err.message : t("Failed to submit deposit"))
     } finally {
       setSubmitting(false)
     }
@@ -580,9 +578,9 @@ export function DepositTab() {
       fetchHistoryDeposits()
       setActiveTab("make")
       setSubmitSuccess(false)
-      setSubmitError("Deposit withdrawn. You can edit details and submit again.")
+      setSubmitError(t("Deposit withdrawn. You can edit details and submit again."))
     } catch (err: any) {
-      setSubmitError(err?.response?.data?.detail ?? "Failed to withdraw deposit")
+      setSubmitError(err?.response?.data?.detail ?? t("Failed to withdraw deposit"))
     } finally {
       setActionLoadingId(null)
     }
@@ -610,7 +608,7 @@ export function DepositTab() {
       {loading ? (
         <li className="py-8 text-center"><Loader2 className="mx-auto h-4 w-4 animate-spin text-muted-foreground" /></li>
       ) : rows.length === 0 ? (
-        <li className="py-8 text-center text-sm text-muted-foreground">No records found.</li>
+        <li className="py-8 text-center text-sm text-muted-foreground">{t("No records found.")}</li>
       ) : (
         rows.map((dep) => (
           <li key={dep.id} className="flex flex-col gap-2 py-3">
@@ -618,10 +616,10 @@ export function DepositTab() {
               <div className="min-w-0">
                 <p className="font-nums text-sm font-semibold">{formatRsFromRupees(Number(dep.deposited_amount))}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {showUser && <>{dep.depositor_name ?? "Member"} · </>}
-                  {formatDate(dep.deposited_date || dep.created_at)} · <span className="capitalize">{dep.deposit_type.replace("_", " ")}</span>
+                  {showUser && <>{dep.depositor_name ?? t("Member")} · </>}
+                  {formatDate(dep.deposited_date || dep.created_at)} · <span className="capitalize">{enumLabel(dep.deposit_type)}</span>
                 </p>
-                <p className="text-xs text-muted-foreground">Due {formatDate(dep.due_deposit_date)}</p>
+                <p className="text-xs text-muted-foreground">{t("Due {0}", formatDate(dep.due_deposit_date))}</p>
               </div>
               {depositStatusBadge(dep.verification_status)}
             </div>
@@ -634,8 +632,7 @@ export function DepositTab() {
                 disabled={actionLoadingId === dep.id}
               >
                 {actionLoadingId === dep.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Ban className="mr-1 h-3.5 w-3.5" />}
-                Withdraw & Edit
-              </Button>
+                {t("Withdraw & Edit")}</Button>
             )}
           </li>
         ))
@@ -645,13 +642,13 @@ export function DepositTab() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-xs">Date</TableHead>
-            {showUser && <TableHead className="text-xs">User</TableHead>}
-            <TableHead className="text-xs">Amount</TableHead>
-            <TableHead className="text-xs">Type</TableHead>
-            <TableHead className="text-xs">Due Date</TableHead>
-            <TableHead className="text-xs">Status</TableHead>
-            {showWithdrawAction && <TableHead className="text-xs text-right">Action</TableHead>}
+            <TableHead className="text-xs">{t("Date")}</TableHead>
+            {showUser && <TableHead className="text-xs">{t("User")}</TableHead>}
+            <TableHead className="text-xs">{t("Amount")}</TableHead>
+            <TableHead className="text-xs">{t("Type")}</TableHead>
+            <TableHead className="text-xs">{t("Due Date")}</TableHead>
+            <TableHead className="text-xs">{t("Status")}</TableHead>
+            {showWithdrawAction && <TableHead className="text-xs text-right">{t("Action")}</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -664,8 +661,7 @@ export function DepositTab() {
           ) : rows.length === 0 ? (
             <TableRow>
               <TableCell colSpan={showWithdrawAction ? (showUser ? 7 : 6) : (showUser ? 6 : 5)} className="py-8 text-center text-sm text-muted-foreground">
-                No records found.
-              </TableCell>
+                {t("No records found.")}</TableCell>
             </TableRow>
           ) : (
             rows.map((dep) => (
@@ -675,7 +671,7 @@ export function DepositTab() {
                   <TableCell className="text-xs">{dep.depositor_name ?? `${dep.user_id.slice(0, 8)}…`}</TableCell>
                 )}
                 <TableCell className="text-xs font-medium">{formatRsFromRupees(Number(dep.deposited_amount))}</TableCell>
-                <TableCell className="text-xs capitalize">{dep.deposit_type.replace("_", " ")}</TableCell>
+                <TableCell className="text-xs capitalize">{enumLabel(dep.deposit_type)}</TableCell>
                 <TableCell className="text-xs">{formatDate(dep.due_deposit_date)}</TableCell>
                 <TableCell>{depositStatusBadge(dep.verification_status)}</TableCell>
                 {showWithdrawAction && (
@@ -693,8 +689,7 @@ export function DepositTab() {
                         ) : (
                           <Ban className="mr-1 h-3.5 w-3.5" />
                         )}
-                        Withdraw & Edit
-                      </Button>
+                        {t("Withdraw & Edit")}</Button>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
@@ -712,35 +707,29 @@ export function DepositTab() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h2 className="text-lg font-semibold text-foreground">Deposits</h2>
+        <h2 className="text-lg font-semibold text-foreground">{t("Deposits")}</h2>
         <p className="text-sm text-muted-foreground">
-          Submit deposits, track verification status, and manage pending submissions
-        </p>
+          {t("Submit deposits, track verification status, and manage pending submissions")}</p>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className={`h-auto w-full justify-start overflow-x-auto [scrollbar-width:none] [&>button]:shrink-0 sm:grid ${isDepositReviewer ? "sm:max-w-2xl sm:grid-cols-5" : "sm:max-w-xl sm:grid-cols-4"}`}>
           <TabsTrigger value="make" className="gap-1">
             <Banknote className="h-4 w-4" />
-            Make Deposit
-          </TabsTrigger>
+            {t("Make Deposit")}</TabsTrigger>
           <TabsTrigger value="my" className="gap-1">
             <ListChecks className="h-4 w-4" />
-            My Deposits
-          </TabsTrigger>
+            {t("My Deposits")}</TabsTrigger>
           <TabsTrigger value="community" className="gap-1">
             <Users className="h-4 w-4" />
-            Community
-          </TabsTrigger>
+            {t("Community")}</TabsTrigger>
           <TabsTrigger value="history" className="gap-1">
             <History className="h-4 w-4" />
-            History
-          </TabsTrigger>
+            {t("History")}</TabsTrigger>
           {isDepositReviewer && (
             <TabsTrigger value="review" className="gap-1">
               <ShieldCheck className="h-4 w-4" />
-              Review
-            </TabsTrigger>
+              {t("Review")}</TabsTrigger>
           )}
         </TabsList>
 
@@ -761,15 +750,17 @@ export function DepositTab() {
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold">
                   {thisPeriod.paid
-                    ? `This period's deposit is in: ${formatRsFromRupees(Number(thisPeriod.amount))} for ${formatDate(thisPeriod.due_date)}`
-                    : `${formatRsFromRupees(Number(thisPeriod.amount))} due by ${formatDate(thisPeriod.due_date)}`}
+                    ? t("This period's deposit is in: {0} for {1}", formatRsFromRupees(Number(thisPeriod.amount)), formatDate(thisPeriod.due_date))
+                    : t("{0} due by {1}", formatRsFromRupees(Number(thisPeriod.amount)), formatDate(thisPeriod.due_date))}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {thisPeriod.paid
-                    ? "Check its status under My Deposits. You can also pay ahead or towards your loan below."
+                    ? t("Check its status under My Deposits. You can also pay ahead or towards your loan below.")
                     : thisPeriod.days_left <= 0
-                      ? "Due today. Deposits after the due date get the late fine."
-                      : `${thisPeriod.days_left} day${thisPeriod.days_left === 1 ? "" : "s"} left. Deposits after the due date get the late fine.`}
+                      ? t("Due today. Deposits after the due date get the late fine.")
+                      : thisPeriod.days_left === 1
+                        ? t("{0} day left. Deposits after the due date get the late fine.", 1)
+                        : t("{0} days left. Deposits after the due date get the late fine.", thisPeriod.days_left)}
                 </p>
               </div>
             </div>
@@ -778,10 +769,10 @@ export function DepositTab() {
             <Card className="lg:col-span-3">
               <CardHeader className="gap-4">
                 <div>
-                  <CardTitle className="text-sm font-semibold">Make a deposit</CardTitle>
-                  <CardDescription>Pay at the bank first, then upload the voucher here.</CardDescription>
+                  <CardTitle className="text-sm font-semibold">{t("Make a deposit")}</CardTitle>
+                  <CardDescription>{t("Pay at the bank first, then upload the voucher here.")}</CardDescription>
                 </div>
-                <ol className="grid grid-cols-4 gap-2" aria-label="Steps">
+                <ol className="grid grid-cols-4 gap-2" aria-label={t("Steps")}>
                   {["Policy", "Voucher", "Check & split", "Submit"].map((label, i) => {
                     const step = !selectedPolicyId ? 0 : !ocrResult ? 1 : !canSubmit ? 2 : 3
                     const state = i < step ? "done" : i === step ? "current" : "todo"
@@ -791,7 +782,7 @@ export function DepositTab() {
                           className={`h-1.5 rounded-full ${state === "todo" ? "bg-muted" : "bg-primary"} ${state === "current" ? "opacity-60" : ""}`}
                         />
                         <span className={`text-[11px] ${state === "todo" ? "text-muted-foreground" : "font-medium text-foreground"}`}>
-                          {i + 1}. {label}
+                          {n(i + 1)}. {t(label)}
                         </span>
                       </li>
                     )
@@ -800,11 +791,11 @@ export function DepositTab() {
               </CardHeader>
               <CardContent className="flex flex-col gap-5">
                 <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium">Current deposit policy</Label>
+                  <Label className="text-xs font-medium">{t("Current deposit policy")}</Label>
                   {policiesLoading ? (
                     <div className="flex h-14 items-center gap-2 rounded-lg border px-3">
                       <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">Loading the current policy…</span>
+                      <span className="text-sm text-muted-foreground">{t("Loading the current policy…")}</span>
                     </div>
                   ) : selectedPolicy ? (
                     <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
@@ -814,20 +805,19 @@ export function DepositTab() {
                       <div className="min-w-0 flex-1">
                         <p className="font-nums text-sm font-semibold">{formatRs(selectedPolicy.amount_paisa)}</p>
                         <p className="text-xs text-muted-foreground">
-                          {scheduleText(selectedPolicy)} · late fine {selectedPolicy.late_deposit_fine}% · in force since {formatDate(selectedPolicy.effective_from)}
+                          {t("{0} · late fine {1}% · in force since {2}", scheduleText(selectedPolicy), selectedPolicy.late_deposit_fine, formatDate(selectedPolicy.effective_from))}
                         </p>
                       </div>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-warning-foreground dark:text-warning">
                       <AlertTriangle className="h-4 w-4 shrink-0" />
-                      No deposit policy is in force right now, so deposits can't be made. Please contact the Treasurer.
-                    </div>
+                      {t("No deposit policy is in force right now, so deposits can't be made. Please contact the Treasurer.")}</div>
                   )}
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <Label className="text-xs font-medium">Payment voucher</Label>
+                  <Label className="text-xs font-medium">{t("Payment voucher")}</Label>
                   <div
                     onDragOver={(e) => {
                       e.preventDefault()
@@ -876,17 +866,16 @@ export function DepositTab() {
                           }}
                         >
                           <X className="mr-1 h-3 w-3" />
-                          Remove
-                        </Button>
+                          {t("Remove")}</Button>
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-2">
                         <Upload className="h-8 w-8 text-muted-foreground/60" />
                         <p className="text-sm font-medium">
-                          <span className="sm:hidden">Tap to take a photo or choose a screenshot</span>
-                          <span className="hidden sm:inline">Drop the voucher here or click to choose it</span>
+                          <span className="sm:hidden">{t("Tap to take a photo or choose a screenshot")}</span>
+                          <span className="hidden sm:inline">{t("Drop the voucher here or click to choose it")}</span>
                         </p>
-                        <p className="text-xs text-muted-foreground">Bank app screenshot or photo · JPG, PNG or WEBP up to 10 MB</p>
+                        <p className="text-xs text-muted-foreground">{t("Bank app screenshot or photo · JPG, PNG or WEBP up to 10 MB")}</p>
                       </div>
                     )}
                   </div>
@@ -895,7 +884,7 @@ export function DepositTab() {
                 {ocrLoading && (
                   <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    <p className="text-sm font-medium text-primary">Processing voucher...</p>
+                    <p className="text-sm font-medium text-primary">{t("Processing voucher...")}</p>
                   </div>
                 )}
 
@@ -917,7 +906,7 @@ export function DepositTab() {
                     edited ? (
                       <p className="flex items-center gap-1 text-xs text-warning">
                         <AlertTriangle className="h-3 w-3" />
-                        Edited. OCR read: {original}
+                        {t("Edited. OCR read: ")}{original}
                       </p>
                     ) : null
 
@@ -925,21 +914,18 @@ export function DepositTab() {
                     <div className="rounded-lg border p-4">
                       <div className="mb-1 flex items-center gap-2">
                         <ScanLine className="h-4 w-4 text-primary" />
-                        <p className="text-xs font-semibold uppercase tracking-wider text-primary">Voucher Details</p>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-primary">{t("Voucher Details")}</p>
                       </div>
                       <p className="mb-3 text-xs text-muted-foreground">
-                        {detected
-                          ? "Check these against your voucher and correct anything OCR misread."
-                          : "Enter the details exactly as shown on your voucher."}{" "}
-                        The treasurer verifies every deposit before it counts.
-                        {receiptId &&
-                          " Your voucher image is kept for 15 days so the treasurer can check it, then deleted."}
+                        {t("{0} The treasurer verifies every deposit before it counts.{1}", detected
+                          ? t("Check these against your voucher and correct anything OCR misread.")
+                          : t("Enter the details exactly as shown on your voucher."), receiptId &&
+                          t(" Your voucher image is kept for 15 days so the treasurer can check it, then deleted."))}
                       </p>
                       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div className="flex flex-col gap-1">
                           <Label htmlFor="voucher-amount" className="text-xs font-medium text-muted-foreground">
-                            Deposited Amount (Rs.)
-                          </Label>
+                            {t("Deposited Amount (Rs.)")}</Label>
                           <div className="relative">
                             <IndianRupee className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                             <Input
@@ -948,7 +934,7 @@ export function DepositTab() {
                               inputMode="decimal"
                               min={0.01}
                               step={0.01}
-                              placeholder="Not detected, enter amount"
+                              placeholder={t("Not detected, enter amount")}
                               className="pl-8 font-nums font-semibold"
                               value={ocrResult.amount ?? ""}
                               onChange={(e) =>
@@ -958,13 +944,12 @@ export function DepositTab() {
                           </div>
                           {ocrHint(
                             amountEdited,
-                            detected?.amount != null ? formatRsFromRupees(detected.amount) : "nothing",
+                            detected?.amount != null ? formatRsFromRupees(detected.amount) : t("nothing"),
                           )}
                         </div>
                         <div className="flex flex-col gap-1">
                           <Label htmlFor="voucher-date" className="text-xs font-medium text-muted-foreground">
-                            Deposited Date &amp; Time ({TIME_ZONE_LABEL})
-                          </Label>
+                            {t("Deposited Date & Time ({0})", TIME_ZONE_LABEL)}</Label>
                           <div className="relative">
                             <CalendarClock className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                             <Input
@@ -976,22 +961,21 @@ export function DepositTab() {
                               onChange={(e) => updateVoucher({ date: fromZoneInputValue(e.target.value) })}
                             />
                           </div>
-                          {ocrHint(dateEdited, detected?.date ? formatDateTime(detected.date) : "nothing")}
+                          {ocrHint(dateEdited, detected?.date ? formatDateTime(detected.date) : t("nothing"))}
                           {dateInFuture && (
-                            <p className="text-xs text-destructive">The date can't be in the future.</p>
+                            <p className="text-xs text-destructive">{t("The date can't be in the future.")}</p>
                           )}
                         </div>
                       </div>
                       <div className="mt-3 flex flex-col gap-1">
                         <Label htmlFor="voucher-ref" className="text-xs font-medium text-muted-foreground">
-                          Voucher Reference
-                        </Label>
+                          {t("Voucher Reference")}</Label>
                         <div className="relative">
                           <Receipt className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                           <Input
                             id="voucher-ref"
                             maxLength={64}
-                            placeholder="Reference code / transaction ID"
+                            placeholder={t("Reference code / transaction ID")}
                             className="pl-8 font-mono"
                             value={ocrResult.reference ?? ""}
                             onChange={(e) => updateVoucher({ reference: e.target.value || null })}
@@ -1006,7 +990,7 @@ export function DepositTab() {
                 {previewLoading && (
                   <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-3">
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                    <p className="text-sm font-medium text-primary">Computing summary...</p>
+                    <p className="text-sm font-medium text-primary">{t("Computing summary...")}</p>
                   </div>
                 )}
 
@@ -1021,24 +1005,24 @@ export function DepositTab() {
                   <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
                     <div className="mb-3 flex items-center gap-2">
                       <Banknote className="h-4 w-4 text-primary" />
-                      <p className="text-xs font-semibold uppercase tracking-wider text-primary">Summary</p>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-primary">{t("Summary")}</p>
                     </div>
 
                     <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
                       <div className="rounded-md border bg-background p-2 text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Net Amount</p>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("Net Amount")}</p>
                         <p className="font-nums text-sm font-bold">{formatRsFromRupees(preview.net_amount)}</p>
                       </div>
                       <div className="rounded-md border bg-background p-2 text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Policy Amount</p>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("Policy Amount")}</p>
                         <p className="font-nums text-sm font-bold">{formatRsFromRupees(preview.required_deposit)}</p>
                       </div>
                       <div className="rounded-md border bg-background p-2 text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Late Fine</p>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("Late Fine")}</p>
                         <p className="font-nums text-sm font-bold">{formatRsFromRupees(preview.fine_amount)}</p>
                       </div>
                       <div className="rounded-md border bg-background p-2 text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Due Date</p>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("Due Date")}</p>
                         <p className="text-sm font-medium">{formatDate(preview.due_date)}</p>
                       </div>
                     </div>
@@ -1047,42 +1031,38 @@ export function DepositTab() {
                       <div className="mb-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                         <p className="text-xs text-destructive/90">
-                          Net amount is lower than policy amount + fine. You can still allocate categories manually,
-                          but ensure your allocation total matches net amount.
-                        </p>
+                          {t("Net amount is lower than policy amount + fine. You can still allocate categories manually, but ensure your allocation total matches net amount.")}</p>
                       </div>
                     )}
 
                     <Separator className="my-3" />
                     <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Manually Allocate Your Deposit
-                    </p>
+                      {t("Manually Allocate Your Deposit")}</p>
 
                     <div className="mb-3 flex flex-wrap items-center gap-2">
                       <Select value={newCategory} onValueChange={(v) => setNewCategory(v as SplitCategory)}>
                         <SelectTrigger className="w-48">
-                          <SelectValue placeholder="Select category" />
+                          <SelectValue placeholder={t("Select category")} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="deposit">Regular Deposit</SelectItem>
-                          <SelectItem value="fine">Late Fine</SelectItem>
-                          <SelectItem value="advance">Advance Deposit</SelectItem>
-                          <SelectItem value="loan_principal">Loan Principal</SelectItem>
-                          <SelectItem value="loan_interest">Loan Interest</SelectItem>
-                          <SelectItem value="loan_renewal">Loan Renewal</SelectItem>
+                          <SelectItem value="deposit">{t("Regular Deposit")}</SelectItem>
+                          <SelectItem value="fine">{t("Late Fine")}</SelectItem>
+                          <SelectItem value="advance">{t("Advance Deposit")}</SelectItem>
+                          <SelectItem value="loan_principal">{t("Loan Principal")}</SelectItem>
+                          <SelectItem value="loan_interest">{t("Loan Interest")}</SelectItem>
+                          <SelectItem value="loan_renewal">{t("Loan Renewal")}</SelectItem>
                         </SelectContent>
                       </Select>
 
                       {(newCategory === "loan_principal" || newCategory === "loan_interest" || newCategory === "loan_renewal") && (
                         <Select value={selectedLoanId} onValueChange={setSelectedLoanId}>
                           <SelectTrigger className="w-56">
-                            <SelectValue placeholder="Select loan" />
+                            <SelectValue placeholder={t("Select loan")} />
                           </SelectTrigger>
                           <SelectContent>
                             {preview.active_loans.map((ln) => (
                               <SelectItem key={ln.loan_id} value={ln.loan_id}>
-                                Loan of {formatRs(ln.principal_paisa)} · {formatRs(ln.outstanding_principal_paisa)} left
-                              </SelectItem>
+                                {t("Loan of {0} · {1} left", formatRs(ln.principal_paisa), formatRs(ln.outstanding_principal_paisa))}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -1090,15 +1070,13 @@ export function DepositTab() {
 
                       <Button variant="outline" className="gap-1" onClick={addAllocation}>
                         <Plus className="h-4 w-4" />
-                        Add Category
-                      </Button>
+                        {t("Add Category")}</Button>
                     </div>
 
                     <div className="flex flex-col gap-2">
                       {allocations.length === 0 ? (
                         <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                          No allocations yet. Add categories manually.
-                        </div>
+                          {t("No allocations yet. Add categories manually.")}</div>
                       ) : (
                         allocations.map((alloc, idx) => (
                           <div key={`${alloc.category}-${alloc.loan_id ?? idx}`} className="flex items-center gap-2 rounded-md border bg-background p-2.5">
@@ -1109,12 +1087,12 @@ export function DepositTab() {
                               const ln = preview?.active_loans.find((l) => l.loan_id === alloc.loan_id)
                               return (
                                 <span className="text-[11px] text-muted-foreground">
-                                  {ln ? `Loan of ${formatRs(ln.principal_paisa)}` : "Loan"}
+                                  {ln ? t("Loan of {0}", formatRs(ln.principal_paisa)) : t("Loan")}
                                 </span>
                               )
                             })()}
                             <div className="ml-auto flex items-center gap-1">
-                              <span className="text-xs text-muted-foreground">Rs.</span>
+                              <span className="text-xs text-muted-foreground">{t("Rs.")}</span>
                               <Input
                                 type="number"
                                 min={0}
@@ -1140,13 +1118,13 @@ export function DepositTab() {
 
                     <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                       <div className="rounded-md border bg-background p-2 text-xs">
-                        <span className="text-muted-foreground">Net:</span> {formatRsFromRupees(netAmount)}
+                        <span className="text-muted-foreground">{t("Net:")}</span> {formatRsFromRupees(netAmount)}
                       </div>
                       <div className="rounded-md border bg-background p-2 text-xs">
-                        <span className="text-muted-foreground">Allocated:</span> {formatRsFromRupees(allocTotal)}
+                        <span className="text-muted-foreground">{t("Allocated:")}</span> {formatRsFromRupees(allocTotal)}
                       </div>
                       <div className={`rounded-md border p-2 text-xs ${Math.abs(allocationDiff) < 1 ? "bg-emerald-50 border-emerald-200" : "bg-orange-50 border-orange-200"}`}>
-                        <span className="text-muted-foreground">Remaining:</span> {formatRsFromRupees(allocationDiff)}
+                        <span className="text-muted-foreground">{t("Remaining:")}</span> {formatRsFromRupees(allocationDiff)}
                       </div>
                     </div>
                   </div>
@@ -1163,15 +1141,13 @@ export function DepositTab() {
                   <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                     <p className="text-sm font-medium text-emerald-700">
-                      Deposit submitted in pending status. Treasurer has been notified for verification.
-                    </p>
+                      {t("Deposit submitted in pending status. Treasurer has been notified for verification.")}</p>
                   </div>
                 )}
 
                 <Button className="h-10 w-full sm:w-auto sm:self-end" disabled={!canSubmit} onClick={handleSubmit}>
                   {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}
-                  Submit
-                </Button>
+                  {t("Submit")}</Button>
               </CardContent>
             </Card>
 
@@ -1179,8 +1155,7 @@ export function DepositTab() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-sm font-semibold">
                   <Landmark className="h-4 w-4 text-primary" />
-                  How deposits work
-                </CardTitle>
+                  {t("How deposits work")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <ol className="flex flex-col gap-4">
@@ -1189,14 +1164,14 @@ export function DepositTab() {
                     ["Upload the voucher", "We read the amount, date and reference from it. Check them and correct anything that's wrong."],
                     ["Split the money", "Choose what it covers: this period's deposit, a late fine, an advance, or your loan."],
                     ["Treasurer verifies", "It counts once the Treasurer has checked it against the bank. The voucher image is kept for 15 days for that."],
-                  ].map(([t, d], i) => (
-                    <li key={t} className="flex gap-3">
+                  ].map(([title, d], i) => (
+                    <li key={title} className="flex gap-3">
                       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                        {i + 1}
+                        {n(i + 1)}
                       </span>
                       <span>
-                        <span className="block text-sm font-medium">{t}</span>
-                        <span className="block text-xs text-muted-foreground">{d}</span>
+                        <span className="block text-sm font-medium">{t(title)}</span>
+                        <span className="block text-xs text-muted-foreground">{t(d)}</span>
                       </span>
                     </li>
                   ))}
@@ -1209,10 +1184,9 @@ export function DepositTab() {
         <TabsContent value="my" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-semibold">My Deposits</CardTitle>
+              <CardTitle className="text-sm font-semibold">{t("My Deposits")}</CardTitle>
               <CardDescription>
-                Your submitted deposits. Pending deposits can be withdrawn for editing and resubmission.
-              </CardDescription>
+                {t("Your submitted deposits. Pending deposits can be withdrawn for editing and resubmission.")}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               {!myLoading && myDeposits.length > 0 && (
@@ -1223,11 +1197,11 @@ export function DepositTab() {
                     ["Rejected", myDeposits.filter((d) => d.verification_status === "rejected"), "text-destructive"],
                   ].map(([label, list, cls]) => (
                     <div key={label as string}>
-                      <dt className="text-xs text-muted-foreground">{label as string}</dt>
+                      <dt className="text-xs text-muted-foreground">{t(label as string)}</dt>
                       <dd className={`font-nums font-semibold ${cls as string}`}>
                         {formatRsFromRupees((list as DepositItem[]).reduce((sum, d) => sum + Number(d.deposited_amount), 0))}
                         <span className="block text-xs font-normal text-muted-foreground">
-                          {(list as DepositItem[]).length} deposit{(list as DepositItem[]).length === 1 ? "" : "s"}
+                          {t("{0} deposit{1}", (list as DepositItem[]).length, (list as DepositItem[]).length === 1 ? "" : "s")}
                         </span>
                       </dd>
                     </div>
@@ -1242,8 +1216,8 @@ export function DepositTab() {
         <TabsContent value="community" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-semibold">Community Deposits</CardTitle>
-              <CardDescription>Verified deposits across the cooperative</CardDescription>
+              <CardTitle className="text-sm font-semibold">{t("Community Deposits")}</CardTitle>
+              <CardDescription>{t("Verified deposits across the cooperative")}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <CommunityFilters
@@ -1260,8 +1234,8 @@ export function DepositTab() {
         <TabsContent value="history" className="mt-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm font-semibold">History</CardTitle>
-              <CardDescription>Your verified/rejected deposit history</CardDescription>
+              <CardTitle className="text-sm font-semibold">{t("History")}</CardTitle>
+              <CardDescription>{t("Your verified/rejected deposit history")}</CardDescription>
             </CardHeader>
             <CardContent>{renderDepositTable(historyDeposits, historyLoading)}</CardContent>
           </Card>
@@ -1271,8 +1245,8 @@ export function DepositTab() {
           <TabsContent value="review" className="mt-4 flex flex-col gap-4">
             <Card>
               <CardHeader>
-                <CardTitle className="text-sm font-semibold">Review Deposits</CardTitle>
-                <CardDescription>Deposits waiting for your verification (never your own)</CardDescription>
+                <CardTitle className="text-sm font-semibold">{t("Review Deposits")}</CardTitle>
+                <CardDescription>{t("Deposits waiting for your verification (never your own)")}</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-3">
                 {reviewLoading ? (
@@ -1280,7 +1254,7 @@ export function DepositTab() {
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                   </div>
                 ) : reviewDeposits.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No pending deposits to review.</p>
+                  <p className="text-sm text-muted-foreground">{t("No pending deposits to review.")}</p>
                 ) : (
                   reviewDeposits.map((dep) => {
                     const isThisLoading = actionLoadingId === dep.id
@@ -1292,19 +1266,17 @@ export function DepositTab() {
                               {(dep.depositor_name ?? "?").split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase()}
                             </span>
                             <div className="space-y-1">
-                              <p className="text-sm font-medium">{dep.depositor_name ?? "Member"}</p>
+                              <p className="text-sm font-medium">{dep.depositor_name ?? t("Member")}</p>
                               <p className="font-nums text-lg font-semibold leading-none">{formatRsFromRupees(Number(dep.deposited_amount))}</p>
                               <p className="text-xs text-muted-foreground">
-                                Paid {formatDateTime(dep.deposited_date)} · due {formatDate(dep.due_deposit_date)}
+                                {t("Paid {0} · due {1}", formatDateTime(dep.deposited_date), formatDate(dep.due_deposit_date))}
                               </p>
                               {new Date(dep.deposited_date).getTime() > new Date(dep.due_deposit_date).getTime() ? (
                                 <Badge variant="outline" className="border-warning/40 bg-warning/10 text-[11px] text-warning-foreground dark:text-warning">
-                                  Late: after the due date
-                                </Badge>
+                                  {t("Late: after the due date")}</Badge>
                               ) : (
                                 <Badge variant="outline" className="border-success/30 bg-success/10 text-[11px] text-success">
-                                  On time
-                                </Badge>
+                                  {t("On time")}</Badge>
                               )}
                             </div>
                           </div>
@@ -1312,10 +1284,9 @@ export function DepositTab() {
                             {dep.receipt_id ? (
                               <Button size="sm" variant="ghost" onClick={() => setReviewReceiptId(dep.receipt_id)}>
                                 <Receipt className="mr-2 h-4 w-4" />
-                                View receipt
-                              </Button>
+                                {t("View receipt")}</Button>
                             ) : (
-                              <span className="text-xs text-muted-foreground">No receipt attached</span>
+                              <span className="text-xs text-muted-foreground">{t("No receipt attached")}</span>
                             )}
                             <Button
                               size="sm"
@@ -1327,8 +1298,7 @@ export function DepositTab() {
                               ) : (
                                 <BadgeCheck className="mr-2 h-4 w-4" />
                               )}
-                              Verify
-                            </Button>
+                              {t("Verify")}</Button>
                             <Button
                               size="sm"
                               variant="outline"
@@ -1340,8 +1310,7 @@ export function DepositTab() {
                               ) : (
                                 <Ban className="mr-2 h-4 w-4" />
                               )}
-                              Reject
-                            </Button>
+                              {t("Reject")}</Button>
                           </div>
                         </div>
                       </div>

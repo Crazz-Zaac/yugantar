@@ -1,3 +1,4 @@
+import { enumLabel, t } from "@/lib/i18n"
 import { useEffect, useState } from "react"
 import { useLocation } from "wouter"
 import {
@@ -179,11 +180,10 @@ export function HomeTab() {
       <Card>
         <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
           <AlertCircle className="h-8 w-8 text-destructive" />
-          <p className="text-sm">Couldn't load your dashboard.</p>
+          <p className="text-sm">{t("Couldn't load your dashboard.")}</p>
           <Button variant="outline" size="sm" onClick={load}>
             <RefreshCw className="mr-2 h-4 w-4" />
-            Try again
-          </Button>
+            {t("Try again")}</Button>
         </CardContent>
       </Card>
     )
@@ -203,7 +203,7 @@ export function HomeTab() {
     <div className="flex flex-col gap-6">
       {/* Greeting */}
       <div>
-        <h2 className="text-xl font-semibold tracking-tight text-foreground">Namaste, {data.first_name}</h2>
+        <h2 className="text-xl font-semibold tracking-tight text-foreground">{t("Namaste, {0}", data.first_name)}</h2>
         <p className="text-sm text-muted-foreground">
           {todayLabel()} · {TIME_ZONE_LABEL}
         </p>
@@ -218,8 +218,7 @@ export function HomeTab() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
               </span>
-              Needs your attention
-            </CardTitle>
+              {t("Needs your attention")}</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col divide-y">
             {data.actions.map((a, i) => {
@@ -249,13 +248,13 @@ export function HomeTab() {
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
         <Kpi
-          label="My savings"
+          label={t("My savings")}
           value={formatRs(data.savings_total)}
           icon={PiggyBank}
-          hint={`${data.deposits_count} verified deposit${data.deposits_count === 1 ? "" : "s"}`}
+          hint={data.deposits_count === 1 ? t("{0} verified deposit", 1) : t("{0} verified deposits", data.deposits_count)}
         />
         <Kpi
-          label="Next deposit"
+          label={t("Next deposit")}
           value={due ? formatRs(due.amount) : "—"}
           icon={CalendarClock}
           tone={due && !due.paid && due.days_left <= 3 ? "warning" : due?.paid ? "success" : "primary"}
@@ -263,36 +262,38 @@ export function HomeTab() {
             due ? (
               due.paid ? (
                 <span className="inline-flex items-center gap-1 text-success">
-                  <CheckCircle2 className="h-3 w-3" /> Paid for {formatDate(due.due_date)}
+                  <CheckCircle2 className="h-3 w-3" /> {t(" Paid for ")}{formatDate(due.due_date)}
                 </span>
               ) : (
-                <>Due {formatDate(due.due_date)} · {due.days_left <= 0 ? "today" : `${due.days_left} day${due.days_left === 1 ? "" : "s"} left`}</>
+                <>{t("Due {0} · {1}", formatDate(due.due_date), due.days_left <= 0 ? t("today") : due.days_left === 1 ? t("{0} day left", 1) : t("{0} days left", due.days_left))}</>
               )
             ) : (
-              "No active deposit policy"
+              t("No active deposit policy")
             )
           }
         />
         <Kpi
-          label="Loan outstanding"
+          label={t("Loan outstanding")}
           value={loan ? formatRs(loan.outstanding) : "—"}
           icon={CreditCard}
           tone={loan ? "primary" : "muted"}
-          hint={loan ? `of ${formatRs(loan.principal)} · ${loan.progress_pct}% repaid` : data.loan_application_pending ? "Application under review" : "No active loan"}
+          hint={loan ? t("of {0} · {1}% repaid", formatRs(loan.principal), loan.progress_pct) : data.loan_application_pending ? t("Application under review") : t("No active loan")}
         >
           {loan && <Progress value={loan.progress_pct} className="h-1.5" />}
         </Kpi>
         <Kpi
-          label="Awaiting verification"
+          label={t("Awaiting verification")}
           value={formatRs(data.pending_amount)}
           icon={Clock}
           tone={data.pending_count ? "warning" : "muted"}
           hint={
             data.pending_count
-              ? `${data.pending_count} deposit${data.pending_count === 1 ? "" : "s"} with the Treasurer`
+              ? data.pending_count === 1
+                ? t("{0} deposit with the Treasurer", 1)
+                : t("{0} deposits with the Treasurer", data.pending_count)
               : Number(data.fines_total) > 0
-                ? `Fines so far: ${formatRs(data.fines_total)}`
-                : "Nothing pending"
+                ? t("Fines so far: {0}", formatRs(data.fines_total))
+                : t("Nothing pending")
           }
         />
       </div>
@@ -301,8 +302,8 @@ export function HomeTab() {
       <div className="grid gap-4 lg:grid-cols-5">
         <Card className="lg:col-span-3">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Savings growth</CardTitle>
-            <CardDescription>Your verified savings over the last 12 months</CardDescription>
+            <CardTitle className="text-sm font-semibold">{t("Savings growth")}</CardTitle>
+            <CardDescription>{t("Your verified savings over the last 12 months")}</CardDescription>
           </CardHeader>
           <CardContent className="h-64 pl-0 sm:h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -325,8 +326,8 @@ export function HomeTab() {
 
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Money in each month</CardTitle>
-            <CardDescription>Deposits and loan repayments</CardDescription>
+            <CardTitle className="text-sm font-semibold">{t("Money in each month")}</CardTitle>
+            <CardDescription>{t("Deposits and loan repayments")}</CardDescription>
           </CardHeader>
           <CardContent className="h-64 pl-0 sm:h-72">
             <ResponsiveContainer width="100%" height="100%">
@@ -348,12 +349,12 @@ export function HomeTab() {
         <Card className="lg:col-span-3">
           <CardHeader className="flex-row items-start justify-between space-y-0 pb-3">
             <div>
-              <CardTitle className="text-sm font-semibold">My loan</CardTitle>
-              <CardDescription>{loan ? loan.purpose ?? "Loan" : "You don't have an active loan"}</CardDescription>
+              <CardTitle className="text-sm font-semibold">{t("My loan")}</CardTitle>
+              <CardDescription>{loan ? loan.purpose ?? t("Loan") : t("You don't have an active loan")}</CardDescription>
             </div>
             {loan && (
               <Badge variant="outline" className="border-success/30 bg-success/10 capitalize text-success">
-                {loan.status}
+                {enumLabel(loan.status)}
               </Badge>
             )}
           </CardHeader>
@@ -362,7 +363,7 @@ export function HomeTab() {
               <div className="flex flex-col gap-4">
                 <div>
                   <div className="mb-1.5 flex items-baseline justify-between text-sm">
-                    <span className="text-muted-foreground">Repaid</span>
+                    <span className="text-muted-foreground">{t("Repaid")}</span>
                     <span className="font-nums font-medium">
                       {formatRs(loan.principal_paid)} <span className="text-muted-foreground">/ {formatRs(loan.principal)}</span>
                     </span>
@@ -373,11 +374,11 @@ export function HomeTab() {
                   {[
                     ["Outstanding", formatRs(loan.outstanding)],
                     ["Interest paid", formatRs(loan.interest_paid)],
-                    ["Rate", `${Number(loan.interest_rate)}% p.a.`],
+                    ["Rate", t("{0}% p.a.", Number(loan.interest_rate))],
                     ["Matures", formatDate(loan.maturity_date)],
                   ].map(([k, v]) => (
                     <div key={k}>
-                      <dt className="text-xs text-muted-foreground">{k}</dt>
+                      <dt className="text-xs text-muted-foreground">{t(k)}</dt>
                       <dd className="font-nums font-medium">{v}</dd>
                     </div>
                   ))}
@@ -387,11 +388,11 @@ export function HomeTab() {
               <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed p-4">
                 <p className="text-sm text-muted-foreground">
                   {data.loan_application_pending
-                    ? "Your loan application is being reviewed by the Treasurer and President."
-                    : "Need funds? You can apply for a loan under the active loan policy."}
+                    ? t("Your loan application is being reviewed by the Treasurer and President.")
+                    : t("Need funds? You can apply for a loan under the active loan policy.")}
                 </p>
                 <Button size="sm" variant="outline" onClick={() => navigate("/dashboard/loans")}>
-                  {data.loan_application_pending ? "View application" : "Apply for a loan"}
+                  {data.loan_application_pending ? t("View application") : t("Apply for a loan")}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
@@ -401,11 +402,11 @@ export function HomeTab() {
 
         <Card className="lg:col-span-2">
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-semibold">Recent activity</CardTitle>
+            <CardTitle className="text-sm font-semibold">{t("Recent activity")}</CardTitle>
           </CardHeader>
           <CardContent>
             {data.recent.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">No deposits or payments yet.</p>
+              <p className="py-6 text-center text-sm text-muted-foreground">{t("No deposits or payments yet.")}</p>
             ) : (
               <ul className="flex flex-col divide-y">
                 {data.recent.map((r, i) => (
@@ -425,7 +426,7 @@ export function HomeTab() {
                         }`}
                       >
                         {r.status === "verified" && <BadgeCheck className="h-3 w-3" />}
-                        {r.status}
+                        {enumLabel(r.status)}
                       </span>
                     </span>
                   </li>

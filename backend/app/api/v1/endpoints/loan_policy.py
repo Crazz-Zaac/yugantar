@@ -23,6 +23,8 @@ from fastapi_mail import NameEmail
 
 router = APIRouter(prefix="/policies", tags=["policies"])
 
+loan_policy_service = LoanPolicyService()
+
 
 @router.get(
     "/loan",
@@ -129,8 +131,7 @@ def update_loan_policy(
             detail=f"Only draft policies can be edited. Current status: {existing.status.value}",
         )
 
-    # Prevent status from being changed via update
-    policy_in.status = None
+    # Status can't be changed via update: the service leaves it out of the update data
 
     client_ip = request.client.host if request.client else None
 

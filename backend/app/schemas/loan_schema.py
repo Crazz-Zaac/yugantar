@@ -123,6 +123,10 @@ class LoanResponse(SQLModel):
     # Treasurer fund verification
     fund_verified_by: Optional[str] = None
     fund_verified_at: Optional[datetime] = None
+    # Display names for the people above (the *_by fields hold emails)
+    approved_by_name: Optional[str] = None
+    rejected_by_name: Optional[str] = None
+    fund_verified_by_name: Optional[str] = None
     # Guarantor (a member) and their signature
     guarantor_user_id: Optional[uuid.UUID] = None
     guarantor_name: Optional[str] = None

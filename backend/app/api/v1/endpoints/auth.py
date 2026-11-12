@@ -203,30 +203,14 @@ async def verify_email_token(
 def _notify_admins_pending_approval(session: Session, background_tasks: BackgroundTasks, user: User) -> None:
     """Tell every admin that a verified registration is waiting for approval."""
     from sqlmodel import select
-    from app.models.notification_model import Notification, NotificationType
-    from app.services.email_notify import send_generic_email
-    from fastapi_mail import NameEmail
+    from app.models.notification_model import NotificationType
 
     name = f"{user.first_name} {user.last_name}".strip()
     admins = [
         u for u in session.exec(select(User).where(User.disabled == False)).all()  # noqa: E712
         if "admin" in {str(getattr(r, "value", r)).lower() for r in (u.access_roles or [])}
     ]
-    for admin in admins:
-        session.add(
-            Notification(
-                user_id=admin.id,
-                title="New member awaiting approval",
-                message=f"{name} ({user.email}) verified their email and is waiting for your approval.",
-                notification_type=NotificationType.GENERAL,
-            )
-        )
-        background_tasks.add_task(
-            send_generic_email,
-            [NameEmail(name=admin.first_name, email=admin.email)],
-            "New member awaiting approval — Yugantar",
-            f"Hello {admin.first_name},\n\n{name} ({user.email}) registered and verified their email. "
-            "Please review the registration in the admin Members tab and approve or reject it.\n\n"
-            "Best regards,\nYugantar System",
-        )
-    session.commit()
+    from app.services.notify import notify
+
+    notify(session, background_tasks, admins, "member_awaiting_approval", NotificationType.GENERAL,
+           commit=True, name=name, email=user.email)

@@ -1,3 +1,4 @@
+import { t, n } from "@/lib/i18n"
 import { useState, useEffect } from "react"
 import { Search, MoreHorizontal, CheckCircle2, XCircle, AlertTriangle, Loader2, Shield, Clock, UserCheck } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -56,31 +57,27 @@ function MemberStatusBadge({ status }: { status: MemberStatus }) {
     return (
       <Badge variant="outline" className="gap-1 border-warning/30 bg-warning/10 text-warning text-xs">
         <Clock className="h-3 w-3" />
-        Pending approval
-      </Badge>
+        {t("Pending approval")}</Badge>
     )
   }
   if (status === "active") {
     return (
       <Badge variant="outline" className="gap-1 border-success/30 bg-success/10 text-success text-xs">
         <CheckCircle2 className="h-3 w-3" />
-        Active
-      </Badge>
+        {t("Active")}</Badge>
     )
   }
   if (status === "inactive") {
     return (
       <Badge variant="outline" className="gap-1 border-muted-foreground/30 bg-muted text-muted-foreground text-xs">
         <XCircle className="h-3 w-3" />
-        Email unverified
-      </Badge>
+        {t("Email unverified")}</Badge>
     )
   }
   return (
     <Badge variant="outline" className="gap-1 border-destructive/30 bg-destructive/10 text-destructive text-xs">
       <AlertTriangle className="h-3 w-3" />
-      Suspended
-    </Badge>
+      {t("Suspended")}</Badge>
   )
 }
 
@@ -107,7 +104,7 @@ export function MembersTab() {
       setTotalCount(res.data.total)
     } catch (err: any) {
       console.error("Failed to fetch members:", err)
-      setError(err?.response?.data?.detail || "Failed to load members")
+      setError(err?.response?.data?.detail || t("Failed to load members"))
     } finally {
       setIsLoading(false)
     }
@@ -117,16 +114,16 @@ export function MembersTab() {
     const member = members.find((m) => m.id === memberId)
     if (member && !member.disabled) {
       const answer = await confirm({
-        title: `Suspend ${getFullName(member)}?`,
-        description: "They're signed out everywhere and can't sign in until you reactivate the account.",
-        confirmLabel: "Suspend",
+        title: t("Suspend {0}?", getFullName(member)),
+        description: t("They're signed out everywhere and can't sign in until you reactivate the account."),
+        confirmLabel: t("Suspend"),
         destructive: true,
       })
       if (!answer.confirmed) return
     }
     try {
       await apiClient.post(`/admin/users/${memberId}/toggle-disabled`)
-      toast.success(member?.disabled ? "Account reactivated" : "Account suspended")
+      toast.success(member?.disabled ? t("Account reactivated") : t("Account suspended"))
       fetchMembers() // Refresh the list
     } catch (err) {
       console.error("Failed to toggle member status:", err)
@@ -139,9 +136,9 @@ export function MembersTab() {
   const handleApproval = async (member: MemberUser, approve: boolean) => {
     if (!approve) {
       const answer = await confirm({
-        title: `Reject ${getFullName(member)}'s registration?`,
-        description: "Their account will be removed and they'll be told by email.",
-        confirmLabel: "Reject registration",
+        title: t("Reject {0}'s registration?", getFullName(member)),
+        description: t("Their account will be removed and they'll be told by email."),
+        confirmLabel: t("Reject registration"),
         destructive: true,
       })
       if (!answer.confirmed) return
@@ -149,17 +146,17 @@ export function MembersTab() {
     setApprovalBusyId(member.id)
     try {
       await apiClient.post(`/admin/users/${member.id}/${approve ? "approve" : "reject"}`)
-      toast.success(approve ? `${getFullName(member)} approved` : "Registration rejected", {
+      toast.success(approve ? t("{0} approved", getFullName(member)) : t("Registration rejected"), {
         description: approve
           ? member.is_verified
-            ? "They can sign in now."
-            : "They can sign in once they verify their email."
-          : "They've been told by email.",
+            ? t("They can sign in now.")
+            : t("They can sign in once they verify their email.")
+          : t("They've been told by email."),
       })
       fetchMembers()
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail || `Failed to ${approve ? "approve" : "reject"} the registration`)
+      setError(detail || (approve ? t("Failed to approve the registration") : t("Failed to reject the registration")))
     } finally {
       setApprovalBusyId(null)
     }
@@ -169,7 +166,7 @@ export function MembersTab() {
   const renderActions = (member: MemberUser, status: MemberStatus) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Actions for ${getFullName(member)}`}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t("Actions for {0}", getFullName(member))}>
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
@@ -178,17 +175,14 @@ export function MembersTab() {
             <DropdownMenuItem>Edit Details</DropdownMenuItem> */}
             <DropdownMenuItem onClick={() => setRoleModalUser(member as unknown as UserForUI)}>
               <Shield className="mr-2 h-3.5 w-3.5" />
-              Edit Roles
-            </DropdownMenuItem>
+              {t("Edit Roles")}</DropdownMenuItem>
             <DropdownMenuSeparator />
             {status === "suspended" ? (
               <DropdownMenuItem className="text-success" onClick={() => handleToggleDisabled(member.id)}>
-                Reactivate
-              </DropdownMenuItem>
+                {t("Reactivate")}</DropdownMenuItem>
             ) : (
               <DropdownMenuItem className="text-destructive" onClick={() => handleToggleDisabled(member.id)}>
-                Suspend
-              </DropdownMenuItem>
+                {t("Suspend")}</DropdownMenuItem>
             )}
           </DropdownMenuContent>
         </DropdownMenu>
@@ -218,8 +212,8 @@ export function MembersTab() {
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Members</h2>
-          <p className="text-sm text-muted-foreground">New members register themselves; approve them here, and manage roles and accounts.</p>
+          <h2 className="text-lg font-semibold text-foreground">{t("Members")}</h2>
+          <p className="text-sm text-muted-foreground">{t("New members register themselves; approve them here, and manage roles and accounts.")}</p>
         </div>
       </div>
 
@@ -228,11 +222,10 @@ export function MembersTab() {
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-sm font-semibold">
               <UserCheck className="h-4 w-4" />
-              Registrations awaiting approval ({pendingApproval.length})
+              {t("Registrations awaiting approval (")}{n(pendingApproval.length)})
             </CardTitle>
             <CardDescription>
-              New members can sign in only after verifying their email and being approved here.
-            </CardDescription>
+              {t("New members can sign in only after verifying their email and being approved here.")}</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
             {pendingApproval.map((m) => (
@@ -240,17 +233,16 @@ export function MembersTab() {
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{getFullName(m)}</p>
                   <p className="text-xs text-muted-foreground">
-                    {m.email} · {m.phone || "no phone"} · registered {formatDate(m.joined_at)}
+                    {t("{0} · {1} · registered {2}", m.email, m.phone || t("no phone"), formatDate(m.joined_at))}
                   </p>
                   <p className={`text-xs ${m.is_verified ? "text-success" : "text-muted-foreground"}`}>
-                    {m.is_verified ? "Email verified" : "Email not verified yet"}
+                    {m.is_verified ? t("Email verified") : t("Email not verified yet")}
                   </p>
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" disabled={approvalBusyId === m.id} onClick={() => handleApproval(m, true)}>
                     <CheckCircle2 className="mr-2 h-4 w-4" />
-                    Approve
-                  </Button>
+                    {t("Approve")}</Button>
                   <Button
                     size="sm"
                     variant="outline"
@@ -258,8 +250,7 @@ export function MembersTab() {
                     onClick={() => handleApproval(m, false)}
                   >
                     <XCircle className="mr-2 h-4 w-4" />
-                    Reject
-                  </Button>
+                    {t("Reject")}</Button>
                 </div>
               </div>
             ))}
@@ -271,14 +262,14 @@ export function MembersTab() {
         <CardHeader className="pb-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <CardTitle className="text-sm font-semibold">All Members</CardTitle>
-              <CardDescription>{filtered.length} of {totalCount} members</CardDescription>
+              <CardTitle className="text-sm font-semibold">{t("All Members")}</CardTitle>
+              <CardDescription>{t("{0} of {1} members", filtered.length, totalCount)}</CardDescription>
             </div>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search members..."
+                  placeholder={t("Search members...")}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="h-9 w-full pl-9 text-sm sm:w-64"
@@ -289,11 +280,11 @@ export function MembersTab() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="pending">Pending approval</SelectItem>
-                  <SelectItem value="inactive">Email unverified</SelectItem>
-                  <SelectItem value="suspended">Suspended</SelectItem>
+                  <SelectItem value="all">{t("All Status")}</SelectItem>
+                  <SelectItem value="active">{t("Active")}</SelectItem>
+                  <SelectItem value="pending">{t("Pending approval")}</SelectItem>
+                  <SelectItem value="inactive">{t("Email unverified")}</SelectItem>
+                  <SelectItem value="suspended">{t("Suspended")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -303,17 +294,17 @@ export function MembersTab() {
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-sm text-muted-foreground">Loading members...</span>
+              <span className="ml-2 text-sm text-muted-foreground">{t("Loading members...")}</span>
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center gap-2 py-12">
               <p className="text-sm text-destructive">{error}</p>
-              <Button variant="outline" size="sm" onClick={fetchMembers}>Retry</Button>
+              <Button variant="outline" size="sm" onClick={fetchMembers}>{t("Retry")}</Button>
             </div>
           ) : (
             <>
             <ul className="flex flex-col divide-y sm:hidden">
-              {filtered.length === 0 && <li className="py-8 text-center text-sm text-muted-foreground">No members match.</li>}
+              {filtered.length === 0 && <li className="py-8 text-center text-sm text-muted-foreground">{t("No members match.")}</li>}
               {filtered.map((member) => {
                 const status = getMemberStatus(member)
                 return (
@@ -345,11 +336,11 @@ export function MembersTab() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="text-xs">Member</TableHead>
-                    <TableHead className="text-xs">Roles</TableHead>
-                    <TableHead className="text-xs">Join Date</TableHead>
-                    <TableHead className="text-xs">Phone</TableHead>
-                    <TableHead className="text-xs">Status</TableHead>
+                    <TableHead className="text-xs">{t("Member")}</TableHead>
+                    <TableHead className="text-xs">{t("Roles")}</TableHead>
+                    <TableHead className="text-xs">{t("Join Date")}</TableHead>
+                    <TableHead className="text-xs">{t("Phone")}</TableHead>
+                    <TableHead className="text-xs">{t("Status")}</TableHead>
                     <TableHead className="w-10 text-xs"></TableHead>
                   </TableRow>
                 </TableHeader>

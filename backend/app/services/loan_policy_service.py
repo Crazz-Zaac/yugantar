@@ -65,7 +65,7 @@ class LoanPolicyService(PolicyService):
                 detail="Change reason is required for updating the policy",
             )
 
-        policy_data = policy_in.model_dump(exclude_unset=True, mode="json")
+        policy_data = policy_in.model_dump(exclude_unset=True, exclude={"status", "change_reason", "updated_by", "updated_at"}, mode="json")
         updated_policy = PolicyService.update_policy(
             db_session=session,
             policy_class=LoanPolicy,

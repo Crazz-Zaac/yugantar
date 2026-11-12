@@ -1,3 +1,4 @@
+import { t, roleName } from "@/lib/i18n"
 // Types and helpers for policy approval by member signatures.
 // Backend: app/api/v1/endpoints/policy_signing.py
 
@@ -40,13 +41,33 @@ export interface Signature {
   signed_at: string | null
   reason: string | null
   counted: boolean
+  /** A hand signature image is on file */
+  has_signature_image: boolean
   proxy: ProxyRequest | null
+}
+
+export interface PolicyTerm {
+  label: string
+  value: string
 }
 
 export interface SigningSummary {
   policy_type: PolicyType
   policy_id: string
   label: string
+  /** What the policy says (same wording as the PDF record) */
+  title: string
+  statement: string
+  /** The same policy in Nepali */
+  statement_ne: string
+  /** The Treasurer edited the wording (otherwise generated from the terms) */
+  statement_custom: boolean
+  terms: PolicyTerm[]
+  /** The adoption record PDF can be downloaded (policy adopted) */
+  record_available: boolean
+  record_reference: string | null
+  /** Open for signing: a watermarked preview PDF of the record so far */
+  preview_available: boolean
   status: "draft" | "finalized" | "active" | "expired" | "void"
   signing_deadline: string | null
   deadline_passed: boolean
@@ -80,12 +101,12 @@ export function timeLeft(iso: string | null | undefined): string | null {
   const ms = deadline.getTime() - Date.now()
   if (ms <= 0) return null
   const hours = Math.floor(ms / 3_600_000)
-  if (hours >= 48) return `${Math.floor(hours / 24)} days left`
-  if (hours >= 1) return `${hours} hour${hours === 1 ? "" : "s"} left`
-  return "less than an hour left"
+  if (hours >= 48) return t("{0} days left", Math.floor(hours / 24))
+  if (hours >= 1) return hours === 1 ? t("{0} hour left", 1) : t("{0} hours left", hours)
+  return t("less than an hour left")
 }
 
 export function roleLabel(roles: string[]): string {
   const office = roles.filter((r) => r !== "member")
-  return office.length ? office.map((r) => r[0].toUpperCase() + r.slice(1)).join(", ") : "Member"
+  return office.length ? office.map((r) => roleName(r)).join(", ") : t("Member")
 }

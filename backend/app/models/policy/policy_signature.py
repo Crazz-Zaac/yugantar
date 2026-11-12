@@ -50,6 +50,9 @@ class PolicySignature(BaseModel, table=True):
     signer_name: Optional[str] = Field(default=None, max_length=200, nullable=True)
     signed_at: Optional[datetime] = Field(default=None, nullable=True)
     reason: Optional[str] = Field(default=None, max_length=500, nullable=True)
+    # Hand-written signature (drawn or uploaded), a cleaned PNG in document storage
+    signature_file_key: Optional[str] = Field(default=None, max_length=300, nullable=True)
+    signature_sha256: Optional[str] = Field(default=None, max_length=64, nullable=True)
 
     # Set when the signature was recorded by an Admin on the member's behalf
     proxy_request_id: Optional[uuid.UUID] = Field(

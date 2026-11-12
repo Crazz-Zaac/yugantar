@@ -1,3 +1,4 @@
+import { getLang, t } from "@/lib/i18n"
 import { useEffect, useState } from "react"
 import { useLocation, useSearch } from "wouter"
 import { CheckCircle2, XCircle, Loader2, ArrowRight } from "lucide-react"
@@ -21,7 +22,7 @@ export default function VerifyEmail() {
 
         if (!token) {
             setState("error")
-            setMessage("No verification token provided. Please check your email link.")
+            setMessage(t("No verification token provided. Please check your email link."))
             return
         }
 
@@ -29,7 +30,7 @@ export default function VerifyEmail() {
             try {
                 const res = await fetch(
                     `${ENV.API_BASE}/auth/verify-email?token=${encodeURIComponent(token)}`,
-                    { method: "POST" },
+                    { method: "POST", headers: { "X-Language": getLang() } },
                 )
                 const data = await res.json()
 
@@ -43,11 +44,11 @@ export default function VerifyEmail() {
                     }
                 } else {
                     setState("error")
-                    setMessage(data.detail || "Email verification failed.")
+                    setMessage(data.detail || t("Email verification failed."))
                 }
             } catch {
                 setState("error")
-                setMessage("Could not connect to the server. Please try again later.")
+                setMessage(t("Could not connect to the server. Please try again later."))
             }
         }
 
@@ -60,17 +61,16 @@ export default function VerifyEmail() {
                 <CardContent className="flex flex-col items-center gap-6 pt-8 pb-8 text-center">
                     {/* Logo */}
                     <div className="flex h-16 w-16 items-center justify-center rounded-full bg-white shadow-sm border">
-                        <img src={yugantarLogo} alt="Yugantar" className="h-12 w-12" />
+                        <img src={yugantarLogo} alt={t("Yugantar")} className="h-12 w-12" />
                     </div>
 
                     {state === "loading" && (
                         <>
                             <Loader2 className="h-12 w-12 animate-spin text-primary" />
                             <div>
-                                <h1 className="text-lg font-semibold text-foreground">Verifying your email…</h1>
+                                <h1 className="text-lg font-semibold text-foreground">{t("Verifying your email…")}</h1>
                                 <p className="mt-1 text-sm text-muted-foreground">
-                                    Please wait while we verify your email address.
-                                </p>
+                                    {t("Please wait while we verify your email address.")}</p>
                             </div>
                         </>
                     )}
@@ -81,12 +81,11 @@ export default function VerifyEmail() {
                                 <CheckCircle2 className="h-8 w-8 text-success" />
                             </div>
                             <div>
-                                <h1 className="text-lg font-semibold text-foreground">Email Verified!</h1>
+                                <h1 className="text-lg font-semibold text-foreground">{t("Email Verified!")}</h1>
                                 <p className="mt-1 text-sm text-muted-foreground">{message}</p>
                             </div>
                             <Button className="mt-2 gap-2" onClick={() => navigate("/login")}>
-                                Go to Sign In
-                                <ArrowRight className="h-4 w-4" />
+                                {t("Go to Sign In")}<ArrowRight className="h-4 w-4" />
                             </Button>
                         </>
                     )}
@@ -97,12 +96,11 @@ export default function VerifyEmail() {
                                 <CheckCircle2 className="h-8 w-8 text-chart-2" />
                             </div>
                             <div>
-                                <h1 className="text-lg font-semibold text-foreground">Your email is now verified.</h1>
+                                <h1 className="text-lg font-semibold text-foreground">{t("Your email is now verified.")}</h1>
                                 <p className="mt-1 text-sm text-muted-foreground">{message}</p>
                             </div>
                             <Button className="mt-2 gap-2" onClick={() => navigate("/login")}>
-                                Go to Sign In
-                                <ArrowRight className="h-4 w-4" />
+                                {t("Go to Sign In")}<ArrowRight className="h-4 w-4" />
                             </Button>
                         </>
                     )}
@@ -113,12 +111,11 @@ export default function VerifyEmail() {
                                 <XCircle className="h-8 w-8 text-destructive" />
                             </div>
                             <div>
-                                <h1 className="text-lg font-semibold text-foreground">Verification Failed</h1>
+                                <h1 className="text-lg font-semibold text-foreground">{t("Verification Failed")}</h1>
                                 <p className="mt-1 text-sm text-muted-foreground">{message}</p>
                             </div>
                             <Button variant="outline" className="mt-2 gap-2" onClick={() => navigate("/login")}>
-                                Go to Sign In
-                                <ArrowRight className="h-4 w-4" />
+                                {t("Go to Sign In")}<ArrowRight className="h-4 w-4" />
                             </Button>
                         </>
                     )}

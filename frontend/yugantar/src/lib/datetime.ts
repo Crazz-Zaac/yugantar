@@ -10,6 +10,9 @@
  * helper below (display and inputs) follows it.
  */
 
+import { adToBs, BS_MONTHS } from "@/lib/bs"
+import { getLang, neDigits } from "@/lib/i18n"
+
 export const DISPLAY_TIME_ZONE = "Asia/Kathmandu"
 export const TIME_ZONE_LABEL = "NPT"
 
@@ -70,22 +73,37 @@ export function parseUtc(value: string | null | undefined): Date | null {
   return Number.isNaN(d.getTime()) ? null : d
 }
 
-/** "11 Nov 2026" (in NPT) */
+// Nepali interface: Bikram Sambat date of the NPT calendar day, Nepali digits
+function bsParts(d: Date): { year: string; month: string; day: string } | null {
+  const p = zoneParts(d)
+  const bs = adToBs(p.year, p.month, p.day)
+  return bs ? { year: neDigits(String(bs.year)), month: BS_MONTHS[bs.month - 1], day: neDigits(String(bs.day)) } : null
+}
+
+/** "11 Nov 2026" (in NPT); Nepali: "२०८३ कार्तिक २५" */
 export function formatDate(value: string | null | undefined): string {
   const d = parseUtc(value)
-  return d ? dateFormat.format(d) : "—"
+  if (!d) return "—"
+  const bs = getLang() === "ne" ? bsParts(d) : null
+  return bs ? `${bs.year} ${bs.month} ${bs.day}` : dateFormat.format(d)
 }
 
-/** "11 Nov" (in NPT) */
+/** "11 Nov" (in NPT); Nepali: "कार्तिक २५" */
 export function formatShortDate(value: string | null | undefined): string {
   const d = parseUtc(value)
-  return d ? shortDateFormat.format(d) : "—"
+  if (!d) return "—"
+  const bs = getLang() === "ne" ? bsParts(d) : null
+  return bs ? `${bs.month} ${bs.day}` : shortDateFormat.format(d)
 }
 
-/** "11 Nov 2026, 15:15 NPT" */
+/** "11 Nov 2026, 15:15 NPT"; Nepali: "२०८३ कार्तिक २५, १५:१५" */
 export function formatDateTime(value: string | null | undefined): string {
   const d = parseUtc(value)
-  return d ? `${dateFormat.format(d)}, ${timeFormat.format(d)} ${TIME_ZONE_LABEL}` : "—"
+  if (!d) return "—"
+  const bs = getLang() === "ne" ? bsParts(d) : null
+  return bs
+    ? `${bs.year} ${bs.month} ${bs.day}, ${neDigits(timeFormat.format(d))}`
+    : `${dateFormat.format(d)}, ${timeFormat.format(d)} ${TIME_ZONE_LABEL}`
 }
 
 // ─── <input type="datetime-local"> values, in NPT ───────────────────────────

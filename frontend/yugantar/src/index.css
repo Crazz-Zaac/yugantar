@@ -50,7 +50,7 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: 'Inter', 'Noto Sans Devanagari', ui-sans-serif, system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
@@ -149,7 +149,7 @@
 }
 
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', 'Noto Sans Devanagari', sans-serif;
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
 }
@@ -161,6 +161,6 @@ body {
 
 /* Amounts: same typeface as the UI, with tabular figures so columns align */
 .font-nums {
-  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  font-family: 'Inter', 'Noto Sans Devanagari', ui-sans-serif, system-ui, sans-serif;
   font-variant-numeric: tabular-nums lining-nums;
 }

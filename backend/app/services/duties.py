@@ -69,6 +69,15 @@ def is_active_member(user: User) -> bool:
     return not user.disabled and bool(user.is_verified) and bool(user.is_approved)
 
 
+def name_with_role(user: Optional[User]) -> Optional[str]:
+    """ "First Last (President)": office roles in title case, else "Member"."""
+    if user is None:
+        return None
+    order = [CooperativeRole.PRESIDENT.value, CooperativeRole.TREASURER.value, CooperativeRole.SECRETARY.value]
+    roles = [r.title() for r in order if r in coop_roles(user)] or ["Member"]
+    return f"{user.first_name} {user.last_name}".strip() + f" ({', '.join(roles)})"
+
+
 def is_system_admin(user: Optional[User]) -> bool:
     """Has the ADMIN access role (the system administration account)."""
     if user is None:

@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { getLang, t } from "@/lib/i18n";
 import {
   apiClient,
   SESSION_EXPIRED_EVENT,
@@ -12,7 +13,6 @@ import {
   normalizeUser,
   UserForUI,
   denormalizeUser,
-  EditableUserFields,
 } from "@/utils/normalizeUser";
 
 interface AuthContextType {
@@ -22,7 +22,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<UserForUI>;
   signup: (...args: any) => Promise<void>;
   logout: () => void;
-  updateProfile: (data: EditableUserFields) => Promise<void>;
+  updateProfile: (data: Partial<UserForUI>) => Promise<void>;
   changePassword: (
     currentPassword: string,
     newPassword: string
@@ -92,12 +92,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         ...apiData,
         email: userData.email,
         password,
+        // Emails (e.g. the verification link) in the language chosen on the page
+        preferred_language: getLang(),
       });
 
 
       const res = await fetch(`${API_BASE}/users/register`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "X-Language": getLang() },
         body,
       });
 
@@ -107,11 +109,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (errorData.detail) {
           if (Array.isArray(errorData.detail)) {
             const firstError = errorData.detail[0];
-            throw new Error(firstError.msg || "Validation failed");
+            throw new Error(firstError.msg || t("Validation failed"));
           }
           throw new Error(errorData.detail);
         }
-        throw new Error("Failed to register");
+        throw new Error(t("Failed to register"));
       }
 
       // A new account can't sign in yet: the email must be verified and an
@@ -160,7 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const updateProfile = async (data: EditableUserFields) => {
+  const updateProfile = async (data: Partial<UserForUI>) => {
     const apiData = denormalizeUser(data);
 
     try {

@@ -1,3 +1,4 @@
+import { getLang } from "@/lib/i18n";
 import { ENV } from "@/config/env";
 import { getAccessToken } from "@/api/api";
 
@@ -13,6 +14,7 @@ export const authFetch = async (
         credentials: "include",
         headers: {
             "Content-Type": "application/json",
+            "X-Language": getLang(),
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
             ...options.headers,
         },

@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field
-from typing import List, Optional
+from typing import List, Literal, Optional
 from enum import Enum
 from datetime import datetime, timezone
 from pydantic import field_validator, EmailStr
@@ -78,6 +78,8 @@ class UserCreate(UserBase):
     password: str = Field(
         ..., min_length=8, max_length=72
     )  # Limit to 72 bytes for bcrypt
+    # The language chosen on the sign-up page (emails use it)
+    preferred_language: Literal["en", "ne"] = "en"
 
     @field_validator("password")
     def validate_password_strength(cls, value):
@@ -94,6 +96,7 @@ class UserUpdate(SQLModel):
     email: EmailStr = Field(default=None, max_length=100)
     phone: Optional[str] = Field(default=None, max_length=15)
     address: Optional[str] = Field(default=None, max_length=255)
+    preferred_language: Optional[Literal["en", "ne"]] = None
 
 
 class UserPasswordChange(SQLModel):
@@ -127,6 +130,7 @@ class UserResponse(UserBase):
 
     is_approved: bool = False
     approved_at: Optional[datetime] = None
+    preferred_language: str = "en"
 
     created_at: datetime
     updated_at: datetime

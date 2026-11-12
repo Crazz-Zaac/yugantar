@@ -932,3 +932,124 @@ Checked visually with headless screenshots (Playwright/Chromium in a throwaway c
 - **New dependency:** `fpdf2` (in `pyproject.toml`/`poetry.lock`). The backend and celery images were rebuilt.
 - **Operations:** the `documents-data` volume holds permanent records and must be included in backups.
 - Tests: `test_guarantor` (25 checks) and `test_filters` (11). All 13 suites pass (205 checks).
+- **Reviewer names:** `approved_by`, `rejected_by` and `fund_verified_by` still store emails (the duty checks use them), but loan responses now also carry `approved_by_name`, `rejected_by_name` and `fund_verified_by_name`. My Loans ("Approved by") and the review cards ("Funds Verified By") show "Name (Role)", e.g. "Pres Gx (President)", instead of emails; the agreement PDF uses the same format (`duties.name_with_role`).
+
+### 25. Fix: creating, editing and deleting policies crashed (500)
+- **Symptom:** clicking Create Policy left the dialog open. The request failed with a 500, and the page's error banner was hidden behind the dialog.
+- **Cause:** the policy-signing change (b06322f) removed the module-level `deposit_policy_service` / `loan_policy_service` instances, but the create/update/delete routes still used them (`NameError`). Restored them.
+- **Two more bugs found while testing:**
+  - The deposit update schema had no `change_reason`, so editing a deposit policy crashed. Added the field, as the loan schema already has it.
+  - Both update routes did `policy_in.status = None` to block status changes. That marked `status` as set, so it was written as NULL, and the database refused it. The services now leave `status`, `change_reason`, `updated_by` and `updated_at` out of the update data instead.
+- **Frontend:** saving shows a success toast. A failure now shows the server's message as a toast, which is visible above the dialog.
+- Tests: `test_policy_crud` (create, update and delete for both policy types; an update can't change the status). 7/7 pass.
+- Pyflakes reports no other undefined names in `app/`.
+
+### 26. Policies: admin accounts don't sign, the policy is shown before signing, adoption record PDF
+- **Late fine in Rs:** the deposit-policy form shows the fine in rupees under the % ("= Rs. 250 on a Rs. 5,000 deposit"). The fine is a one-off % of the deposit amount (`calculate_late_fine`). The policy cards show "Late fine 5% (Rs. 250)".
+- **Signers:**
+  - Accounts with the system **admin** access role are no longer required signers, even if they also carry the member role. Admin is an extra role, and that person signs from their member account. (This replaces the earlier rule that an admin who is also a member signs.)
+  - In policies opened before this change, existing admin rows are ignored: hidden and not counted.
+  - An admin account trying to sign gets 403. An admin can't be the target of a proxy signature, but admins can still *request* proxies.
+- **The policy is shown before signing:**
+  - `services/policy_document.py` holds the single source of the wording. `policy_statement()` gives a plain-language paragraph, e.g. "Every member shall deposit Rs. 5,000 by the 15th of every month. A deposit made after the due date carries a late fine of 5% of the deposit (Rs. 250). This policy is effective from …". `policy_terms()` gives the label/value rows.
+  - The signing summary (`GET /policies/{type}/{id}/signatures`) now includes `title`, `statement`, `terms`, `record_available` and `record_reference`.
+  - The signing dialog is titled with the policy and opens with a "The policy" section (the statement and a terms grid) above the signatures.
+- **Adoption record (PDF):**
+  - When a policy is adopted, a letter on Yugantar letterhead is generated:
+    - the logo, "YUGANTAR Cooperative", a unique **Ref. No.** (`YUG/DP/2026/0001` for deposits, `YUG/LP/…` for loans, one sequence per year) and the date;
+    - a blue/red/green rule taken from the logo;
+    - a subject line, the policy statement, and who adopted it and when ("All 6 members listed below signed and approved this policy by …, and it took effect immediately on adoption …");
+    - a terms table and a members' approval table (no., name, role, decision, signed on in NPT, proxy marked);
+    - a closing line and the **Treasurer's signature block** (the Treasurer who created the policy, else the current Treasurer);
+    - a footer with the reference, page x of y and a checksum note.
+  - It's stored in the `documents-data` volume (`policy-records/…`), with a new `policyrecord` table holding the reference, file key, SHA-256 and certifying Treasurer. Migration `bd9e87df7c79`, round trip tested.
+  - It's generated once, at adoption (in `close_if_due`; a PDF failure never undoes the adoption), or on the first download for policies adopted earlier.
+  - `GET /policies/{type}/{id}/record`: any member may download it once the policy is adopted (active or ended); otherwise 404. The file is named by its reference.
+  - Download buttons are in the signing dialog ("Adoption record (PDF)"), on the in-force cards and on ended policies.
+  - The logo is a cropped copy of `public/main_logo.png` at `backend/app/assets/yugantar_logo.png`. The Celery worker also has the logo and fpdf2, because the hourly job adopts policies.
+- Tests: `test_policy_record` (15 checks); `test_signing` updated to the new admin rule (34), and it now deletes the record files it creates.
+- **Fix: the signing dialog "blinked" after Sign.** The dialog's `onChanged` refresh (`fetchPolicies`) set the page's `loading` flag, which replaced the whole Policies tab with the spinner. That unmounted the open dialog, which re-opened fresh and lost its "You signed" notice. Now only the first load shows the spinner; later refreshes update the page in place.
+
+### 27. Hand signatures on policies; members on every adoption record
+- **Why the record had no members:** the record you downloaded (`YUG/LP/2026/0001`) was for a loan policy adopted before in-app signing, so there were no signature rows to list.
+- **Older policies:** the record now prints a "Members' signatures" sheet listing the current members, with blank "Signature and date" boxes to sign on the printed copy.
+- **Signed policies:** the members' approval table gains a **Signature** column showing each member's hand signature. Members who signed before hand signatures existed show "Signed in app". The Treasurer's hand signature is placed above the signature line.
+- **Hand signature input** (`components/signature/SignaturePad.tsx`):
+  - **Draw** with a finger, stylus or mouse. It uses Pointer Events with `touch-action: none`, so the page doesn't scroll while signing on a phone, plus coalesced events and smoothed curves. The canvas is sized for the screen's pixel density and redrawn on resize or rotation. Undo and Clear buttons are included.
+  - **Upload image**: a photo or scan (any format the browser can open, re-encoded in the browser, max 8 MB).
+  - Members must provide a signature to "Sign (approve)". The Treasurer's "Sign & open" now opens `SignatureDialog` with the pad.
+- **Backend:**
+  - `services/signature_image.py` decodes the data URL with Pillow, refuses non-images and empty or too-small drawings, makes a paper background transparent, crops to the ink, caps the size at 900×300 and stores a PNG (`signatures/…` in the documents volume).
+  - New `PolicySignature.signature_file_key` / `signature_sha256` fields (migration `30bcc7a59cb3`, round trip tested).
+  - The sign and submit routes accept `signature_image`. Rejecting removes the hand signature, and withdrawing deletes the images.
+  - `GET /policies/{type}/{id}/signatures/{user_id}/image` lets any member view a signature. The signing dialog shows each member's signature under their name.
+  - The backend still accepts an approval without an image, for proxy signatures and older clients.
+- **PDF layout:** the closing paragraph and signature block are kept together on one page.
+- **Dev data:** the two records generated earlier were deleted. They are rebuilt in the new layout on their next download, and their reference numbers are issued again.
+- Tests: `test_hand_signature` (10 checks): drawn and photo signatures, refusal of empty or non-image data, background removal, removal on rejection, and the PDF embedding the signatures. All 16 suites pass (264 checks).
+
+### 28. Policy wording in Nepali; Treasurer can edit the wording
+- **Nepali text from templates** (`policy_document.policy_statement_ne`): written from the terms by fixed sentence templates (no translation service or ML), so it costs nothing to run.
+  - Numbers use Devanagari digits (रु. ५०,०००, १%).
+  - Dates are Bikram Sambat with the AD date in Nepali (वि.सं. २०८३ कार्तिक २६ (ई.सं. २०२६ नोभेम्बर १२)), converted with `nepali-datetime`.
+  - Deposit due days are days of the AD month, so the text says "हरेक अंग्रेजी महिनाको १५ तारिखभित्र" rather than गते (BS).
+- **Editable wording:**
+  - New nullable `statement_en` / `statement_ne` on policies (migration `18cbd62e7fb4`; the column is on the shared base, so the unused interest, penalty and investment policy tables got it too). Null means automatic.
+  - Create and update accept both fields. They can only be changed while the policy is a draft, so the wording is locked once it's opened for signing.
+  - `POST /policies/{deposit|loan}/statement-preview` (policy managers) returns the generated text for the form's current terms, without saving anything.
+  - The policy forms have a "Policy wording" section (`components/policies/PolicyWordingEditor.tsx`) with English and नेपाली boxes. The text is generated as the Treasurer types (400 ms debounce) and can be edited. An edited box is marked "edited", with a warning that it no longer follows the terms and a "Use automatic text" reset.
+  - The form-to-request conversion was pulled into `depositPayload` / `loanPayload`, shared by save and preview.
+- **Members see both:** the signing dialog shows the English and the Nepali text. `SigningSummary` gained `statement_ne` and `statement_custom`, and `statement` is now the edited English if there is one.
+- **PDF:** prints the English then the Nepali paragraph.
+  - The Nepali uses Noto Sans Devanagari with HarfBuzz text shaping (`uharfbuzz`), so conjuncts and vowel signs render correctly.
+  - Noto Sans is the fallback for Latin letters inside the Nepali (e.g. "EMI").
+  - The fonts are in `backend/app/assets/fonts/` (regular weights only, about 0.85 MB, SIL Open Font License).
+- **Web:** Noto Sans Devanagari is added to the Google Fonts link and the font stack. It's served split by script, so it only downloads when Nepali text is shown.
+- **Cost:** `uharfbuzz` (2 MB wheel) and `nepali-datetime` (18 KB) were added to `pyproject.toml` / `poetry.lock`, and the backend and celery images rebuilt. CPU cost only arises when a PDF is generated (once per adoption), plus a tiny preview request while editing a form.
+- Tests: `test_policy_nepali` (11 checks). All 17 suites pass (275 checks).
+- **Fix: phantom "New Deposit Requires Verification" notifications.** The receipts test suite (a scratch test, not in the repo) commits real rows and deletes them afterwards. Its cleanup removed the test user ("Tst R"), deposits and receipts, but not the notifications those deposits sent to the real Treasurer accounts, so every test run left two behind (68 in total). They were deleted, and the test's cleanup now removes them. Nothing in the app itself was wrong.
+- The PDF record prints the Nepali paragraph as well. No records were stored before the Nepali change (the earlier ones were cleared in entry 27), so every record generated from now on includes it.
+
+### 29. Policy record: Nepali-only wording; preview PDF while signing is open
+- **Why the PDF looked empty:** the record downloaded (`YUG/DP/2026/0001`) was for a policy adopted before in-app signing, so it showed the blank "Signature and date" sheet for signing on paper. The policy actually signed with hand signatures was still open (it's adopted at its one-week deadline), so it had no record yet.
+- **Preview PDF:**
+  - `GET /policies/{type}/{id}/record/preview` lets any member download it while signing is open: the record as it stands, with the hand signatures collected so far.
+  - It's watermarked "PREVIEW - NOT ADOPTED", its Ref. No. reads "PREVIEW", a red note says it isn't the adoption record, and the footer reads "Not an official record".
+  - It isn't stored, and it's no longer available once the policy is adopted.
+  - The signing dialog has a "Preview PDF" button (`preview_available` in the summary).
+- **Rows with hand signatures** are taller (9 mm), so the signatures are legible.
+- **Nepali-only wording:**
+  - The PDF prints only the Nepali paragraph.
+  - The policy form's wording editor has only the नेपाली box.
+  - The signing dialog shows the Nepali first, with the English under "Read in English".
+  - The rest of the PDF (headings, terms table) is still in English.
+- The stored record `YUG/DP/2026/0001` (old layout, dev data) was cleared; it's rebuilt on the next download.
+- Tests: `test_policy_record` gained 3 preview checks (18). All 17 suites pass (278 checks).
+
+### 30. The whole system in English and Nepali
+- **Choice:** English by default. Each user's choice is saved on their account (`User.preferred_language`, "en" | "ne"; migration `80fe1322cf51`, existing users default to "en").
+  - Members change it in **Settings → Preferences → Language**.
+  - There's also a **language button** in the header (members, admin) and on the sign-in and sign-up pages, where the choice is kept in the browser and sent with the registration.
+  - The Settings page remembers its open tab, because switching language re-renders the app.
+- **Nepali style:** Devanagari digits (रु. १,००,०००, ३ वटा) and **Bikram Sambat dates** (२०८३ कार्तिक २६).
+  - `lib/bs.ts` converts AD→BS from a 1.2 KB month-length table for BS 2000–2099, exported from the backend's `nepali-datetime`, so both sides agree. Spot-checked against it, including the year boundary.
+  - Times stay in NPT. Chart months are AD months named in Nepali, because deposits follow the AD calendar.
+- **Frontend** (`lib/i18n.ts`, `contexts/LanguageContext.tsx`, `locales/ne.ts`):
+  - English stays in the code; `t("…")` returns the Nepali, and values go in as `{0}`, `{1}`, so whole sentences are translated in Nepali word order.
+  - `n()` converts numbers to Nepali digits; `roleName()` and `enumLabel()` cover roles and API status values. `formatRs`, `formatRsCompact`, `formatDate*` and `monthLabel` follow the language.
+  - Text wasn't wrapped by hand. A TypeScript-compiler codemod wrapped JSX text, text props, toasts, confirm dialogs and error fallbacks, and used the type checker to wrap number values in `n()`; the rest (template strings, plurals, label constants) was done by hand.
+  - Local variables named `t`/`n` were renamed first so they can't shadow the functions.
+  - About 860 texts are translated. The Nepali dictionary is a separate chunk (about 20 KB gzipped), loaded only when Nepali is chosen.
+  - Every API request sends `X-Language`.
+- **Backend** (`app/i18n.py`):
+  - **Notifications and emails** use a message catalogue (key + values) with English and Nepali text. A new `services/notify.py` `notify()` replaces the per-endpoint notification and email code (deposits, loans, guarantor, agreement, policy signing, proxies, new members).
+  - Notifications store the English text plus `i18n_key`/`i18n_args`, and are shown in the reader's language. Emails go out in each recipient's saved language; the verification, password-reset, approval and rejection emails have Nepali versions too.
+  - **Error messages:** an exception handler translates `HTTPException.detail` from a table of about 130 exact texts plus patterns for the dynamic ones (amounts, statuses). Home action items, the admin activity log and policy labels are translated the same way. Anything unknown stays English.
+  - Amounts and dates in server text use Nepali digits and BS dates.
+- **PDF records:** the policy wording is already Nepali-only; the rest of the record is still English.
+- **Not covered:**
+  - Date pickers (`<input type="date">`) remain in the browser's AD calendar.
+  - Some legacy screens' marketing copy is translated as is.
+  - **The Nepali texts should be reviewed by a native speaker**; they are all in `frontend/yugantar/src/locales/ne.ts` and `backend/app/i18n.py`.
+- **Tests:** the new `test_i18n` (13 checks) covers the setting, translated errors, notifications in both languages, emails in the recipient's language, BS date-time and the activity and dashboard patterns. All 18 suites pass, including test files updated for the new email helper.
+  - The frontend type-checks, a production build succeeds, and lint shows no new problems.
