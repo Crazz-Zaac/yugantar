@@ -14,10 +14,12 @@ from .loan_model import Loan
 from .receipt_model import Receipt
 from .fine_model import Fine
 
-# from .expense_model import ExpenditureModel
+from .expense_model import Expense
+from .meeting_minutes_model import MeetingMinutes, MinutesSignature
 from .loan_payment import LoanPayment
 from .notification_model import Notification
 from .calendar_model import CalendarEvent, EventRsvp
+from .report_model import GeneratedReport
 
 from .mixins.money import MoneyMixin
 

@@ -159,11 +159,21 @@ def policy_statement(policy_type: str, policy) -> str:
         else "Late penalties apply from the due date."
     )
     emi = " Members may also repay in equal monthly instalments (EMI)." if policy.emi_applicable else ""
+    charge = _service_charge_pct(policy)
+    service = (
+        f" A service charge of {_num(charge)}% of the loan amount is charged when a loan is issued or renewed."
+        if charge
+        else ""
+    )
     return (
         f"Members may borrow between {rs(policy.min_loan_amount)} and {rs(policy.max_loan_amount)} at "
-        f"{_num(policy.interest_rate)}% interest per year, charged as simple interest on the amount borrowed. "
+        f"{_num(policy.interest_rate)}% interest per year, charged as simple interest on the amount borrowed.{service} "
         f"{grace} {renewals} {guarantor}{emi} This policy is {_effective_text(policy)}."
     )
+
+
+def _service_charge_pct(policy) -> Decimal:
+    return Decimal(str(getattr(policy, "service_charge_percent", 0) or 0))
 
 
 # ---------------------------------------------------------------------------
@@ -238,9 +248,13 @@ def policy_statement_ne(policy_type: str, policy) -> str:
         else "जमानीकर्ता राख्नु ऐच्छिक हो।"
     )
     emi = " सदस्यहरूले समान मासिक किस्ता (EMI) मा पनि भुक्तानी गर्न सक्नेछन्।" if policy.emi_applicable else ""
+    charge = _service_charge_pct(policy)
+    service = (
+        f" ऋण जारी वा नवीकरण गर्दा ऋण रकमको {ne_num(_num(charge))}% सेवा शुल्क लाग्नेछ।" if charge else ""
+    )
     return (
         f"सदस्यहरूले वार्षिक {ne_num(policy.interest_rate)}% साधारण ब्याजदरमा {ne_rs(policy.min_loan_amount)} देखि "
-        f"{ne_rs(policy.max_loan_amount)} सम्म ऋण लिन सक्नेछन्; ब्याज लिएको पूरै रकममा गणना गरिनेछ। "
+        f"{ne_rs(policy.max_loan_amount)} सम्म ऋण लिन सक्नेछन्; ब्याज लिएको पूरै रकममा गणना गरिनेछ।{service} "
         f"{grace} {renewals} {guarantor}{emi} {effective}"
     )
 
@@ -286,6 +300,12 @@ def policy_terms(policy_type: str, policy) -> list[tuple[str, str]]:
     return [
         ("Loan amount", f"{rs(policy.min_loan_amount)} to {rs(policy.max_loan_amount)}"),
         ("Interest", f"{_num(policy.interest_rate)}% per year, simple interest"),
+        (
+            "Service charge",
+            f"{_num(_service_charge_pct(policy))}% of the loan amount, when issued or renewed"
+            if _service_charge_pct(policy)
+            else "None",
+        ),
         ("Grace period", _plural(policy.grace_period_days, "day") if policy.grace_period_days else "None"),
         ("Renewals", f"Up to {policy.max_renewals}" if policy.max_renewals else "Not allowed"),
         ("Guarantor", "Required (another member)" if policy.requires_collateral else "Optional"),
@@ -316,6 +336,7 @@ class _Letterhead(FPDF):
     reference = ""
     issued = ""
     preview = False  # signing still open: watermark, no reference number
+    document_label = "Policy adoption record"  # shown in the footer
 
     def header(self):
         if self.preview:
@@ -368,7 +389,7 @@ class _Letterhead(FPDF):
         self.ln(1.5)
         self.set_font("Helvetica", "", 7.5)
         self.set_text_color(*MUTED)
-        self.cell(0, 4, _latin1(f"{ORG_NAME}  |  Policy adoption record  |  {self.reference}"), align="L")
+        self.cell(0, 4, _latin1(f"{ORG_NAME}  |  {self.document_label}  |  {self.reference}"), align="L")
         self.set_x(self.l_margin)
         self.cell(0, 4, f"Page {self.page_no()} of {{nb}}", align="R", new_x="LMARGIN", new_y="NEXT")
         self.cell(

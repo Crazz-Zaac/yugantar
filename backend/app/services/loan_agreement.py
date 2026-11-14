@@ -121,6 +121,13 @@ def build_agreement_pdf(session: Session, loan: Loan) -> bytes:
     pdf.row("Purpose", loan.purpose or "-")
     pdf.row("Interest rate", f"{Decimal(loan.interest_rate).normalize()}% per year (simple interest)")
     pdf.row("Term", f"{months} months: {format_local(loan.start_date)[:11]} to {format_local(loan.maturity_date)[:11]}")
+    charge = Decimal(loan.service_charge_paisa or 0) / 100
+    if loan.service_charge_method == "deposit":
+        pdf.row("Service charge", _rs(charge) + " (one-off; to be paid with a deposit)")
+        pdf.row("Amount paid out", _rs(principal))
+    else:
+        pdf.row("Service charge", _rs(charge) + " (one-off; deducted from the payout)")
+        pdf.row("Amount paid out", _rs(principal - charge))
     pdf.row("Monthly interest", _rs(monthly_interest.quantize(Decimal("0.01"))))
     pdf.row("Total interest", _rs(total_interest))
     pdf.row("Total to repay", _rs(principal + total_interest))

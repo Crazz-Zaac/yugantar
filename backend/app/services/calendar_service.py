@@ -4,7 +4,9 @@ The cooperative calendar and online meetings.
 Who may do what
   * Every active member sees events for "members"; office bearers (President,
     Treasurer, Secretary) also see "office bearers only" events.
-  * Office bearers create, change and cancel the cooperative's events.
+  * Office bearers create, change and cancel the cooperative's events; the
+    Admin can stand in for them (and start / schedule meetings) when they
+    are absent.
     Changes and cancellations notify everyone who can see the event.
   * Any member can add personal events: only they see them, nobody is
     notified (except their own reminder), and they edit or delete them.
@@ -53,7 +55,13 @@ from app.schemas.calendar_schema import (
     RsvpRequest,
 )
 from app.services import jaas
-from app.services.duties import coop_roles, is_active_member, is_office_bearer, name_with_role
+from app.services.duties import (
+    can_organise,
+    coop_roles,
+    is_active_member,
+    is_admin_standin,
+    name_with_role,
+)
 from app.services.notify import notify
 from app.utils.local_time import LOCAL_TZ, LOCAL_TZ_LABEL, to_local
 
@@ -83,7 +91,7 @@ def _local_midnight(d: date) -> datetime:
 # ---------------------------------------------------------------------------
 def is_calendar_member(user: Optional[User]) -> bool:
     """Active member of the cooperative (not a bare technical account)."""
-    return user is not None and is_active_member(user) and bool(user.cooperative_roles)
+    return user is not None and is_active_member(user) and (bool(user.cooperative_roles) or is_admin_standin(user))
 
 
 def require_member(user: User) -> None:
@@ -93,7 +101,7 @@ def require_member(user: User) -> None:
 
 def require_manager(user: User) -> None:
     require_member(user)
-    if not is_office_bearer(user):
+    if not can_organise(user):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN, "Only office bearers (President, Treasurer, Secretary) can manage events."
         )
@@ -106,12 +114,12 @@ def is_personal(event: CalendarEvent) -> bool:
 def can_see(user: User, event: CalendarEvent) -> bool:
     if is_personal(event):
         return event.created_by == user.id
-    return event.visibility != EventVisibility.OFFICE_BEARERS or is_office_bearer(user)
+    return event.visibility != EventVisibility.OFFICE_BEARERS or can_organise(user)
 
 
 def can_manage(user: User, event: CalendarEvent) -> bool:
     """Personal events: their owner. Cooperative events: office bearers."""
-    return event.created_by == user.id if is_personal(event) else is_office_bearer(user)
+    return event.created_by == user.id if is_personal(event) else can_organise(user)
 
 
 def require_can_manage(user: User, event: CalendarEvent) -> None:
@@ -123,7 +131,7 @@ def require_can_manage(user: User, event: CalendarEvent) -> None:
 
 def require_can_publish(user: User, visibility) -> None:
     """Only office bearers put events on the cooperative's calendar."""
-    if getattr(visibility, "value", visibility) != EventVisibility.PRIVATE.value and not is_office_bearer(user):
+    if getattr(visibility, "value", visibility) != EventVisibility.PRIVATE.value and not can_organise(user):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             "Only office bearers can add events for the cooperative. You can add personal events that only you see.",
@@ -240,7 +248,7 @@ class CalendarService:
         if include_due_dates and not online_only:
             items += self._due_items(session, user, start, end, lang)
         items.sort(key=lambda i: (i.start, not i.all_day, i.title))
-        return CalendarFeed(items=items, can_manage=is_office_bearer(user), meetings_enabled=jaas.enabled())
+        return CalendarFeed(items=items, can_manage=can_organise(user), meetings_enabled=jaas.enabled())
 
     def upcoming(self, session: Session, user: User, lang: str, limit: int = 5) -> CalendarFeed:
         now = datetime.now(timezone.utc)
@@ -629,7 +637,7 @@ class CalendarService:
             )
         if now > closes:
             raise HTTPException(status.HTTP_409_CONFLICT, "This meeting has ended.")
-        moderator = is_office_bearer(user) or event.created_by == user.id
+        moderator = can_organise(user) or event.created_by == user.id
         display = f"{user.first_name} {user.last_name}".strip()
         roles = [r.title() for r in ("president", "treasurer", "secretary") if r in coop_roles(user)]
         if roles:

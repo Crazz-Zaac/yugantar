@@ -18,6 +18,7 @@ class SplitCategory(str, Enum):
     LOAN_PRINCIPAL = "loan_principal"  # pay loan principal only
     LOAN_INTEREST = "loan_interest"  # pay loan interest only
     LOAN_RENEWAL = "loan_renewal"  # pay off remaining principal to close/renew loan
+    SERVICE_CHARGE = "service_charge"  # the loan's one-off service charge (when not deducted at payout)
 
 
 class DepositPreviewRequest(SQLModel):
@@ -45,6 +46,7 @@ class LoanSummary(SQLModel):
     outstanding_principal_paisa: int
     outstanding_interest_paisa: int
     interest_rate: Decimal
+    service_charge_due_paisa: int = 0  # still to pay with a deposit
 
 
 class SplitAllocation(SQLModel):

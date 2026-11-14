@@ -48,6 +48,12 @@ class Loan(BaseModel, table=True):
         description="Total penalties incurred on the loan",
     )
 
+    # Service charge fixed when the loan was applied for (policy % x amount);
+    # later policy changes don't alter it
+    service_charge_paisa: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    # How the member pays it (chosen when applying): "deducted" from the payout,
+    # or "deposit" (later, as a "Service charge" part of a deposit voucher)
+    service_charge_method: str = Field(default="deducted", max_length=20, sa_column_kwargs={"server_default": "deducted"})
     accrued_interest_paisa: int = Field(
         default=0.0,
         description="Total interest amount accrued on the loan",

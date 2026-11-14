@@ -9,6 +9,8 @@ import { SettingsTab } from "./SettingsTab"
 import { MemberPoliciesTab } from "./MemberPoliciesTab"
 import { CalendarTab } from "@/components/tools/CalendarTab"
 import { MeetingsTab } from "@/components/tools/MeetingsTab"
+import { ReportsTab } from "@/components/tools/ReportsTab"
+import { ExpensesTab } from "./ExpensesTab"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { LanguageToggle } from "@/components/LanguageToggle"
 import { NotificationPanel } from "@/components/NotificationPanel"
@@ -26,7 +28,7 @@ const bottomNav: { id: MemberTab; label: string; icon: typeof Home }[] = [
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
-export type MemberTab = "home" | "deposit" | "loans" | "policies" | "calendar" | "meetings" | "settings"
+export type MemberTab = "home" | "deposit" | "loans" | "policies" | "calendar" | "meetings" | "reports" | "expenses" | "settings"
 
 const tabTitles: Record<MemberTab, string> = {
   home: "Dashboard",
@@ -35,6 +37,8 @@ const tabTitles: Record<MemberTab, string> = {
   policies: "Policies",
   calendar: "Calendar",
   meetings: "Meetings",
+  reports: "Financial Reports",
+  expenses: "Expenses",
   settings: "Settings",
 }
 
@@ -46,6 +50,8 @@ const segmentToTab: Record<string, MemberTab> = {
   policies: "policies",
   calendar: "calendar",
   meetings: "meetings",
+  reports: "reports",
+  expenses: "expenses",
   settings: "settings",
 }
 
@@ -57,6 +63,8 @@ const tabToPath: Record<MemberTab, string> = {
   policies: "/dashboard/policies",
   calendar: "/dashboard/calendar",
   meetings: "/dashboard/meetings",
+  reports: "/dashboard/reports",
+  expenses: "/dashboard/expenses",
   settings: "/dashboard/settings",
 }
 
@@ -91,6 +99,10 @@ export function MemberDashboard({ onLogout }: { onLogout: () => void }) {
         return <CalendarTab />
       case "meetings":
         return <MeetingsTab />
+      case "reports":
+        return <ReportsTab />
+      case "expenses":
+        return <ExpensesTab />
       case "settings":
         return <SettingsTab />
     }
@@ -195,16 +207,16 @@ export function MemberDashboard({ onLogout }: { onLogout: () => void }) {
             <button
               type="button"
               onClick={() => setSidebarOpen(true)}
-              aria-current={["policies", "meetings", "settings"].includes(activeTab) ? "page" : undefined}
+              aria-current={["policies", "meetings", "reports", "expenses", "settings"].includes(activeTab) ? "page" : undefined}
               className={`flex w-full flex-col items-center gap-1 py-2.5 text-[11px] font-medium transition-colors ${
-                ["policies", "meetings", "settings"].includes(activeTab)
+                ["policies", "meetings", "reports", "expenses", "settings"].includes(activeTab)
                   ? "text-primary"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <span
                 className={`flex h-7 w-12 items-center justify-center rounded-full transition-colors ${
-                  ["policies", "meetings", "settings"].includes(activeTab) ? "bg-primary/10" : ""
+                  ["policies", "meetings", "reports", "expenses", "settings"].includes(activeTab) ? "bg-primary/10" : ""
                 }`}
               >
                 <MoreHorizontal className="h-5 w-5" />

@@ -29,6 +29,8 @@ class LoanPaymentService:
     @staticmethod
     def apply_verified_payment(loan: Loan, payment: LoanPayment) -> None:
         """Credit a just-verified payment to its loan."""
+        if payment.payment_type == LoanPaymentType.SERVICE_CHARGE:
+            return  # the service charge isn't repayment of the loan
         loan.total_paid_paisa += payment.amount_paisa
         if (
             payment.payment_type == LoanPaymentType.PRINCIPAL
@@ -39,6 +41,8 @@ class LoanPaymentService:
     @staticmethod
     def reverse_verified_payment(loan: Loan, payment: LoanPayment) -> None:
         """Undo the effect of a verified payment that is being removed."""
+        if payment.payment_type == LoanPaymentType.SERVICE_CHARGE:
+            return
         loan.total_paid_paisa = max(0, loan.total_paid_paisa - payment.amount_paisa)
         if (
             loan.status == LoanStatus.PAID

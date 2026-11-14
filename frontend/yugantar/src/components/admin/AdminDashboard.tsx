@@ -6,6 +6,8 @@ import { OverviewTab } from "./OverviewTab"
 import { MembersTab } from "./MembersTab"
 import { ActivityTab } from "./ActivityTab"
 import { PoliciesTab } from "./PoliciesTab"
+import { CalendarTab } from "@/components/tools/CalendarTab"
+import { MeetingsTab } from "@/components/tools/MeetingsTab"
 import { ThemeToggle } from "@/components/ThemeToggle"
 import { LanguageToggle } from "@/components/LanguageToggle"
 import { NotificationPanel } from "@/components/NotificationPanel"
@@ -14,13 +16,17 @@ import { Menu, LogOut } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
-export type AdminTab = "overview" | "members" | "activity" | "policies"
+// Calendar and Meetings: the Admin stands in for the organisers (events,
+// meetings, minutes) when they are absent
+export type AdminTab = "overview" | "members" | "activity" | "policies" | "calendar" | "meetings"
 
 const tabTitles: Record<AdminTab, string> = {
   overview: "Overview",
   members: "Members",
   activity: "Activity Log",
   policies: "Policies",
+  calendar: "Calendar",
+  meetings: "Meetings",
 }
 
 /** Map URL segment to tab id */
@@ -29,6 +35,8 @@ const segmentToTab: Record<string, AdminTab> = {
   members: "members",
   activity: "activity",
   policies: "policies",
+  calendar: "calendar",
+  meetings: "meetings",
 }
 
 /** Map tab id to URL path */
@@ -37,6 +45,8 @@ const tabToPath: Record<AdminTab, string> = {
   members: "/admin/members",
   activity: "/admin/activity",
   policies: "/admin/policies",
+  calendar: "/admin/calendar",
+  meetings: "/admin/meetings",
 }
 
 export function AdminDashboard({
@@ -70,6 +80,10 @@ export function AdminDashboard({
         return <ActivityTab />
       case "policies":
         return <PoliciesTab />
+      case "calendar":
+        return <CalendarTab />
+      case "meetings":
+        return <MeetingsTab />
     }
   }
 

@@ -15,6 +15,7 @@ from app.models.loan_model import Loan, LoanStatus
 from app.models.loan_payment import LoanPayment, LoanPaymentType, LoanPaymentStatus
 from app.models.mixins.money import MoneyMixin
 from app.services.receipt_service import ReceiptService
+from app.services.loan_service import service_charge_due_paisa
 from app.services.policy_lifecycle import require_current_deposit_policy
 from app.utils.deposit_date_utils import (
     calculate_due_date,
@@ -87,6 +88,7 @@ class SmartDepositService:
                     outstanding_principal_paisa=outstanding_principal,
                     outstanding_interest_paisa=ln.accrued_interest_paisa,
                     interest_rate=ln.interest_rate,
+                    service_charge_due_paisa=service_charge_due_paisa(session, ln),
                 )
             )
 
@@ -139,6 +141,7 @@ class SmartDepositService:
                 SplitCategory.LOAN_PRINCIPAL,
                 SplitCategory.LOAN_INTEREST,
                 SplitCategory.LOAN_RENEWAL,
+                SplitCategory.SERVICE_CHARGE,
             ):
                 loan_allocs.append(a)
 
@@ -175,6 +178,9 @@ class SmartDepositService:
             deposited_date=now,
             due_deposit_date=due_date,
             amount_paisa=MoneyMixin.rupees_to_paisa(alloc_total),
+            # The member's capital in this voucher (reports use these)
+            regular_paisa=MoneyMixin.rupees_to_paisa(deposit_amount),
+            advance_paisa=MoneyMixin.rupees_to_paisa(advance_amount),
             verification_status=DepositVerificationStatus.PENDING,
             receipt_id=receipt_id,
         )
@@ -234,9 +240,24 @@ class SmartDepositService:
                         f"to cover outstanding principal",
                     )
 
+            if la.category == SplitCategory.SERVICE_CHARGE:
+                due = service_charge_due_paisa(session, loan)
+                if loan.service_charge_method != "deposit" or due == 0:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        "This loan has no service charge left to pay with a deposit.",
+                    )
+                if paisa > due:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        f"The service charge left on this loan is Rs. {due / 100:,.2f}.",
+                    )
+
             payment_type = (
                 LoanPaymentType.INTEREST
                 if la.category == SplitCategory.LOAN_INTEREST
+                else LoanPaymentType.SERVICE_CHARGE
+                if la.category == SplitCategory.SERVICE_CHARGE
                 else LoanPaymentType.PRINCIPAL
             )
 

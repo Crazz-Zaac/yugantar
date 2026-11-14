@@ -88,9 +88,13 @@ export function NotificationPanel() {
       case "policy_finalized":
         return isAdminArea ? "/admin/policies" : "/dashboard/policies"
       case "event":
-        return "/dashboard/calendar"
+        return isAdminArea ? "/admin/calendar" : "/dashboard/calendar"
       case "meeting":
-        return "/dashboard/meetings"
+        return isAdminArea ? "/admin/meetings" : "/dashboard/meetings"
+      case "expense":
+        return "/dashboard/expenses"
+      case "minutes":
+        return isAdminArea ? "/admin/meetings?view=minutes" : "/dashboard/meetings?view=minutes"
       default:
         // e.g. proxy-signature notifications (type "general") about a policy
         if (notification.policy_id) return isAdminArea ? "/admin/policies" : "/dashboard/policies"

@@ -1129,3 +1129,350 @@ Checked visually with headless screenshots (Playwright/Chromium in a throwaway c
   - Clicking an event still opens it, and **+N more** shows the day's full list.
 - **Week view:** every day has an **+ Add** button under its events.
 - The toolbar's **New event** button and the day list's **Add** stay as other ways in. Members still add personal events only.
+
+---
+
+## Report Generation
+
+### 34. Monthly statement of accounts (official PDF), loan service charge, deposit breakdown
+- **What:** a **Reports** page under Tools (`/dashboard/reports`). A member picks a range of months (from–to, at most 24, nothing in the future), previews it on screen, then **Generate official PDF**.
+  - The PDF is A4 landscape on the Yugantar letterhead (logo, tri-colour rule) with its own reference number `YUG/RPT/<year>/<NNNN>`.
+  - It's kept permanently in document storage with its SHA-256, and listed under **Generated reports** for every member to download.
+  - Every generation is a new snapshot with a new reference; older reports are never changed.
+- **Decisions (from the user):**
+  - **Interest:** principal owed at the start of the month × yearly rate ÷ 12.
+  - **Service charge:** a loan-policy setting (1% now).
+  - **Layout:** one section per month, then period totals.
+  - **Access:** any member can generate a report (closed group, transparency).
+- **Contents, per month and per member** (approved members; the system admin account is excluded):
+  - **A. Summary (as at the end of the month):**
+    - Capital this month.
+    - Capital contribution (total).
+    - Loans issued (total).
+    - Capital due: required deposits not yet paid.
+    - Capital advance: paid beyond what's required.
+  - **B. Accruals of the month:**
+    - Principal outstanding at the end of the month.
+    - Duration: month of the loan / term in months, `*` once past maturity.
+    - Interest accrual.
+    - Loan renewal / service charge, in the month the loan was issued.
+    - Fine in deposit: late fines paid with deposits that month.
+  - Then a period summary: flows summed over the period, balances at its end.
+  - The PDF ends with a "Prepared by / Checked by (Treasurer) / Approved by (President)" sign-off block and a "Basis of the figures" section.
+- **Rules:**
+  - Only verified deposits and loan payments count.
+  - **Capital due/advance:** total capital is compared with one required deposit per due date (the deposit policy in force that day: adopted, latest start wins) since the member joined, so only one of the two is ever non-zero.
+  - Loans count from when they were disbursed (else approved), and only if approved, active or paid.
+  - **Interest when a loan is issued mid-month:** that month is pro-rated by the days the money was out.
+  - Months are AD calendar months in NPT; the BS dates are shown next to them.
+- **Design:**
+  - `services/reports/monthly_statement.py` holds the pure figures, in integer paisa. It loads everything once per range and computes in memory, with no PDF or HTTP code.
+  - `statement_pdf.py` renders the PDF; the letterhead from `policy_document.py` is reused, with a `document_label` for the footer.
+  - `service.py` handles numbering, storage and listing. If two generations clash on the unique reference, it retries with the next number and removes the orphaned file.
+  - The API is in `api/v1/endpoints/report.py`:
+    - `GET /reports/options`
+    - `GET /reports/monthly-statement` (preview)
+    - `POST /reports/monthly-statement` (generate)
+    - `GET /reports`
+    - `GET /reports/{id}/pdf`
+- **Deposit breakdown:**
+  - A deposit's `amount_paisa` is the whole voucher, which can include a late fine and loan payments. New columns `Deposit.regular_paisa` and `advance_paisa` record the member's capital: set by the voucher-split flow (and the old deposit endpoint).
+  - The migration backfills existing rows: voucher − fine − loan payments, and an ADVANCE deposit's first policy-amount counts as regular.
+- **Loan service charge:**
+  - `LoanPolicy.service_charge_percent` (default 1%, 0–100) is set in the policy form, with a hint showing what it costs on the maximum loan. Policy chips show it.
+  - The policy wording (EN and NE) and the terms table state it.
+  - It's fixed onto each loan when applied for (`Loan.service_charge_paisa`, rounded to the paisa), so later policy changes don't alter it. Existing loans were backfilled at their policy's 1%.
+  - It's shown on the loan, in the agreement PDF and in the report.
+  - Collecting the charge (e.g. deducting it at disbursement) isn't built; the report shows it as accrued.
+- **Migration:** `0e9bf1c4ab19` (round-trip tested).
+- **Nepali:** about 50 interface texts and 7 error messages. The PDF is in English, with BS dates in Devanagari.
+- **Not changed, to decide:** the generated loan-policy wording still says interest is "charged as simple interest on the amount borrowed", while the report accrues it on the outstanding balance (as decided). Members have signed that wording, so it was left alone.
+- **Tests:** the new `test_reports` (32 checks) uses a hand-worked example.
+  - Covers: capital, due/advance, pending and rejected deposits ignored, the voucher's fine and loan parts not counted as capital, Jan pro-rata interest (Rs 61.94), Feb/Mar interest on the reduced balance, service charge month, durations including past maturity.
+  - Also covers: API validation, reference sequence, PDF checksum, service charge on policies and loans, and the deposit split.
+  - All 20 suites pass (363 checks). The frontend type-checks and builds, and lint shows no new problems.
+- **Test-data incident (fixed):**
+  - The old `test_signing` borrowed the first real deposit and loan policies, sent them back to signing (which deletes members' signature images) and deleted their record PDFs. The database rollback restores rows, but not files.
+  - That's how `YUG/DP/2026/0001`'s PDF kept disappearing, and **its 3 hand-signature images are lost** (the rows still reference them; the PDF now shows those rows without the image).
+  - `test_signing` now creates its own throwaway policies. `test_fix9` now removes the agreement PDFs it creates.
+  - 69 orphaned agreement PDFs from earlier test runs (referenced by no loan) were deleted, and the record PDF was rebuilt.
+  - A full run now leaves the document storage unchanged.
+
+### 35. Financial Reports: two reports, From/To dates, Report Archive
+- **Navigation:** the tab is now **Financial Reports**, in the main menu just before Policies (no longer under Tools). It's still at `/dashboard/reports`.
+- **The page has three tabs** (the open tab is remembered for the session):
+  - **Monthly Financial Statement:** member contributions (this period and total), loans issued, capital due, capital advance.
+  - **Monthly Accrual Report:** principal outstanding, duration, interest accrual, renewal / service charges, deposit fines.
+  - **Report Archive:** every official PDF generated, newest first, with reference, period, who prepared it and when. It can be filtered by All / Financial Statement / Accrual Report. Signed approval stays on paper (Treasurer, President sign-off lines on the PDF).
+- **Filters:**
+  - **From date / To date** use the BS/AD date pickers (`DateField`), limited to the first day with data up to today.
+  - Quick ranges: This month, Last month, Last 3 months, This year.
+  - The figures update automatically when the dates change (no Preview button), and the rupee figures appear as soon as they're ready.
+- **Any date range** (inclusive, NPT, at most about 24 months), not just whole months:
+  - The range is split into calendar months, and the first and last months are cut to the From/To dates.
+  - Flows count inside each part; balances are as at its end.
+  - Interest is pro-rated by the days covered (e.g. 10–20 Feb = 11/28 of the month's interest).
+  - A part that runs to today is marked "to date".
+- **Two separate official PDFs** from the same figures, each with its own reference series:
+  - Monthly Financial Statement: `YUG/FS/<year>/<NNNN>`.
+  - Monthly Accrual Report: `YUG/AR/<year>/<NNNN>`.
+  - Each has its own period summary and notes. Months follow each other on the page instead of one page each.
+- **API:**
+  - `GET /reports/options`: `first_date`, `last_date`, `max_days`.
+  - `GET /reports/preview?date_from&date_to`
+  - `POST /reports/{financial_statement|accrual_report}`
+  - `GET /reports?kind=`
+  - `GET /reports/{id}/pdf`
+  - `generated_report.period_from/to` now hold dates (`YYYY-MM-DD`); migration `0e9bf1c4ab19` was edited in place, since it hadn't been committed.
+- **Incident:**
+  - Re-running that migration (down and up) dropped the reports table, deleting the two reports the President had generated with the earlier combined version (`YUG/RPT/2026/0001`, November 2026; `YUG/RPT/2026/0002`, September–October 2026). Their PDFs were still on disk.
+  - Their entries were rebuilt from the PDFs (title, preparer, file time, checksum) as legacy `monthly_statement` reports. They're listed and downloadable in the archive as "Statement of accounts (combined)", but no new ones can be generated.
+- **Nepali:** 25 more texts.
+- **Tests:** `test_reports` now has 40 checks:
+  - date validation, a range inside one month (pro-rated Rs 47.14), first and last months cut, "to date";
+  - both report kinds and their reference series, unknown kind refused, archive filter.
+  - All 20 suites pass (371 checks), and the document storage is unchanged after a full run. The frontend type-checks and builds, and lint shows no new problems.
+
+### 36. Quarterly (fiscal-year) filter, Statement of Financial Position, service charge payment choice
+- **Quarterly reports:** the date filter has a **quarter** picker for Nepal fiscal years (Shrawan–Asar).
+  - Q1 Shrawan–Ashwin, Q2 Kartik–Poush, Q3 Magh–Chaitra, Q4 Baisakh–Asar, plus **Whole year**.
+  - It lists fiscal years from the first data to today; the current quarter runs to today. E.g. FY 2083/84 Q1 = 17 Jul – 17 Oct 2026, Q4 ends 16 Jul 2027.
+  - Picking one sets the From/To dates, which can still be adjusted. The month sections inside a quarter are AD months, cut to the quarter's dates.
+- **Statement of Financial Position (SOFP):** a new tab and an official PDF (A4 portrait, `YUG/FP/<year>/<NNNN>`).
+  - Shows the position as at the To date, with a comparison column as at the day before the From date.
+  - **Assets:**
+    1. Deposit (Share Capital) receivables: required deposits not paid.
+    2. Investment (Loan to Members): principal outstanding.
+    3. Investment in Equity Market: "–" until it's tracked.
+    4. Cash / Bank balance.
+  - **Equity and liabilities:** Share Capital (deposits required so far), Capital Advance, Retained Earnings, Margin Loan ("–", not tracked yet).
+  - **Schedules:**
+    - A. Retained earnings breakdown: fines and penalties, interest, service charges, equity-market profit.
+    - B. Loans paid out − principal repaid.
+    - C. How cash is worked out.
+  - It shows **Balanced** when both sides agree.
+- **Decisions (from the user):**
+  - **Retained earnings:** income **received** only (cash basis): late deposit fines, loan penalties, interest payments and service charges (no accrued-but-unpaid interest).
+  - **Loans:** principal outstanding, not total issued.
+  - **Cash / Bank balance** = capital received + income received − principal outstanding. A service charge deducted at payout counts both as income and as less money paid out, so the statement balances by construction.
+  - **Limitation:** there's no opening balance or bank statement in the system, so cash is only as complete as the records. With the dev data it's negative: Rs 3.85 lakh of loans against Rs 39,188 of recorded capital. An opening-balance entry or a bank reconciliation would be the next step.
+- **Service charge payment:** the member chooses when applying for a loan:
+  - **Deduct from the loan:** they receive the amount minus the charge; it's income when the loan is issued.
+  - **Pay with a deposit:** they receive the full amount, and the deposit split offers **Service Charge** for that loan, capped at what's left (pending payments count). It's income once the deposit is verified.
+  - New `Loan.service_charge_method` (default `deducted`) and `LoanPaymentType.SERVICE_CHARGE` (migration `c7f0e4f26bdc`). A service-charge payment isn't counted as loan repayment (`total_paid` and PAID status untouched).
+  - The loan details and the agreement PDF show the method, the amount paid out and what's left to pay.
+- **Fixed in passing:** the deposit split's loan picker showed amounts in paisa as rupees (a Rs 90,000 loan appeared as Rs 90,00,000).
+- **Process note:** running Prettier with `--no-config` on `LoansTab.tsx`/`DepositTab.tsx` reformatted hundreds of unrelated lines. Both files were rebuilt from `HEAD` with only this session's edits re-applied (+96/−11 lines); Prettier should only be run on new files.
+- **Nepali:** 48 more texts (SOFP lines, quarters, service-charge choices) and 2 errors.
+- **Tests:** `test_reports` now has 56 checks:
+  - **SOFP, worked by hand:** share capital Rs 9,000, receivables Rs 6,000, advance Rs 2,000, loans Rs 11,500, retained earnings Rs 170, cash −Rs 6,330, both sides Rs 11,170.
+  - **Service charge:** paid by deposit counts only once verified; interest received counts.
+  - **Deposit split:** the service-charge part is capped, recorded as a service-charge payment and not as repayment; the default method is "deducted".
+  - All 20 suites pass (387 checks), and the document storage is unchanged after a full run. The frontend type-checks and builds, and lint shows no new problems.
+
+### 37. Complete Financial Report (all reports in one)
+- **What:** a **Complete Report** tab, now the first tab and the default, plus an official PDF `YUG/CR/<year>/<NNNN>` with all the reports for the chosen dates in one document, with one reference and one sign-off. The individual reports stay as they were.
+- **The on-screen tab** shows the Statement of Financial Position, then the Monthly Financial Statement, then the Monthly Accrual Report, each under a numbered part heading. The same From/To and quarter filter drives all of them.
+- **The PDF** (A4 landscape):
+  - First page: a contents list and an "At a glance" table (total assets, share capital, capital deposited, principal outstanding, interest accrued, retained earnings, cash).
+  - Then Part 1 (SOFP with schedules), Part 2 (Financial Statement with period summary) and Part 3 (Accrual Report with period summary), each starting on a new page.
+  - It ends with one Prepared / Checked / Approved block and the notes of all three reports, without duplicates.
+  - The archive has a "Complete" filter.
+- **Code:** `statement_pdf.py` was split into part writers (`_write_position`, `_write_monthly`, `_title_block`, `_sign_off`, `_notes`). Each individual report and the complete report are composed from the same parts, so they always show the same figures and layout.
+- **Nepali:** 4 more texts.
+- **Tests:** `test_reports` now has 59 checks (complete report: reference series, PDF contains all three parts, archive filter). All 20 suites pass (390 checks), and the document storage is unchanged after a full run. The frontend type-checks and builds, and lint shows no new problems.
+
+### 38. Report PDFs redesigned (review feedback)
+- **Letterhead and footer:**
+  - A compact letterhead on every page: small logo, "YUGANTAR Cooperative", and on the right the report title, reference and date, with a thin tri-colour rule.
+  - The footer is a single line (organisation, report, reference, "Page x of y") plus one short verification line.
+  - Reports have their own document class (`_ReportDoc`); policy records keep their letterhead.
+- **Type scale:** title 20, section 13 (blue, with a rule), subsection 10.5, body 9, tables 8.5, notes 8.
+- **Tables:**
+  - Light blue header, zebra rows, shaded bold total rows, right-aligned amounts.
+  - Full-width columns sized per report.
+  - The fill colour is reset before every table, so colours from earlier drawing can't leak into rows.
+- **Complete report, page 1 (executive summary cover):**
+  - Logo and name, the report reference and date, title and reporting period (with BS dates).
+  - Eight key-figure cards:
+    - total assets, principal outstanding, capital required, income received;
+    - cash / bank, capital deposited, interest accrued, outstanding capital.
+  - A contents list with real page numbers (fpdf2 ToC placeholder; the parts are also PDF bookmarks).
+  - A "Prepared by · Amounts in NPR · Dates in Nepal Time" line.
+- **Statement of Financial Position:**
+  - Full-width table with a schedule-reference column (A/B/C), shaded ASSETS / EQUITY AND LIABILITIES rows and the two dates as column headings.
+  - A one-line check that both sides balance.
+  - Schedules on the following page: A. Retained Earnings and B. Loans to Members side by side.
+  - New **C. Cash and Bank Reconciliation**: opening balance (day before the period) + capital received + income received − loans paid out + principal repaid = closing balance.
+- **Monthly Financial Statement columns renamed** (PDF and screen):
+  - Capital deposited during period
+  - Cumulative capital deposited
+  - Cumulative loans issued
+  - Outstanding capital contribution
+  - Capital paid in advance
+- **Monthly Accrual Report:**
+  - The member-level summary now shows the number of loans instead of the dense Duration column.
+  - New **loan schedule** below it (PDF and screen): loan reference (`LN-XXXXXXXX`, as on the agreement), member, principal, outstanding, rate, month of term ("7 of 12", `*` past maturity), interest accrual, service charge.
+  - New `LoanAccrualRow` per loan per month section; its interest adds up to the member totals.
+- **Approval and notes** (on its own page in the complete report):
+  - Three bordered approval boxes (Prepared / Checked / Approved) with signature and date lines.
+  - Numbered notes in three groups: Accounting basis and assumptions, Data limitations and exclusions, Document verification (reference, generated when and for whom, where the checksum is kept, the signed paper copy being the approved record).
+- **Page breaks:** each part of the complete report starts on a new page, and month blocks and schedules are kept together where they fit. The complete report went from 11 pages to 9 on the dev data.
+- **Kept as is:** two decimal places on amounts (cooperative accounts are kept to the paisa), and the report names "Monthly Financial Statement" / "Monthly Accrual Report" used across the app.
+- **Fixed:** a stray double space in member names when the middle name is blank.
+- **Nepali:** 14 more texts.
+- **Tests:** `test_reports` now has 61 checks (loan schedule rows and totals). All 20 suites pass, and the document storage is unchanged after a full run. The frontend type-checks and builds, and lint shows no new problems.
+
+### 39. Reports: period activity vs. cumulative vs. balances; income received vs. accrued
+- **Every table now says what its amounts measure,** in a small label under it (PDF and screen):
+  - **During the period (dates):** activity in that section or period, e.g. capital deposited, interest accrual, service charges, deposit fines, the cash reconciliation movements.
+  - **Cumulative to (date):** totals from the start of the records, e.g. cumulative capital deposited, cumulative loans issued, Schedule A income, loans paid out and principal repaid.
+  - **As at (date):** closing balances, e.g. every Statement of Financial Position line, principal outstanding, outstanding capital contribution, capital paid in advance, loans held, month of term.
+  - Mixed tables (Monthly Financial Statement, the accrual summary, the loan schedule) list which columns are which.
+  - The period summaries have a **Basis** column (PDF) / coloured basis tag (screen): During the period, Cumulative to …, As at ….
+- **Income received vs. income accrued:**
+  - Retained Earnings is labelled "(income received)" on the statement, and Schedule A is headed "income received, cash basis". Its label says interest earned but not yet paid is not included.
+  - **New memo under Schedule A:** "Interest earned vs received" for the period: interest accrued (earned), interest received, and earned less received (not in Retained Earnings). The screen has the same as a card under the schedules.
+  - Interest accrual columns are labelled "(earned)", and the period summary row reads "Interest accrued (earned, not necessarily received)".
+  - The cover card says "earned in the period, not necessarily received", and the income card says "retained earnings (cash basis)".
+  - The notes add an "Income received versus income accrued" paragraph and say each table states its measure. The accrual note says accrued interest is not income received.
+- **Layout fixes:** captions in the side-by-side schedules now wrap within their column, and a month's heading is kept with its table (larger keep-together estimate).
+- **Nepali:** 27 more texts.
+- **Tests:** `test_reports` now has 62 checks (PDF contains the basis labels and the earned-vs-received memo). All 20 suites pass, and the document storage is unchanged after a full run. The frontend type-checks and builds, and lint shows no new problems.
+
+### 40. Expenses (Treasurer records, everyone sees, counted in the Financial Reports)
+- **Navigation:** a new **Expenses** tab in the main menu, just before Financial Reports (`/dashboard/expenses`).
+- **Recording (Treasurer only), designed to take seconds:**
+  - Amount (focused on open), date paid (BS/AD picker, today by default, no future dates), category chips, "What for" (optional; required for Other), then **Record expense** or Enter.
+  - The last category used is remembered. After saving, the amount and note clear and the cursor returns to Amount, ready for the next expense.
+  - **Categories:** Meeting, AGM, Gift / welfare, Office & stationery, Bank charges, Transport, Other.
+- **Viewing (every member):** a month-by-month list with the month's total and per-category totals; each row shows the date, category, description, amount and who recorded it.
+- **Corrections:** the Treasurer **voids** an entry with a required reason. It stays listed, struck through, with who voided it and why, and stops counting in reports. Nothing is deleted.
+- **Data:** a new `expense` table (migration `77c6c1954f3a`):
+  - Fields: amount in **paisa**, category, `spent_on` (the NPT day it was paid), description, who recorded it, and void fields.
+  - The old unused `expendituremodel` table (float amounts, never used, empty) was dropped. The migration refuses to drop it if it ever has rows.
+  - API: `GET /expenses?date_from&date_to`, `POST /expenses`, `POST /expenses/{id}/void`.
+- **In the Financial Reports:**
+  - **Retained Earnings = income received − expenses paid** (cash basis), so expenses also reduce the **Cash / Bank balance**. The statement still balances.
+  - The SOFP line reads "Retained Earnings (income received less expenses)". Schedule A shows Income received, then Less: expenses paid, then Retained Earnings.
+  - The cash reconciliation (C) has "Less: expenses paid".
+  - New **Schedule D**: expenses by category for the period.
+  - The complete report gets a new **Part 4. Expenses** (date, category, description, recorded by, amount, total), so Approval and notes is now Part 5.
+  - The cover has an **Expenses paid** card (five small cards now), and the Retained Earnings card reads "income received less expenses".
+  - A note explains that expenses reduce Retained Earnings and cash on the day paid, and that voided entries are excluded.
+  - On screen: the expense lines in the SOFP schedules, and an Expenses table under the SOFP tab and as part 4 of the Complete Report tab.
+- **Nepali:** 37 more texts and 6 error messages.
+- **Tests:** the new `test_expenses` (21 checks):
+  - who may record, view and void;
+  - stored in paisa; future date, zero amount, bad category and Other without description refused;
+  - void with a reason (only once); nothing deleted;
+  - in the reports: period total (voided and out-of-range excluded), Retained Earnings and cash reduced, still balanced, by category, the From-date boundary, the API.
+  - `test_reports` was updated for Part 4/5 and the new label. All 21 suites pass (412 checks), and the document storage is unchanged after a full run. The frontend type-checks and builds, and lint shows no new problems.
+
+### 41. Expenses need the President's approval
+- **Decisions (from the user):**
+  - Approval applies to **expenses only** (reports keep their paper sign-off).
+  - Until approved, an expense is **left out of the figures but listed** in the reports.
+- **Flow:**
+  1. The Treasurer records an expense: status **Awaiting approval**. The President is notified (in-app and email), and the toast says "Sent to the President for approval".
+  2. The **President approves** it, or **rejects** it with a required reason. The Treasurer is notified either way.
+  3. Only **approved**, non-voided expenses count in the Financial Reports. Rejected ones stay listed (struck through, with the reason).
+  - The Treasurer can still void a pending or approved entry with a reason.
+- **Separation of duties** (`services/duties.py`): new `Duty.APPROVE_EXPENSE` with the President as primary. The expense's recorder is the "beneficiary", so nobody approves their own entry. If the person who recorded it is also the President, the **Secretary** approves instead. The Secretary can't approve other expenses.
+- **Data:** `expense.status` (pending | approved | rejected), `reviewed_by` / `reviewed_by_name` / `reviewed_at` / `review_note` (migration `8da414dbdf0f`). Existing rows became **pending**: one dev expense, "New Year Celebration", now awaits approval.
+- **API:**
+  - `POST /expenses/{id}/approve` and `POST /expenses/{id}/reject {reason}`.
+  - `GET /expenses?status=pending`.
+  - The list returns `can_approve`, a per-item `can_review`, and `pending_rupees`; `total_rupees` and `by_category` cover approved expenses only.
+- **Screens:**
+  - **Expenses:** the President (or Secretary standing in) sees an **"Awaiting your approval"** panel at the top with Approve / Reject, for every month. Each row shows a status badge and "approved by" / "rejected by: reason". The month totals split Approved and Awaiting approval.
+  - **Home:** a **"Expenses to approve"** action item.
+  - **Notifications:** the new `expense` type opens the Expenses tab.
+  - Also fixed: Home had no icon for the existing `guarantee_request` action, which would have crashed the page when that action appeared. It now has one, plus a fallback icon.
+- **Reports:**
+  - The Expenses part / table has an **Approved by** column.
+  - A separate **"Awaiting the President's approval (not counted in this report)"** table lists pending expenses in the period.
+  - Schedule D's label says how much is awaiting approval and not included, and the accounting note explains the approval rule.
+- **Nepali:** 17 more interface texts, 3 notification messages, 4 errors and the Home action (with its count pattern).
+- **Tests:** `test_expenses` now has 33 checks:
+  - pending by default and not counted;
+  - the President is notified and sees the pending list; the Home action;
+  - the Treasurer and members can't approve; approve, reject with a reason, can't review twice, the Treasurer notified;
+  - a President-recorder can't approve their own and the Secretary does; the Secretary can't approve ordinary expenses;
+  - only approved expenses count.
+  - All 21 suites pass (426 checks), and the document storage is unchanged after a full run. The frontend type-checks and builds, and lint shows no new problems.
+
+### 42. Meeting minutes and the resolutions register (Meetings tab)
+- **Where:** Meetings now has three tabs: **Meetings** (online meetings, as before), **Minutes**, **Resolutions**. `?view=minutes` / `?view=resolutions` opens one directly, which notifications and the Home action use.
+- **Standard format** for every meeting, online or in person:
+  1. **The meeting:** title, online / in person, when (NPT), place, chaired by (defaults to the President), recorded by.
+  2. **Attendance:** a checklist of members giving "X of Y members present", plus non-member guests.
+  3. **Agenda and proceedings:** each item has **what was discussed** and **what was concluded**. An item can be **put to a vote**:
+     - with a type (policy, bill / proposal, investment, loan, budget / expense, election, other) and votes for / against / abstained;
+     - the result is worked out automatically: **passed** by simple majority of those voting (for > against), **unanimous** when nobody voted against or abstained, otherwise not passed;
+     - votes can't exceed the members present.
+  4. **Any other business.**
+- **From a calendar meeting:** pick a past meeting / general assembly (last 90 days) to fill in the title, time, type and place. Attendees are suggested from the members who replied "Going".
+- **Workflow:**
+  - Any office bearer writes minutes (normally the Secretary) as a **draft** that office bearers can see and edit.
+  - **Submit** checks that attendance is recorded and that every item has a discussion or conclusion, then notifies the President.
+  - The **President approves**, or **returns** the minutes with a note (back to draft, and the writer is notified). If the President wrote them, the **Secretary** approves instead (`Duty.APPROVE_MINUTES`; nobody approves their own).
+  - **Approved** minutes are locked, numbered `YUG/MM/<year>/<NNNN>`, stored as a PDF with a SHA-256, and every member is notified.
+  - Members see approved minutes only.
+- **Minutes PDF** (A4 portrait, the reports' letterhead and type scale):
+  - meeting details with BS date; attendance as a two-column list with "X of Y present (Z%)";
+  - the proceedings item by item (Discussed / Concluded / coloured vote line);
+  - a resolutions table, any other business;
+  - Recorded by / Approved by boxes with timestamps and signature lines, and a verification note.
+- **Resolutions register:** every resolution voted on in approved minutes, newest first: date, resolution and conclusion, type, for / against / abstained (with how many were present), result, and which minutes record it. It can be filtered All / Passed / Not passed. This is the place to show when a bill, policy or investment plan was passed by a majority.
+- **Home:** "Minutes to approve" action for the President (or Secretary standing in). Notifications open Meetings → Minutes.
+- **Data:** a new `meeting_minutes` table (migration `78f5060424bb`). Agenda items are kept as JSON (title, discussion, decision, vote), attendees as member ids, plus a member count for "X of Y". The old, never-used `MeetingMinutesModel` (no table existed) and its schema were replaced.
+- **API:**
+  - `GET /minutes`, `GET /minutes/{id}`, `POST /minutes`, `PUT /minutes/{id}`;
+  - `POST /minutes/{id}/submit | approve | return`;
+  - `GET /minutes/{id}/pdf`, `GET /minutes/resolutions`, `GET /minutes/prefill?event_id&occurrence`.
+- **Nepali:** 83 interface texts, 3 notification messages, 12 errors, the Home action and its pattern.
+- **Tests:** the new `test_minutes` (28 checks):
+  - who writes, sees and approves; vote results (majority / not passed / unanimous / no vote);
+  - too many votes and non-member attendees refused; drafts hidden from members;
+  - the submit checks; return with a note; locked after submit and after approval;
+  - reference numbering; every member notified; PDF checksum; the resolutions register;
+  - the Secretary approves the President's own minutes; prefill from the calendar with "Going" attendees; the Home action; Nepali errors.
+  - All 22 suites pass (454 checks), and the document storage is unchanged after a full run. The frontend type-checks and builds, and lint shows no new problems.
+
+### 43. Members who attended sign the minutes
+- **Flow (as for policies):** when the President approves minutes, every member who **attended** gets a signature request (in-app and email: "Please sign the minutes"), plus a **"Minutes to sign"** Home action.
+  - In Meetings → Minutes the attendee reads the minutes and clicks **Sign the minutes**, using the same hand-signature pad as policies (draw with mouse or finger, or upload a photo).
+  - Or they **Decline** with a reason (e.g. a wrong vote count). The Secretary (writer) and the President are told. A member who declined can still sign later.
+  - Only attendees can sign, and only once. Members who were absent aren't asked.
+  - When everyone who attended has signed, the minutes become **Signed by all** (`signed` status) and the writer and approver are notified.
+  - Approved-but-unsigned minutes show "Approved · collecting signatures". The list shows "X of Y signed" and a **Needs your signature** marker.
+- **PDF:** the attendance section is now the **signature sheet**: number, member, status (Signed / Declined / Not signed yet), date and the hand signature image. Declined members' reasons are printed, followed by "X of Y members who attended have signed".
+  - The PDF is rebuilt (new SHA-256, old file removed) after each signature or decline, so the downloaded copy is always current.
+- **Screens:** a Signatures section on the minutes page (name, signature thumbnail and time, or the decline reason). The thumbnail component was moved from the policy dialog to `components/signature/SignatureThumb.tsx` and is shared.
+- **Data:** a new `minutes_signature` table (minutes, member, status pending | signed | declined, signer name, time, signature image key and SHA-256, decline note; one row per member per minutes; migration `fd7400ca12cb`).
+  - API: `POST /minutes/{id}/sign {signature_image}`, `POST /minutes/{id}/decline {reason}`, `GET /minutes/{id}/signatures/{user_id}/image`.
+  - The minutes response gives `signatures`, `signed_count`, `my_signature` and `can_sign`. Signed minutes stay visible to members and in the resolutions register.
+- **Nepali:** 16 interface texts, 3 notification messages, 4 errors and the Home action.
+- **Tests:** `test_minutes` now has 42 checks:
+  - approval creates requests for the 4 attendees only, and they're notified; Home action;
+  - the absent member can't sign; signing records the image and rebuilds the PDF; can't sign twice;
+  - members can view a signature; decline with a reason notifies the writer; changing your mind and signing;
+  - all signed means "signed", with the writer and approver told; the PDF has the 4 signatures and its checksum matches; still in the register.
+  - All 22 suites pass (468 checks), and the document storage is unchanged after a full run. The frontend type-checks and builds, and lint shows no new problems.
+
+### 44. Only the Secretary writes minutes; the Admin stands in for organisers
+- **Minutes:** writing them is the **Secretary's** job. The President, Treasurer and members can no longer write or edit them (other office bearers still see drafts). The **Admin** can write, edit and submit minutes when the Secretary is absent.
+  - Approval is unchanged: the President approves, with the Secretary as backup when the President is the writer's "own item". The Admin never approves.
+  - Attendees still sign.
+- **Admin as stand-in for organisers** (`services/duties.py`: `is_admin_standin`, `can_organise`):
+  - create, change and cancel **cooperative calendar events** (including office-bearers-only ones, which the Admin can see);
+  - **schedule meetings** and **Meet now**, and join online meetings as a **host**;
+  - **write meeting minutes** (above), and fill them from a calendar meeting.
+  - No financial powers come with it, as before: expenses, deposits, loans and policies stay with the office bearers.
+- **Admin Console:** new **Calendar** and **Meetings** tabs (`/admin/calendar`, `/admin/meetings`, with Minutes and Resolutions inside), reusing the member pages. Event, meeting and minutes notifications open these tabs when read in the Admin Console.
+- **Nepali:** the refusal now reads "Only the Secretary (or the Admin, standing in) can write meeting minutes."
+- **Tests:**
+  - `test_minutes` (45): the President and Treasurer can't write; only the Secretary edits drafts; the Admin writes, edits and submits; neither the Admin nor the Secretary approves the Admin's minutes, the President does; the Admin can prefill from the calendar.
+  - `test_calendar` (66): the Admin can manage the calendar, create / edit / cancel a cooperative event, and Meet now and join as host.
+  - All 22 suites pass (474 checks), and the document storage is unchanged after a full run. The frontend type-checks and builds, and lint shows no new problems.

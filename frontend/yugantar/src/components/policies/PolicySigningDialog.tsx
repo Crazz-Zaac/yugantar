@@ -1,4 +1,5 @@
 import { t } from "@/lib/i18n"
+import { SignatureThumb } from "@/components/signature/SignatureThumb"
 import { useCallback, useEffect, useState } from "react"
 import { CheckCircle2, Clock, FileDown, FileText, Loader2, PenLine, PhoneCall, Undo2, XCircle } from "lucide-react"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -40,33 +41,6 @@ function StatusIcon({ status }: { status: SignatureStatus }) {
   if (status === "approved") return <CheckCircle2 className="h-4 w-4 text-success" />
   if (status === "rejected") return <XCircle className="h-4 w-4 text-destructive" />
   return <Clock className="h-4 w-4 text-muted-foreground" />
-}
-
-/** A member's hand signature, loaded with the user's session (not a public URL). */
-function SignatureThumb({ url }: { url: string }) {
-  const [src, setSrc] = useState<string | null>(null)
-  useEffect(() => {
-    let cancelled = false
-    let objectUrl: string | null = null
-    apiClient
-      .get(url, { responseType: "blob" })
-      .then((res) => {
-        if (cancelled) return
-        objectUrl = URL.createObjectURL(res.data as Blob)
-        setSrc(objectUrl)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-      if (objectUrl) URL.revokeObjectURL(objectUrl)
-    }
-  }, [url])
-  if (!src) return <span className="inline-block h-10 w-24 animate-pulse rounded bg-muted" />
-  return (
-    <span className="inline-flex rounded border bg-white px-1.5 py-0.5">
-      <img src={src} alt={t("Hand signature")} className="h-9 max-w-[9rem] object-contain" />
-    </span>
-  )
 }
 
 function SignatureRow({ sig, imageUrl }: { sig: Signature; imageUrl: string }) {

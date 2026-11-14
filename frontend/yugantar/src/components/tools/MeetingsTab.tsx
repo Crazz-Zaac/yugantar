@@ -1,4 +1,7 @@
 import { t } from "@/lib/i18n"
+import { useSearch } from "wouter"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { MinutesPanel, ResolutionsPanel } from "./MinutesPanel"
 import { useEffect, useMemo, useState } from "react"
 import { AlertCircle, CalendarClock, History, Loader2, Plus, RefreshCw, ShieldCheck, Video, Zap } from "lucide-react"
 import { toast } from "sonner"
@@ -25,7 +28,7 @@ import { useJoinMeeting } from "./useJoinMeeting"
 
 const DAY = 86_400_000
 
-export function MeetingsTab() {
+function OnlineMeetings() {
   const [upcoming, setUpcoming] = useState<CalendarFeed | null>(null)
   const [past, setPast] = useState<CalendarItem[]>([])
   const [error, setError] = useState(false)
@@ -269,5 +272,31 @@ export function MeetingsTab() {
       />
       {room}
     </div>
+  )
+}
+
+/** Meetings (online meetings), Minutes (the record of every meeting) and the
+ * Resolutions register. `?view=minutes` / `?view=resolutions` opens a tab. */
+export function MeetingsTab() {
+  const search = useSearch()
+  const requested = new URLSearchParams(search).get("view")
+  const [view, setView] = useState(requested === "minutes" || requested === "resolutions" ? requested : "meetings")
+  return (
+    <Tabs value={view} onValueChange={setView} className="flex flex-col gap-4">
+      <TabsList className="w-full justify-start sm:w-fit">
+        <TabsTrigger value="meetings">{t("Meetings")}</TabsTrigger>
+        <TabsTrigger value="minutes">{t("Minutes")}</TabsTrigger>
+        <TabsTrigger value="resolutions">{t("Resolutions")}</TabsTrigger>
+      </TabsList>
+      <TabsContent value="meetings" className="mt-0">
+        <OnlineMeetings />
+      </TabsContent>
+      <TabsContent value="minutes" className="mt-0">
+        <MinutesPanel />
+      </TabsContent>
+      <TabsContent value="resolutions" className="mt-0">
+        <ResolutionsPanel />
+      </TabsContent>
+    </Tabs>
   )
 }

@@ -19,6 +19,8 @@ Rules (agreed with the committee):
     verify loan funds        Treasurer    Secretary
     approve / reject loan    President    Secretary
     create / edit policy     Treasurer    (none)
+    approve / reject expense President    Secretary (the expense's recorder is the "beneficiary")
+    approve meeting minutes  President    Secretary (when the President wrote them)
 
 Policies are not approved by one person: every member signs them (see
 services/policy_signing_service.py).
@@ -46,6 +48,8 @@ class Duty(str, Enum):
     VERIFY_LOAN_FUNDS = "verify loan funds"
     DECIDE_LOAN = "approve or reject loans"
     MANAGE_POLICY = "create or edit policies"
+    APPROVE_EXPENSE = "approve or reject expenses"
+    APPROVE_MINUTES = "approve meeting minutes"
 
 
 PRIMARY_ROLE: dict[Duty, str] = {
@@ -54,6 +58,8 @@ PRIMARY_ROLE: dict[Duty, str] = {
     Duty.VERIFY_LOAN_FUNDS: CooperativeRole.TREASURER.value,
     Duty.DECIDE_LOAN: CooperativeRole.PRESIDENT.value,
     Duty.MANAGE_POLICY: CooperativeRole.TREASURER.value,
+    Duty.APPROVE_EXPENSE: CooperativeRole.PRESIDENT.value,
+    Duty.APPROVE_MINUTES: CooperativeRole.PRESIDENT.value,
 }
 NO_BACKUP = {Duty.MANAGE_POLICY}
 
@@ -83,6 +89,17 @@ def is_system_admin(user: Optional[User]) -> bool:
     if user is None:
         return False
     return "admin" in {str(getattr(r, "value", r)).lower() for r in (user.access_roles or [])}
+
+
+def is_admin_standin(user: Optional[User]) -> bool:
+    """The Admin account stands in for the organisers (events, meetings,
+    minutes) when they are absent. No financial powers come with it."""
+    return user is not None and is_system_admin(user) and not user.disabled
+
+
+def can_organise(user: Optional[User]) -> bool:
+    """May create cooperative events and start / schedule meetings."""
+    return user is not None and (is_office_bearer(user) or is_admin_standin(user))
 
 
 def can_be_guarantor(user: Optional[User]) -> bool:

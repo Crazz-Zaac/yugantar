@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field
-from typing import Optional, List
+from typing import Literal, Optional, List
 from datetime import datetime
 from decimal import Decimal
 import uuid
@@ -33,6 +33,9 @@ class LoanApplicationCreate(SQLModel):
     # A registered member who stands guarantor (required when the policy
     # requires collateral). They must sign before the Treasurer reviews it.
     guarantor_user_id: Optional[uuid.UUID] = None
+    # How the one-off service charge is paid: taken off the payout, or paid
+    # later with a deposit
+    service_charge_method: Literal["deducted", "deposit"] = "deducted"
 
 
 class GuaranteeDecision(SQLModel):
@@ -92,6 +95,11 @@ class LoanResponse(SQLModel):
     penalties_rupees: Decimal
     accrued_interest_rupees: Decimal
     total_paid_rupees: Decimal
+    # One-off service charge fixed when the loan was applied for
+    service_charge_rupees: Decimal = Decimal("0")
+    service_charge_method: str = "deducted"
+    # Still to pay with a deposit (0 when deducted at payout or already paid)
+    service_charge_due_rupees: Decimal = Decimal("0")
 
     interest_rate: Decimal
     status: LoanStatus

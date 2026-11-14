@@ -334,6 +334,85 @@ MESSAGES.update({
 })
 
 
+# Expenses ({amount} is formatted per language; {category} given in both)
+MESSAGES.update({
+    "expense_awaiting_approval": {
+        "title": {"en": "Expense to approve: {amount}", "ne": "स्वीकृत गर्नुपर्ने खर्च: {amount}"},
+        "message": {
+            "en": "{treasurer} recorded an expense of {amount} ({category}: {description}). Please approve or reject it "
+                  "in Expenses; it counts in the Financial Reports only once approved.",
+            "ne": "{treasurer} ले {amount} को खर्च ({category}: {description}) लेख्नुभयो। कृपया खर्च पृष्ठमा स्वीकृत वा "
+                  "अस्वीकृत गर्नुहोस्; स्वीकृत भएपछि मात्र वित्तीय प्रतिवेदनमा गणना हुन्छ।",
+        },
+    },
+    "expense_approved": {
+        "title": {"en": "Expense approved: {amount}", "ne": "खर्च स्वीकृत: {amount}"},
+        "message": {
+            "en": "{reviewer} approved the expense of {amount} ({category}: {description}).",
+            "ne": "{reviewer} ले {amount} को खर्च ({category}: {description}) स्वीकृत गर्नुभयो।",
+        },
+    },
+    "expense_rejected": {
+        "title": {"en": "Expense rejected: {amount}", "ne": "खर्च अस्वीकृत: {amount}"},
+        "message": {
+            "en": "{reviewer} rejected the expense of {amount} ({category}: {description}). Reason: {reason}",
+            "ne": "{reviewer} ले {amount} को खर्च ({category}: {description}) अस्वीकृत गर्नुभयो। कारण: {reason}",
+        },
+    },
+})
+
+
+# Meeting minutes
+MESSAGES.update({
+    "minutes_submitted": {
+        "title": {"en": "Minutes to approve: {title}", "ne": "स्वीकृत गर्नुपर्ने माइन्युट: {title}"},
+        "message": {
+            "en": "{recorder} submitted the minutes of \u201c{title}\u201d. Please read and approve them (or return "
+                  "them with a note) in Meetings \u2192 Minutes.",
+            "ne": "{recorder} ले \u201c{title}\u201d को माइन्युट पेश गर्नुभयो। कृपया बैठक \u2192 माइन्युटमा पढेर स्वीकृत "
+                  "गर्नुहोस् (वा टिप्पणीसहित फिर्ता गर्नुहोस्)।",
+        },
+    },
+    "minutes_approved": {
+        "title": {"en": "Minutes approved: {title}", "ne": "माइन्युट स्वीकृत: {title}"},
+        "message": {
+            "en": "{reviewer} approved the minutes of \u201c{title}\u201d ({reference}). Read them in Meetings \u2192 Minutes.",
+            "ne": "{reviewer} ले \u201c{title}\u201d को माइन्युट ({reference}) स्वीकृत गर्नुभयो। बैठक \u2192 माइन्युटमा पढ्नुहोस्।",
+        },
+    },
+    "minutes_sign_request": {
+        "title": {"en": "Please sign the minutes: {title}", "ne": "कृपया माइन्युटमा हस्ताक्षर गर्नुहोस्: {title}"},
+        "message": {
+            "en": "The minutes of \u201c{title}\u201d ({reference}) were approved. You attended, so please read and sign "
+                  "them in Meetings \u2192 Minutes (or decline with a reason if they are wrong).",
+            "ne": "\u201c{title}\u201d ({reference}) को माइन्युट स्वीकृत भयो। तपाईं उपस्थित हुनुहुन्थ्यो, त्यसैले कृपया बैठक "
+                  "\u2192 माइन्युटमा पढेर हस्ताक्षर गर्नुहोस् (गलत भए कारणसहित अस्वीकार गर्नुहोस्)।",
+        },
+    },
+    "minutes_fully_signed": {
+        "title": {"en": "Minutes signed by all: {title}", "ne": "सबैले हस्ताक्षर गरे: {title}"},
+        "message": {
+            "en": "All {count} members who attended have signed the minutes of \u201c{title}\u201d ({reference}).",
+            "ne": "उपस्थित सबै {count} सदस्यले \u201c{title}\u201d ({reference}) को माइन्युटमा हस्ताक्षर गर्नुभयो।",
+        },
+    },
+    "minutes_sign_declined": {
+        "title": {"en": "Minutes not signed: {title}", "ne": "माइन्युटमा हस्ताक्षर भएन: {title}"},
+        "message": {
+            "en": "{member} declined to sign the minutes of \u201c{title}\u201d: {reason}",
+            "ne": "{member} ले \u201c{title}\u201d को माइन्युटमा हस्ताक्षर गर्न अस्वीकार गर्नुभयो: {reason}",
+        },
+    },
+    "minutes_returned": {
+        "title": {"en": "Minutes returned: {title}", "ne": "माइन्युट फिर्ता: {title}"},
+        "message": {
+            "en": "{reviewer} returned the minutes of \u201c{title}\u201d for changes: {reason}",
+            "ne": "{reviewer} ले \u201c{title}\u201d को माइन्युट परिवर्तनका लागि फिर्ता गर्नुभयो: {reason}",
+        },
+    },
+})
+
+
 EMAIL_WRAPPER = {
     "en": "Hello {first_name},\n\n{message}\n\nPlease log in to the Yugantar portal for details.\n\n"
           "Best regards,\nYugantar System",
@@ -385,6 +464,49 @@ ERRORS: dict[str, str] = {
     "The meeting opens 15 minutes before it starts.": "बैठक सुरु हुनुभन्दा १५ मिनेट अगाडि खुल्छ।",
     "This meeting has ended.": "यो बैठक सकिएको छ।",
     "Event not found.": "कार्यक्रम फेला परेन।",
+    "Reports are only available to members.": "प्रतिवेदन सदस्यहरूका लागि मात्र उपलब्ध छ।",
+    "Dates must look like 2026-11-14.": "मिति 2026-11-14 जस्तो ढाँचामा हुनुपर्छ।",
+    "Unknown report.": "अज्ञात प्रतिवेदन।",
+    "The To date must not be before the From date.": "सम्मको मिति देखिको मितिभन्दा अगाडि हुनु हुँदैन।",
+    "The report can't include future dates.": "प्रतिवेदनमा भविष्यका मितिहरू समावेश गर्न सकिँदैन।",
+    "A report can cover at most 24 months.": "एउटा प्रतिवेदनमा बढीमा २४ महिना समेट्न सकिन्छ।",
+    "Couldn't number the report; please try again.": "प्रतिवेदनलाई सन्दर्भ नम्बर दिन सकिएन; कृपया फेरि प्रयास गर्नुहोस्।",
+    "Report not found.": "प्रतिवेदन फेला परेन।",
+    "Expenses are only available to members.": "खर्च विवरण सदस्यहरूका लागि मात्र हो।",
+    "Only the Treasurer can record or void expenses.": "कोषाध्यक्षले मात्र खर्च लेख्न वा रद्द गर्न सक्नुहुन्छ।",
+    "The expense date can't be in the future.": "खर्चको मिति भविष्यको हुन सक्दैन।",
+    "Expense not found.": "खर्च फेला परेन।",
+    "Meeting minutes are only available to members.": "बैठकको माइन्युट सदस्यहरूका लागि मात्र हो।",
+    "Only the Secretary (or the Admin, standing in) can write meeting minutes.":
+        "सचिवले (वा अनुपस्थितिमा एडमिनले) मात्र बैठकको माइन्युट लेख्न सक्नुहुन्छ।",
+    "Minutes not found.": "माइन्युट फेला परेन।",
+    "Only members who attended sign the minutes.": "उपस्थित सदस्यले मात्र माइन्युटमा हस्ताक्षर गर्नुहुन्छ।",
+    "These minutes are not open for signatures.": "यो माइन्युट हस्ताक्षरका लागि खुला छैन।",
+    "You have already signed these minutes.": "तपाईंले यो माइन्युटमा पहिले नै हस्ताक्षर गर्नुभएको छ।",
+    "Signature not found.": "हस्ताक्षर फेला परेन।",
+    "Minutes to sign": "हस्ताक्षर गर्नुपर्ने माइन्युट",
+    "Attendees must be members of the cooperative.": "उपस्थित हुनेहरू सहकारीका सदस्य हुनुपर्छ।",
+    "Only draft minutes can be edited.": "मस्यौदा माइन्युट मात्र सम्पादन गर्न सकिन्छ।",
+    "Only draft minutes can be submitted.": "मस्यौदा माइन्युट मात्र पेश गर्न सकिन्छ।",
+    "Record who attended before submitting.": "पेश गर्नुअघि को उपस्थित थिए लेख्नुहोस्।",
+    "Every agenda item needs what was discussed or what was concluded.": "प्रत्येक कार्यसूचीमा के छलफल भयो वा के निष्कर्ष निस्क्यो लेख्नुपर्छ।",
+    "These minutes are not awaiting approval.": "यो माइन्युट स्वीकृतिको पर्खाइमा छैन।",
+    "Couldn't number the minutes; please try again.": "माइन्युटलाई नम्बर दिन सकिएन; फेरि प्रयास गर्नुहोस्।",
+    "Only the President can approve meeting minutes (the Secretary steps in when it's the President's own item).":
+        "अध्यक्षले मात्र माइन्युट स्वीकृत गर्न सक्नुहुन्छ (अध्यक्ष आफैंले लेखेको भए सचिवले गर्नुहुन्छ)।",
+    "You can't act on your own item (approve meeting minutes); the Secretary has to do it.":
+        "आफूले लेखेको माइन्युट आफैं स्वीकृत गर्न मिल्दैन; सचिवले गर्नुपर्छ।",
+    "You can't act on your own item (approve meeting minutes); the President has to do it.":
+        "आफूले लेखेको माइन्युट आफैं स्वीकृत गर्न मिल्दैन; अध्यक्षले गर्नुपर्छ।",
+    "This expense has already been reviewed.": "यो खर्च पहिले नै हेरिसकिएको छ।",
+    "Only the President can approve or reject expenses (the Secretary steps in when it's the President's own item).":
+        "अध्यक्षले मात्र खर्च स्वीकृत वा अस्वीकृत गर्न सक्नुहुन्छ (अध्यक्ष आफैंले लेखेको भए सचिवले गर्नुहुन्छ)।",
+    "You can't act on your own item (approve or reject expenses); the Secretary has to do it.":
+        "आफ्नै खर्च आफैं स्वीकृत गर्न मिल्दैन; सचिवले गर्नुपर्छ।",
+    "You can't act on your own item (approve or reject expenses); the President has to do it.":
+        "आफ्नै खर्च आफैं स्वीकृत गर्न मिल्दैन; अध्यक्षले गर्नुपर्छ।",
+    "This expense is already voided.": "यो खर्च पहिले नै रद्द गरिएको छ।",
+    "This loan has no service charge left to pay with a deposit.": "यो ऋणमा जम्माबाट तिर्न बाँकी सेवा शुल्क छैन।",
     "Only office bearers can add events for the cooperative. You can add personal events that only you see.":
         "सहकारीका कार्यक्रम पदाधिकारीले मात्र थप्न सक्नुहुन्छ। तपाईं आफूले मात्र देख्ने व्यक्तिगत कार्यक्रम थप्न सक्नुहुन्छ।",
     "Online meetings are for the cooperative, not personal events.":
@@ -517,6 +639,8 @@ ERRORS: dict[str, str] = {
     "Sign a new policy": "नयाँ नीतिमा हस्ताक्षर गर्नुहोस्",
     "Sign as guarantor": "जमानीकर्ताको रूपमा हस्ताक्षर गर्नुहोस्",
     "Deposits to verify": "प्रमाणित गर्नुपर्ने जम्मा",
+    "Expenses to approve": "स्वीकृत गर्नुपर्ने खर्च",
+    "Minutes to approve": "स्वीकृत गर्नुपर्ने माइन्युट",
     "Loan applications to review": "समीक्षा गर्नुपर्ने ऋण आवेदन",
     "Loan payments to review": "समीक्षा गर्नुपर्ने ऋण भुक्तानी",
     "Proxy signatures to authorise": "अनुमति दिनुपर्ने प्रतिनिधि हस्ताक्षर",
@@ -560,6 +684,16 @@ def _plural_n(n: str) -> str:
 
 # (pattern, function(match) -> Nepali)
 PATTERNS: list[tuple[re.Pattern, Any]] = [
+    (re.compile(r"(\d+) sets? of minutes from meetings you attended waiting for your signature\."),
+     lambda m: f"तपाईं उपस्थित भएका बैठकका {ne_digits(m[1])} वटा माइन्युट तपाईंको हस्ताक्षरको पर्खाइमा।"),
+    (re.compile(r"(\d+) sets? of meeting minutes waiting for your approval\."),
+     lambda m: f"{ne_digits(m[1])} वटा माइन्युट तपाईंको स्वीकृतिको पर्खाइमा।"),
+    (re.compile(r'More votes than members present on "(.+)"\.'),
+     lambda m: f'"{m[1]}" मा उपस्थित सदस्यभन्दा बढी मत।'),
+    (re.compile(r"(\d+) expenses? waiting for your approval\."),
+     lambda m: f"{ne_digits(m[1])} वटा खर्च तपाईंको स्वीकृतिको पर्खाइमा।"),
+    (re.compile(r"The service charge left on this loan is Rs\. ([\d,.]+)\."),
+     lambda m: f"यो ऋणमा बाँकी सेवा शुल्क रु. {ne_digits(m[1])} हो।"),
     (re.compile(r"This request is already (\w+)\."), lambda m: f"यो अनुरोध पहिले नै {_STATUS_NE.get(m[1], m[1])} छ।"),
     (re.compile(r"Only draft policies can be edited\. Current status: (\w+)"),
      lambda m: f"मस्यौदा नीति मात्र सम्पादन गर्न सकिन्छ। हालको स्थिति: {_STATUS_NE.get(m[1], m[1])}"),

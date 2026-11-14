@@ -18,6 +18,7 @@ class LoanPaymentType(str, Enum):
     PRINCIPAL = "principal"
     INTEREST = "interest"
     PENALTY = "penalty"  # optional, future-proof
+    SERVICE_CHARGE = "service_charge"  # the loan's one-off charge, paid with a deposit
 
 
 class LoanPaymentStatus(str, Enum):

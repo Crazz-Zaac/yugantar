@@ -10,7 +10,11 @@ import {
   Clock,
   CreditCard,
   FileSignature,
+  Handshake,
   Landmark,
+  NotebookPen,
+  PenLine,
+  ReceiptText,
   PhoneCall,
   PiggyBank,
   RefreshCw,
@@ -32,7 +36,17 @@ import { formatRs, formatRsCompact, monthLabel } from "@/lib/money"
 type Num = number | string
 
 interface ActionItem {
-  kind: "sign_policy" | "review_deposits" | "review_loans" | "review_payments" | "authorise_proxy" | "pending_deposit"
+  kind:
+    | "sign_policy"
+    | "guarantee_request"
+    | "review_deposits"
+    | "review_loans"
+    | "review_payments"
+    | "authorise_proxy"
+    | "pending_deposit"
+    | "approve_expenses"
+    | "approve_minutes"
+    | "sign_minutes"
   title: string
   detail: string
   count: number
@@ -74,6 +88,10 @@ const ACTION_ICON: Record<ActionItem["kind"], typeof FileSignature> = {
   review_payments: Wallet,
   authorise_proxy: PhoneCall,
   pending_deposit: Clock,
+  guarantee_request: Handshake,
+  approve_expenses: ReceiptText,
+  approve_minutes: NotebookPen,
+  sign_minutes: PenLine,
 }
 
 const todayLabel = () =>
@@ -223,7 +241,7 @@ export function HomeTab() {
           </CardHeader>
           <CardContent className="flex flex-col divide-y">
             {data.actions.map((a, i) => {
-              const Icon = ACTION_ICON[a.kind]
+              const Icon = ACTION_ICON[a.kind] ?? AlertCircle
               return (
                 <button
                   key={`${a.kind}-${i}`}

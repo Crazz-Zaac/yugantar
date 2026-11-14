@@ -4,7 +4,7 @@ from fastapi import HTTPException, status
 from sqlmodel import Session, select, func, col
 from datetime import datetime, timezone
 from dateutil.relativedelta import relativedelta
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from app.models.loan_model import Loan, LoanStatus
 from app.models.policy.loan_policy import LoanPolicy
@@ -22,6 +22,31 @@ from app.schemas.loan_schema import (
 )
 
 
+def service_charge_paisa(principal_paisa: int, percent) -> int:
+    """The loan's one-off service charge (rounded to the paisa)."""
+    return int((Decimal(principal_paisa) * Decimal(str(percent or 0)) / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def service_charge_due_paisa(session: Session, loan: Loan) -> int:
+    """What's left of the service charge to pay with a deposit (pending
+    payments count as paid: they can't be submitted twice)."""
+    if loan.service_charge_method != "deposit" or not loan.service_charge_paisa:
+        return 0
+    from app.models.loan_payment import LoanPayment, LoanPaymentStatus, LoanPaymentType
+
+    paid = sum(
+        p.amount_paisa
+        for p in session.exec(
+            select(LoanPayment).where(
+                LoanPayment.loan_id == loan.id,
+                LoanPayment.payment_type == LoanPaymentType.SERVICE_CHARGE,
+                LoanPayment.status != LoanPaymentStatus.REJECTED,
+            )
+        ).all()
+    )
+    return max(0, loan.service_charge_paisa - paid)
+
+
 def _loan_to_response(loan: Loan, applicant_name: str | None = None, guarantor_name: str | None = None) -> LoanResponse:
     """Convert a Loan ORM object to a LoanResponse dict."""
     return LoanResponse(
@@ -32,6 +57,8 @@ def _loan_to_response(loan: Loan, applicant_name: str | None = None, guarantor_n
         penalties_rupees=Decimal(loan.penalties_paisa) / 100,
         accrued_interest_rupees=Decimal(loan.accrued_interest_paisa) / 100,
         total_paid_rupees=Decimal(loan.total_paid_paisa) / 100,
+        service_charge_rupees=Decimal(loan.service_charge_paisa or 0) / 100,
+        service_charge_method=loan.service_charge_method or "deducted",
         interest_rate=loan.interest_rate,
         status=loan.status,
         start_date=loan.start_date,
@@ -81,6 +108,7 @@ def loan_response(session: Session, loan: Loan) -> LoanResponse:
     response.approved_by_name = _name_for_email(session, loan.approved_by)
     response.rejected_by_name = _name_for_email(session, loan.rejected_by)
     response.fund_verified_by_name = _name_for_email(session, loan.fund_verified_by)
+    response.service_charge_due_rupees = Decimal(service_charge_due_paisa(session, loan)) / 100
     return response
 
 
@@ -167,6 +195,9 @@ class LoanService:
             policy_id=policy.policy_id,
             user_id=user.id,
             principal_paisa=principal_paisa,
+            # Fixed now from the policy; later policy changes don't alter it
+            service_charge_paisa=service_charge_paisa(principal_paisa, policy.service_charge_percent),
+            service_charge_method=application.service_charge_method,
             interest_rate=policy.interest_rate,
             penalties_paisa=0,
             accrued_interest_paisa=0,

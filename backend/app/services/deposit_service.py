@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 from app.models.policy.deposit_policy import DepositPolicy
 from app.models.policy.base_policy import PolicyStatus
-from app.models.deposit_model import Deposit, DepositVerificationStatus
+from app.models.deposit_model import Deposit, DepositType, DepositVerificationStatus
 from app.schemas.deposit_schema import (
     DepositCreate,
     DepositUserUpdate,
@@ -33,6 +33,23 @@ class DepositService:
     """
     Service class for managing deposits.
     """
+
+    @staticmethod
+    def set_capital_split(session: Session, deposit: Deposit, policy: "DepositPolicy | None") -> None:
+        """Set regular/advance from the amount, less any late fine and loan
+        payments that came out of the same voucher. An ADVANCE deposit's
+        first policy-amount is this period's regular deposit."""
+        fines = sum(
+            f.amount_paisa
+            for f in session.exec(select(Fine).where(Fine.deposit_id == deposit.id)).all()
+        ) if deposit.id else 0
+        payments = sum(p.amount_paisa for p in DepositService._linked_payments(session, deposit.id)) if deposit.id else 0
+        capital = max(0, deposit.amount_paisa - fines - payments)
+        if deposit.deposit_type == DepositType.ADVANCE and policy is not None and policy.amount_paisa:
+            deposit.regular_paisa = min(capital, policy.amount_paisa)
+            deposit.advance_paisa = capital - deposit.regular_paisa
+        else:
+            deposit.regular_paisa, deposit.advance_paisa = capital, 0
 
     @staticmethod
     def _linked_payments(session: Session, deposit_id: uuid.UUID) -> list[LoanPayment]:
@@ -64,6 +81,8 @@ class DepositService:
             amount_paisa=MoneyMixin.rupees_to_paisa(deposit_in.deposited_amount),
             verification_status=DepositVerificationStatus.PENDING,
         )
+        # Here the amount is all capital (the late fine is a separate charge)
+        self.set_capital_split(session, new_deposit, policy)
 
         # Check for late deposit and apply fine if necessary
         if is_deposit_late(now, due_date):
@@ -121,6 +140,7 @@ class DepositService:
         if deposit_data.get("deposited_amount") is not None:
             # stored in paisa; "deposited_amount" isn't a column
             db_deposit.amount_paisa = MoneyMixin.rupees_to_paisa(deposit_data["deposited_amount"])
+            self.set_capital_split(session, db_deposit, session.get(DepositPolicy, db_deposit.policy_id))
 
         session.add(db_deposit)
         session.commit()

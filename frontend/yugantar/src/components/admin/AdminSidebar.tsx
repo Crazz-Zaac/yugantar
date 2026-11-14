@@ -1,5 +1,14 @@
 import { t } from "@/lib/i18n"
-import { LayoutDashboard, Users, Activity, ScrollText, ChevronsLeft, ChevronsRight } from "lucide-react"
+import {
+  LayoutDashboard,
+  Users,
+  Activity,
+  ScrollText,
+  ChevronsLeft,
+  ChevronsRight,
+  CalendarDays,
+  Video,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -13,6 +22,8 @@ const navItems = [
   { id: "members" as AdminTab, label: "Members", icon: Users },
   { id: "activity" as AdminTab, label: "Activity", icon: Activity },
   { id: "policies" as AdminTab, label: "Policies", icon: ScrollText },
+  { id: "calendar" as AdminTab, label: "Calendar", icon: CalendarDays },
+  { id: "meetings" as AdminTab, label: "Meetings", icon: Video },
 ]
 
 export function AdminSidebar({

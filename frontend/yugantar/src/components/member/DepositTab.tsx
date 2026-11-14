@@ -44,7 +44,8 @@ import { communityFilterParams, EMPTY_COMMUNITY_FILTERS, type CommunityFilterVal
 
 type PolicyStatus = "draft" | "finalized" | "active" | "expired" | "void"
 type DepositScheduleType = "monthly_fixed_day" | "occasional"
-type SplitCategory = "deposit" | "fine" | "advance" | "loan_principal" | "loan_interest" | "loan_renewal"
+type SplitCategory = "deposit" | "fine" | "advance" | "loan_principal" | "loan_interest" | "loan_renewal" | "service_charge"
+const LOAN_CATEGORIES: SplitCategory[] = ["loan_principal", "loan_interest", "loan_renewal", "service_charge"]
 
 interface DepositPolicy {
   policy_id: string
@@ -103,6 +104,7 @@ interface LoanSummary {
   outstanding_principal_paisa: number
   outstanding_interest_paisa: number
   interest_rate: number
+  service_charge_due_paisa: number // still to pay with a deposit
 }
 
 interface SplitAllocation {
@@ -179,6 +181,7 @@ function categoryLabel(category: SplitCategory): string {
     loan_principal: "Loan Principal",
     loan_interest: "Loan Interest",
     loan_renewal: "Loan Renewal",
+    service_charge: "Service Charge",
   }
   return t(map[category])
 }
@@ -372,6 +375,7 @@ export function DepositTab() {
           outstanding_principal_paisa: Number(ln.outstanding_principal_paisa),
           outstanding_interest_paisa: Number(ln.outstanding_interest_paisa),
           interest_rate: Number(ln.interest_rate),
+          service_charge_due_paisa: Number(ln.service_charge_due_paisa ?? 0),
         })),
       })
       setAllocations([])
@@ -469,10 +473,7 @@ export function DepositTab() {
 
   const addAllocation = () => {
     if (!preview) return
-    const isLoanCategory =
-      newCategory === "loan_principal" ||
-      newCategory === "loan_interest" ||
-      newCategory === "loan_renewal"
+    const isLoanCategory = LOAN_CATEGORIES.includes(newCategory)
 
     if (isLoanCategory && !selectedLoanId) return
 
@@ -1047,19 +1048,27 @@ export function DepositTab() {
                           <SelectItem value="loan_principal">{t("Loan Principal")}</SelectItem>
                           <SelectItem value="loan_interest">{t("Loan Interest")}</SelectItem>
                           <SelectItem value="loan_renewal">{t("Loan Renewal")}</SelectItem>
+                          {preview.active_loans.some((ln) => ln.service_charge_due_paisa > 0) && (
+                            <SelectItem value="service_charge">{t("Service Charge")}</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
 
-                      {(newCategory === "loan_principal" || newCategory === "loan_interest" || newCategory === "loan_renewal") && (
+                      {LOAN_CATEGORIES.includes(newCategory) && (
                         <Select value={selectedLoanId} onValueChange={setSelectedLoanId}>
                           <SelectTrigger className="w-56">
                             <SelectValue placeholder={t("Select loan")} />
                           </SelectTrigger>
                           <SelectContent>
-                            {preview.active_loans.map((ln) => (
-                              <SelectItem key={ln.loan_id} value={ln.loan_id}>
-                                {t("Loan of {0} · {1} left", formatRs(ln.principal_paisa), formatRs(ln.outstanding_principal_paisa))}</SelectItem>
-                            ))}
+                            {preview.active_loans
+                              .filter((ln) => newCategory !== "service_charge" || ln.service_charge_due_paisa > 0)
+                              .map((ln) => (
+                                <SelectItem key={ln.loan_id} value={ln.loan_id}>
+                                  {newCategory === "service_charge"
+                                    ? t("Loan of {0} · service charge {1} left", formatRs(ln.principal_paisa / 100), formatRs(ln.service_charge_due_paisa / 100))
+                                    : t("Loan of {0} · {1} left", formatRs(ln.principal_paisa / 100), formatRs(ln.outstanding_principal_paisa / 100))}
+                                </SelectItem>
+                              ))}
                           </SelectContent>
                         </Select>
                       )}
@@ -1083,7 +1092,7 @@ export function DepositTab() {
                               const ln = preview?.active_loans.find((l) => l.loan_id === alloc.loan_id)
                               return (
                                 <span className="text-[11px] text-muted-foreground">
-                                  {ln ? t("Loan of {0}", formatRs(ln.principal_paisa)) : t("Loan")}
+                                  {ln ? t("Loan of {0}", formatRs(ln.principal_paisa / 100)) : t("Loan")}
                                 </span>
                               )
                             })()}

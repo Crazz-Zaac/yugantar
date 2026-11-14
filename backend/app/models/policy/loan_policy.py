@@ -46,6 +46,12 @@ class LoanPolicy(BasePolicy, table=True):
         sa_column=Column(Numeric(5, 2), nullable=False, server_default="1.00"),
         description="The interest rate applied to loans under this policy",
     )
+    # One-off service charge, % of the loan amount, charged when a loan is
+    # issued (and on each renewal). The loan keeps the amount it was charged.
+    service_charge_percent: Decimal = Field(
+        sa_column=Column(Numeric(5, 2), nullable=False, server_default="1.00"),
+        description="Service charge, % of the loan amount, charged when a loan is issued",
+    )
     grace_period_days: int = Field(
         default=0,
         ge=0,

@@ -241,6 +241,22 @@ class DashboardService:
                     actions.append(ActionItem(kind="review_payments", title="Loan payments to review",
                                               detail=f"{n} payment{'s' if n != 1 else ''} waiting for review.",
                                               count=n, link="/dashboard/loans", urgent=False))
+            from app.services.expense_service import ExpenseService
+            from app.services.minutes_service import MinutesService
+            from app.models.meeting_minutes_model import MeetingMinutes
+
+            n = sum(1 for mm in session.exec(select(MeetingMinutes).where(MeetingMinutes.status == "submitted")).all()
+                    if MinutesService().can_review(session, user, mm))
+            if n:
+                actions.append(ActionItem(kind="approve_minutes", title="Minutes to approve",
+                                          detail=f"{n} set{'s' if n != 1 else ''} of meeting minutes waiting for your approval.",
+                                          count=n, link="/dashboard/meetings?view=minutes", urgent=True))
+
+            n = ExpenseService().pending_for(session, user)
+            if n:
+                actions.append(ActionItem(kind="approve_expenses", title="Expenses to approve",
+                                          detail=f"{n} expense{'s' if n != 1 else ''} waiting for your approval.",
+                                          count=n, link="/dashboard/expenses", urgent=True))
             try:
                 proxies = signing.list_proxy_requests(session, user, ProxyRequestStatus.PENDING)
             except HTTPException:
@@ -250,6 +266,14 @@ class DashboardService:
                 actions.append(ActionItem(kind="authorise_proxy", title="Proxy signatures to authorise",
                                           detail=f"{n} request{'s' if n != 1 else ''} from the Admin need your decision.",
                                           count=n, link="/dashboard/policies", urgent=True))
+
+        from app.services.minutes_service import MinutesService as _MS
+
+        n = _MS().pending_signatures(session, user)
+        if n:
+            actions.append(ActionItem(kind="sign_minutes", title="Minutes to sign",
+                                      detail=f"{n} set{'s' if n != 1 else ''} of minutes from meetings you attended waiting for your signature.",
+                                      count=n, link="/dashboard/meetings?view=minutes", urgent=True))
 
         if my_pending:
             n = len(my_pending)

@@ -78,6 +78,7 @@ interface LoanPolicy {
     max_loan_amount: number
     min_loan_amount: number
     interest_rate: number
+    service_charge_percent?: number | string
     grace_period_days: number | null
     max_renewals: number | null
     requires_collateral: boolean
@@ -135,6 +136,7 @@ function loanPayload(form: LoanForm): Record<string, unknown> {
         max_loan_amount: Number(form.max_loan_amount),
         min_loan_amount: Number(form.min_loan_amount),
         interest_rate: Number(form.interest_rate),
+        service_charge_percent: form.service_charge_percent === "" ? 0 : Number(form.service_charge_percent),
         grace_period_days: Number(form.grace_period_days),
         max_renewals: Number(form.max_renewals),
         requires_collateral: form.requires_collateral,
@@ -142,6 +144,18 @@ function loanPayload(form: LoanForm): Record<string, unknown> {
         effective_from: form.effective_from ? fromZoneInputValue(form.effective_from) : undefined,
         effective_to: form.effective_to ? fromZoneInputValue(form.effective_to) : null,
     }
+}
+
+/** "Rs 1,000 on a Rs 1,00,000 loan": what the service charge % means. */
+function ServiceChargeHint({ percent, amount }: { percent: string; amount: string }) {
+    const pct = Number(percent)
+    const base = Number(amount) > 0 ? Number(amount) : 100000
+    if (!(pct > 0)) return <p className="text-[11px] text-muted-foreground">{t("No service charge")}</p>
+    return (
+        <p className="text-[11px] text-muted-foreground">
+            {t("One-off, when a loan is issued: {0} on a {1} loan", formatRs(Math.round(base * pct) / 100), formatRs(base))}
+        </p>
+    )
 }
 
 const AUTO_WORDING: Wording = { en: null, ne: null }
@@ -161,6 +175,7 @@ const emptyLoanForm = {
     max_loan_amount: "",
     min_loan_amount: "",
     interest_rate: "",
+    service_charge_percent: "1",
     grace_period_days: "0",
     max_renewals: "0",
     requires_collateral: false,
@@ -309,6 +324,7 @@ export function MemberPoliciesTab() {
             max_loan_amount: String(p.max_loan_amount),
             min_loan_amount: String(p.min_loan_amount),
             interest_rate: String(p.interest_rate),
+            service_charge_percent: String(Number(p.service_charge_percent ?? 1)),
             grace_period_days: String(p.grace_period_days ?? 0),
             max_renewals: String(p.max_renewals ?? 0),
             requires_collateral: p.requires_collateral,
@@ -664,6 +680,19 @@ export function MemberPoliciesTab() {
                                     value={loanForm.max_renewals}
                                     onChange={(e) => setLoanForm((f) => ({ ...f, max_renewals: e.target.value }))}
                                 />
+                            </div>
+                            <div className="flex flex-col gap-2">
+                                <Label className="text-xs font-medium">{t("Service Charge (%)")}</Label>
+                                <Input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    max="100"
+                                    placeholder="e.g. 1"
+                                    value={loanForm.service_charge_percent}
+                                    onChange={(e) => setLoanForm((f) => ({ ...f, service_charge_percent: e.target.value }))}
+                                />
+                                <ServiceChargeHint percent={loanForm.service_charge_percent} amount={loanForm.max_loan_amount} />
                             </div>
                         </div>
 

@@ -38,6 +38,12 @@ class Deposit(BaseModel, MoneyMixin, table=True):
     # the amount is stored in amount_paisa for precision
 
     deposit_type: DepositType = Field(default=DepositType.CURRENT)
+    # What the money was for: amount_paisa is the whole voucher, which may
+    # also include a late fine (Fine.deposit_id) and loan payments
+    # (LoanPayment.deposit_id). These two are the member's capital:
+    # regular = this period's deposit, advance = paid ahead.
+    regular_paisa: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
+    advance_paisa: int = Field(default=0, sa_column_kwargs={"server_default": "0"})
 
     # Clearer date naming
     deposited_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

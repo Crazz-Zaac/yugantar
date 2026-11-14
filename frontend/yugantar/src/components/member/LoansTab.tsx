@@ -58,6 +58,7 @@ interface LoanPolicy {
   max_loan_amount: string
   min_loan_amount: string
   interest_rate: string
+  service_charge_percent?: string
   grace_period_days: number | null
   max_renewals: number | null
   requires_collateral: boolean
@@ -75,6 +76,9 @@ interface LoanItem {
   penalties_rupees: string
   accrued_interest_rupees: string
   total_paid_rupees: string
+  service_charge_rupees?: string
+  service_charge_method?: "deducted" | "deposit"
+  service_charge_due_rupees?: string
   interest_rate: string
   status: "pending" | "approved" | "rejected" | "active" | "paid"
   start_date: string
@@ -223,6 +227,8 @@ export function LoansTab() {
   const [applyTerm, setApplyTerm] = useState("")
   const [applyPurpose, setApplyPurpose] = useState("")
   const [applyCollateral, setApplyCollateral] = useState("")
+  // How the one-off service charge is paid: off the payout, or later with a deposit
+  const [applyChargeMethod, setApplyChargeMethod] = useState<"deducted" | "deposit">("deducted")
   const [applyNotes, setApplyNotes] = useState("")
   const [applyLoading, setApplyLoading] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
@@ -359,6 +365,7 @@ export function LoansTab() {
         collateral_details: applyCollateral || null,
         notes: applyNotes || null,
         guarantor_user_id: guarantorId || null,
+        service_charge_method: applyChargeMethod,
       })
       setApplySuccess(true)
       setApplyAmount("")
@@ -628,6 +635,56 @@ export function LoansTab() {
                         </div>
                       )}
 
+                      {Number(selectedPolicy?.service_charge_percent ?? 0) > 0 && (() => {
+                        const pct = Number(selectedPolicy?.service_charge_percent ?? 0)
+                        const amount = Number(applyAmount) || 0
+                        const charge = Math.round(amount * pct) / 100
+                        const options: { value: "deducted" | "deposit"; title: string; detail: string }[] = [
+                          {
+                            value: "deducted",
+                            title: t("Deduct from the loan"),
+                            detail: amount
+                              ? t("You receive {0}", formatRs(amount - charge))
+                              : t("You receive the loan amount minus the charge"),
+                          },
+                          {
+                            value: "deposit",
+                            title: t("Pay with a deposit"),
+                            detail: amount
+                              ? t("You receive {0}; pay the charge later with a deposit", formatRs(amount))
+                              : t("Pay the charge later with a deposit"),
+                          },
+                        ]
+                        return (
+                          <div className="flex flex-col gap-2">
+                            <Label className="text-xs font-medium">
+                              {amount
+                                ? t("Service charge: {0} ({1}%)", formatRs(charge), n(pct))
+                                : t("Service charge: {0}% of the loan", n(pct))}
+                            </Label>
+                            <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
+                              {options.map((o) => (
+                                <button
+                                  key={o.value}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={applyChargeMethod === o.value}
+                                  onClick={() => setApplyChargeMethod(o.value)}
+                                  className={`rounded-lg border p-3 text-left transition-colors ${
+                                    applyChargeMethod === o.value
+                                      ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                      : "hover:bg-muted/50"
+                                  }`}
+                                >
+                                  <p className="text-sm font-medium text-foreground">{o.title}</p>
+                                  <p className="text-[11px] text-muted-foreground">{o.detail}</p>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      })()}
+
                       <div className="flex flex-col gap-2">
                         <Label htmlFor="notes" className="text-xs font-medium">
                           {t("Notes (optional)")}</Label>
@@ -683,6 +740,12 @@ export function LoansTab() {
                       <span className="font-medium text-right">{formatRs(selectedPolicy.max_loan_amount)}</span>
                       <span className="text-muted-foreground">{t("Interest Rate")}</span>
                       <span className="font-medium text-right">{n(Number(selectedPolicy.interest_rate))}% p.a.</span>
+                      <span className="text-muted-foreground">{t("Service Charge")}</span>
+                      <span className="font-medium text-right">
+                        {Number(selectedPolicy.service_charge_percent ?? 0) > 0
+                          ? t("{0}% (one-off)", n(Number(selectedPolicy.service_charge_percent)))
+                          : t("None")}
+                      </span>
                       <span className="text-muted-foreground">{t("Grace Period")}</span>
                       <span className="font-medium text-right">{t("{0} days", selectedPolicy.grace_period_days ?? 0)}</span>
                       <span className="text-muted-foreground">{t("Max Renewals")}</span>
@@ -1074,6 +1137,19 @@ export function LoansTab() {
                                   <p className="text-xs text-muted-foreground">{t("Interest Rate")}</p>
                                   <p className="font-nums font-medium">{n(Number(loan.interest_rate))}% p.a.</p>
                                 </div>
+                                {Number(loan.service_charge_rupees ?? 0) > 0 && (
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">{t("Service Charge")}</p>
+                                    <p className="font-nums font-medium">{formatRs(loan.service_charge_rupees ?? 0)}</p>
+                                    <p className="text-[11px] text-muted-foreground">
+                                      {loan.service_charge_method === "deposit"
+                                        ? Number(loan.service_charge_due_rupees ?? 0) > 0
+                                          ? t("To pay with a deposit: {0} left", formatRs(loan.service_charge_due_rupees ?? 0))
+                                          : t("Paid with a deposit")
+                                        : t("Deducted from the payout")}
+                                    </p>
+                                  </div>
+                                )}
                                 <div>
                                   <p className="text-xs text-muted-foreground">{t("Maturity Date")}</p>
                                   <p className="font-medium">{formatDate(loan.maturity_date)}</p>

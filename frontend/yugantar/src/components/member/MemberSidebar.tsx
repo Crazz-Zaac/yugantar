@@ -8,6 +8,8 @@ import {
   ChevronsLeft,
   ChevronsRight,
   CalendarDays,
+  FileBarChart,
+  ReceiptText,
   Video,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -28,6 +30,8 @@ const navGroups: { label: string | null; items: { id: Tab; label: string; icon: 
       { id: "home", label: "Home", icon: Home },
       { id: "deposit", label: "Deposit", icon: Landmark },
       { id: "loans", label: "Loans", icon: CreditCard },
+      { id: "expenses", label: "Expenses", icon: ReceiptText },
+      { id: "reports", label: "Financial Reports", icon: FileBarChart },
       { id: "policies", label: "Policies", icon: ScrollText },
     ],
   },

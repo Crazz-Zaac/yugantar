@@ -21,6 +21,8 @@ class LoanPolicyCreate(SQLModel):
     max_loan_amount: Decimal
     min_loan_amount: Decimal
     interest_rate: Decimal
+    # One-off charge when a loan is issued, % of the loan amount
+    service_charge_percent: Decimal = Field(default=Decimal("1.00"), ge=0, le=100)
 
     grace_period_days: int = 0
     max_renewals: Optional[int] = 0
@@ -46,6 +48,7 @@ class LoanPolicyUpdate(SQLModel):
     min_loan_amount: Optional[Decimal] = None
 
     interest_rate: Optional[Decimal] = None
+    service_charge_percent: Optional[Decimal] = Field(default=None, ge=0, le=100)
     grace_period_days: Optional[int] = None
     max_renewals: Optional[int] = None
     change_reason: str  # required for audit
@@ -72,6 +75,7 @@ class LoanPolicyResponse(SQLModel):
     min_loan_amount: Decimal
 
     interest_rate: Decimal
+    service_charge_percent: Decimal = Decimal("1.00")
     grace_period_days: Optional[int]
     max_renewals: Optional[int]
     requires_collateral: bool

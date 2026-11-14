@@ -47,6 +47,7 @@ export interface BoardLoanPolicy {
   min_loan_amount: number
   max_loan_amount: number
   interest_rate: number
+  service_charge_percent?: number | string
   grace_period_days: number | null
   max_renewals: number | null
   requires_collateral: boolean
@@ -111,6 +112,9 @@ function facts(item: Item): string[] {
   const p = item.policy
   return [
     t("{0}% interest per year", Number(p.interest_rate)),
+    Number(p.service_charge_percent ?? 0) > 0
+      ? t("{0}% service charge", Number(p.service_charge_percent))
+      : t("No service charge"),
     p.grace_period_days ? t("{0} days' grace", p.grace_period_days) : t("No grace period"),
     p.max_renewals
       ? p.max_renewals === 1
