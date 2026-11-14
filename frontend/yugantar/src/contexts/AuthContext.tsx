@@ -108,8 +108,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (errorData.detail) {
           if (Array.isArray(errorData.detail)) {
+            // e.g. {loc: ["body", "phone"], msg: "Value error, ..."} -> "phone: ..."
             const firstError = errorData.detail[0];
-            throw new Error(firstError.msg || t("Validation failed"));
+            const field = String(firstError.loc?.[firstError.loc.length - 1] ?? "").replace(/_/g, " ");
+            const msg = String(firstError.msg || t("Validation failed")).replace(/^Value error, /, "");
+            throw new Error(field && field !== "body" ? `${field}: ${msg}` : msg);
           }
           throw new Error(errorData.detail);
         }

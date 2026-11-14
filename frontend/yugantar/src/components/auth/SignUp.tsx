@@ -67,6 +67,7 @@ export function SignUp({ onGoToSignIn }: { onGoToSignIn: () => void }) {
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
   const [agreed, setAgreed] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
@@ -76,8 +77,14 @@ export function SignUp({ onGoToSignIn }: { onGoToSignIn: () => void }) {
     e.preventDefault()
     setError("")
 
-    if (!firstName || !lastName || !email || !phone) {
+    if (!firstName.trim() || !lastName.trim() || !email.trim() || !phone.trim() || !address.trim()) {
       setError(t("Please fill in all required fields."))
+      return
+    }
+
+    // Same rules as the server, so the member sees a clear message here
+    if (!/^\+?[\d ]+$/.test(phone.trim())) {
+      setError(t("Phone number can contain only digits, spaces and a leading +."))
       return
     }
 
@@ -91,6 +98,11 @@ export function SignUp({ onGoToSignIn }: { onGoToSignIn: () => void }) {
       return
     }
 
+    if (!/[A-Z]/.test(password) || !/\d/.test(password)) {
+      setError(t("Password must contain an uppercase letter and a number."))
+      return
+    }
+
     if (!agreed) {
       setError(t("Please agree to the terms and conditions."))
       return
@@ -100,11 +112,11 @@ export function SignUp({ onGoToSignIn }: { onGoToSignIn: () => void }) {
     try {
       await signup(
         {
-          first_name: firstName,
-          last_name: lastName,
-          email,
-          phone,
-          address: address || undefined,
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          address: address.trim(),
         },
         password
       )
@@ -297,18 +309,20 @@ export function SignUp({ onGoToSignIn }: { onGoToSignIn: () => void }) {
                 <Input
                   id="signupPhone"
                   type="tel"
-                  placeholder="+1 (555) 000-0000"
+                  placeholder="+977 98XXXXXXXX"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className="h-11 bg-background"
                   autoComplete="tel"
+                  maxLength={15}
                   disabled={isLoading}
                 />
               </div>
 
               <div className="flex flex-col gap-2">
                 <Label htmlFor="signupAddress" className="text-sm font-medium text-foreground">
-                  {t("Address")}</Label>
+                  {t("Address")} <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   id="signupAddress"
                   placeholder={t("Your address")}
@@ -351,16 +365,26 @@ export function SignUp({ onGoToSignIn }: { onGoToSignIn: () => void }) {
                 <Label htmlFor="confirmPassword" className="text-sm font-medium text-foreground">
                   {t("Confirm password ")}<span className="text-destructive">*</span>
                 </Label>
-                <Input
-                  id="confirmPassword"
-                  type={showPassword ? "text" : "password"}
-                  placeholder={t("Re-enter your password")}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="h-11 bg-background"
-                  autoComplete="new-password"
-                  disabled={isLoading}
-                />
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirm ? "text" : "password"}
+                    placeholder={t("Re-enter your password")}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="h-11 bg-background pr-10"
+                    autoComplete="new-password"
+                    disabled={isLoading}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirm(!showConfirm)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label={showConfirm ? t("Hide password") : t("Show password")}
+                  >
+                    {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
                 {confirmPassword && password !== confirmPassword && (
                   <p className="text-xs text-destructive">{t("Passwords do not match.")}</p>
                 )}

@@ -1476,3 +1476,16 @@ Checked visually with headless screenshots (Playwright/Chromium in a throwaway c
   - `test_minutes` (45): the President and Treasurer can't write; only the Secretary edits drafts; the Admin writes, edits and submits; neither the Admin nor the Secretary approves the Admin's minutes, the President does; the Admin can prefill from the calendar.
   - `test_calendar` (66): the Admin can manage the calendar, create / edit / cancel a cooperative event, and Meet now and join as host.
   - All 22 suites pass (474 checks), and the document storage is unchanged after a full run. The frontend type-checks and builds, and lint shows no new problems.
+
+### 45. Sign-up form fixes
+
+- **The error:** registration failed with a bare "Field required". The form marked Address as optional and left it out when empty, but the server (and the database column) require it.
+- **Other mismatches with the server, now caught in the form with a clear message:**
+  - The password also needs an uppercase letter and a number (the form only checked the length).
+  - The phone may contain only digits, spaces and a leading +, at most 15 characters. The old placeholder `+1 (555) 000-0000` itself failed this rule; it is now `+977 98XXXXXXXX`.
+  - Fields are trimmed before sending.
+- **Address** is now marked required (*).
+- **Confirm password** has its own show/hide eye button (it used to follow the first field's toggle with no button).
+- **Server:** the first name may be 1 character or more (was 3, which refused names like "Om"). Validation errors now show the field and the message (e.g. "phone: String should have at most 15 characters") instead of only "Field required".
+- **Nepali:** translations for the two new messages.
+- **Checked:** a registration with the form's data returns 201 (rolled back); the frontend type-checks, and lint shows no new problems.

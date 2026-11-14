@@ -33,7 +33,7 @@ def validate_password_strength(value: str) -> str:
 
 
 class UserBase(SQLModel):
-    first_name: str = Field(..., min_length=3, max_length=100)
+    first_name: str = Field(..., min_length=1, max_length=100)
     middle_name: Optional[str] = Field(default=None, min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
     gender: GenderEnum = Field(default=GenderEnum.OTHER)

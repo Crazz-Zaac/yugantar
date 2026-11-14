@@ -2,6 +2,8 @@
 // Used by t() in lib/i18n.ts. Values keep the {0}, {1}… placeholders.
 // A text missing here is shown in English.
 const ne: Record<string, string> = {
+  "Phone number can contain only digits, spaces and a leading +.": "फोन नम्बरमा अङ्क, खाली ठाउँ र सुरुमा + मात्र हुन सक्छ।",
+  "Password must contain an uppercase letter and a number.": "पासवर्डमा कम्तीमा एउटा ठूलो अक्षर (A-Z) र एउटा अङ्क हुनुपर्छ।",
   "(account disabled, not counted)": "(खाता निष्क्रिय, गणना गरिएन)",
   "(optional)": "(ऐच्छिक)",
   "1. Choose a loan policy": "१. ऋण नीति छान्नुहोस्",
