@@ -19,6 +19,8 @@ class NotificationType(str, Enum):
     DEPOSIT_SUBMITTED = "deposit_submitted"  # new deposit submitted → notify treasurers
     DEPOSIT_VERIFIED = "deposit_verified"  # treasurer verified deposit → notify member
     DEPOSIT_REJECTED = "deposit_rejected"  # treasurer rejected deposit → notify member
+    EVENT = "event"  # calendar event created / changed / cancelled / reminder
+    MEETING = "meeting"  # online meeting scheduled / starting
     GENERAL = "general"
 
 

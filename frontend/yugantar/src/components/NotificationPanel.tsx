@@ -1,5 +1,5 @@
 import { t } from "@/lib/i18n"
-import { Bell, AlertTriangle, CheckCircle2, Info, ShieldAlert, FileCheck, X } from "lucide-react"
+import { Bell, AlertTriangle, CheckCircle2, Info, ShieldAlert, FileCheck, X, CalendarDays, Video } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -87,6 +87,10 @@ export function NotificationPanel() {
       case "policy_rejected":
       case "policy_finalized":
         return isAdminArea ? "/admin/policies" : "/dashboard/policies"
+      case "event":
+        return "/dashboard/calendar"
+      case "meeting":
+        return "/dashboard/meetings"
       default:
         // e.g. proxy-signature notifications (type "general") about a policy
         if (notification.policy_id) return isAdminArea ? "/admin/policies" : "/dashboard/policies"
@@ -112,6 +116,10 @@ export function NotificationPanel() {
         return <AlertTriangle className="h-4 w-4 text-destructive" />
       case "policy_finalized":
         return <FileCheck className="h-4 w-4 text-chart-2" />
+      case "event":
+        return <CalendarDays className="h-4 w-4 text-chart-2" />
+      case "meeting":
+        return <Video className="h-4 w-4 text-sky-500" />
       default:
         return <Info className="h-4 w-4 text-chart-2" />
     }

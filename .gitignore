@@ -14,3 +14,9 @@ imp_docs/
 !.env.development
 *.env
 docker/secrets/
+
+# JaaS (Jitsi) private keys - never commit
+jitsi_keys/
+backend/secrets/
+*.pk
+*.pem

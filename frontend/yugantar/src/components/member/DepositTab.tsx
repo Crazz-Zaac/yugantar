@@ -1,3 +1,4 @@
+import { DateTimeField } from "@/components/DateField"
 import { enumLabel, n, t } from "@/lib/i18n"
 import { useState, useEffect, useRef, useCallback } from "react"
 import {
@@ -950,17 +951,12 @@ export function DepositTab() {
                         <div className="flex flex-col gap-1">
                           <Label htmlFor="voucher-date" className="text-xs font-medium text-muted-foreground">
                             {t("Deposited Date & Time ({0})", TIME_ZONE_LABEL)}</Label>
-                          <div className="relative">
-                            <CalendarClock className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                              id="voucher-date"
-                              type="datetime-local"
-                              className="pl-8"
-                              max={nowZoneInputValue()}
-                              value={toZoneInputValue(ocrResult.date)}
-                              onChange={(e) => updateVoucher({ date: fromZoneInputValue(e.target.value) })}
-                            />
-                          </div>
+                          <DateTimeField
+                            id="voucher-date"
+                            max={nowZoneInputValue()}
+                            value={toZoneInputValue(ocrResult.date)}
+                            onChange={(v) => updateVoucher({ date: v ? fromZoneInputValue(v) : null })}
+                          />
                           {ocrHint(dateEdited, detected?.date ? formatDateTime(detected.date) : t("nothing"))}
                           {dateInFuture && (
                             <p className="text-xs text-destructive">{t("The date can't be in the future.")}</p>

@@ -14,6 +14,7 @@ from app.api.v1.endpoints import (
     receipt,
     policy_signing,
     dashboard,
+    calendar,
 )
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -65,5 +66,6 @@ app.include_router(notification.router, prefix="/api/v1")
 app.include_router(receipt.router, prefix="/api/v1")
 app.include_router(policy_signing.router, prefix="/api/v1")
 app.include_router(dashboard.router, prefix="/api/v1")
+app.include_router(calendar.router, prefix="/api/v1")
 
 # app.dependency_overrides[get_session] = get_session

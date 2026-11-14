@@ -22,4 +22,9 @@ celery_app.conf.beat_schedule = {
         "task": "close_policy_signings",
         "schedule": crontab(minute=5),
     },
+    # "Starting soon" reminders for calendar events and meetings
+    "send-event-reminders": {
+        "task": "send_event_reminders",
+        "schedule": crontab(minute="*/5"),
+    },
 }

@@ -1053,3 +1053,79 @@ Checked visually with headless screenshots (Playwright/Chromium in a throwaway c
   - **The Nepali texts should be reviewed by a native speaker**; they are all in `frontend/yugantar/src/locales/ne.ts` and `backend/app/i18n.py`.
 - **Tests:** the new `test_i18n` (13 checks) covers the setting, translated errors, notifications in both languages, emails in the recipient's language, BS date-time and the activity and dashboard patterns. All 18 suites pass, including test files updated for the new email helper.
   - The frontend type-checks, a production build succeeds, and lint shows no new problems.
+
+---
+
+## ## Adding New Tools
+
+### 31. Tools: Calendar and online Meetings (Jitsi as a Service)
+- **Where:** a new **Tools** group in the member sidebar with **Calendar** and **Meetings** (`/dashboard/calendar`, `/dashboard/meetings`), laid out like Teams.
+  - On phones the bottom bar is Home · Deposit · Loans · Calendar · **More**; More opens the full menu (Policies, Meetings, Settings).
+  - Home has a **Coming up** card with the next 4 items. Bare admin accounts don't get the calendar.
+- **Who does what:**
+  - Every active member sees "All members" events. Office bearers (President, Treasurer, Secretary) also see "Office bearers only" events.
+  - Only office bearers create, edit and cancel events.
+  - A member can't see or open an event they aren't allowed to see; the API returns 404.
+- **Events** (`calendar_event`, `event_rsvp`; migration `a08f0e9018ce`, round-trip tested):
+  - Fields: title, type (meeting, general assembly, holiday, notice, other), time or all-day, place, details.
+  - **Repeats:** weekly or monthly, with an optional end date. A monthly event on the 31st falls on the last day of shorter months. Editing a repeating event changes the whole series.
+  - Cancelled events stay on the calendar, struck through.
+  - **Replies:** Going / Maybe / Can't go, per occurrence. The counts are shown, and anyone can expand the list to see who replied. Changing an event's time clears the replies.
+- **Due dates on the calendar** are computed from existing data, never copied, so they can't go stale. Members can switch them off.
+  - The monthly deposit due day under the policy in force.
+  - Policy signing deadlines.
+  - The member's own loan maturity date, which only they see.
+- **Views:** Month, Week and Agenda (next 30 days).
+  - In Nepali the month grid is the **BS month** (वैशाख…चैत्र), with BS day numbers and the AD day in small print. Saturdays and holidays are in red. `lib/bs.ts` gained `bsToAd` and `bsMonthLength`.
+  - On phones, a day shows coloured dots and the selected day's list appears below the grid.
+  - **Add to my phone calendar** downloads an `.ics` file, including the repeat rule.
+- **Notifications:**
+  - Members get an in-app notification and an email, in their own language, when an event or meeting is added, its time or place changes, or it's cancelled. Members who lose access because visibility was narrowed are told it's cancelled.
+  - Celery beat (`send_event_reminders`, every 5 minutes) sends a reminder 30 minutes before each timed event, once per occurrence.
+  - Clicking an event notification opens the Calendar; a meeting notification opens the Meetings page.
+- **Online meetings (8x8 JaaS):**
+  - **Join:** any event can be an online meeting, and office bearers can also **Meet now**. Members join inside the app (full-screen; the Jitsi script loads from 8x8 only when someone joins) from 15 minutes before the start until 60 minutes after the scheduled end.
+  - **Tokens:** `services/jaas.py` signs a short-lived RS256 token per person and per room with the JaaS private key. The token carries the member's name. Office bearers and the organiser are hosts (moderators). Recording, live streaming, dial-out and transcription are off. The token response isn't cached.
+  - **Room names** are random (`yugantar-` + 24 hex characters). They're sent only in a join response, never in the feed, emails or `.ics` files.
+- **Configuration:**
+  - New settings: `JAAS_APP_ID`, `JAAS_API_KEY_ID`, `JAAS_PRIVATE_KEY_PATH` (default `/app/secrets/jaas_private_key.pk`), plus the join window and reminder minutes. They're set in `backend/.env` and documented in `.env.example`.
+  - The private key is in `backend/secrets/` (mode 600).
+  - `.gitignore` now ignores `jitsi_keys/`, `backend/secrets/`, `*.pk` and `*.pem`.
+  - Meetings switch off cleanly when the key is missing.
+- **Production (`docker/nginx.conf`):**
+  - The CSP allows `https://8x8.vc` for scripts and frames only.
+  - `Permissions-Policy` allows camera, microphone, screen sharing and fullscreen for the site and 8x8 only (it was `camera=()`, which would have blocked meetings).
+- **Nepali:** about 120 new interface texts, 7 notification messages and 14 error messages.
+- **Tests:** the new `test_calendar` (47 checks) covers permissions, visibility, replies, edits, cancellation, repeat rules, all-day handling, due dates, Nepali output, meeting tokens (room, name, host role, expiry, no caching), Meet now, reminders and `.ics` export. All 19 suites pass. The frontend type-checks and builds, and lint shows no new errors.
+
+### 32. Personal events; BS/AD date pickers (patrojs); one Bikram Sambat table everywhere
+- **Personal events:**
+  - Any member can add events that only they see: "Who can see it" = **Only me (personal)**, stored as `visibility = "private"` with category `personal` (teal on the calendar). No migration was needed.
+  - Nobody else is notified; the owner still gets the 30-minute reminder.
+  - A personal event can't be an online meeting and has no replies.
+  - The owner edits or deletes it (`DELETE /calendar/events/{id}`, personal events only). Cooperative events are still cancelled, not deleted, so members can see what happened.
+  - Office bearers can't see other people's personal events. Their own personal events are private too.
+- **Cooperative events** (all members, or office bearers only) are still created and changed only by office bearers. A member who tries is told they can add a personal event instead.
+- The calendar's **New event** button is shown to everyone; for members it says **Personal event** and the form shows only personal options.
+- **patrojs 1.0.2** (MIT, pinned exactly), a React BS/AD calendar and date picker:
+  - **Checked before adding:** no install scripts, no network, `eval` or storage use in its code, about 64 KB, and the installed files match the inspected tarball.
+  - It moved `@floating-ui/dom`/`core`/`utils` (shared with Radix) from 1.7 to 1.8 (published July 2026).
+  - **`components/DateField.tsx`:** `DateField` and `DateTimeField` (date picker plus time) replace every `<input type="date">` and `datetime-local` in the app: community filters, voucher date, policy effective dates and the event form.
+  - In Nepali the picker shows the **BS calendar** with the AD date under each day; in English it's the other way round. Saturday is the weekend, and "today" is the Nepal date.
+  - **Theme:** it's styled with the app's colours (`index.css`, `._patro` tokens) in light and dark. Inside dialogs its popover renders in the dialog.
+  - Values are still AD `YYYY-MM-DD` in NPT, so nothing changed for the API.
+- **One BS table everywhere:** patrojs's table and the backend's `nepali-datetime` disagreed:
+  - **BS 2062 Baisakh–Jestha (2005):** the sources found put 1 Jestha 2062 on 14 May 2005, which matches patrojs.
+  - **From BS 2084 Jestha (May 2027) onward:** the official calendar isn't published yet, so both libraries use projections.
+
+  Both sides now use **patrojs's table**: `lib/bs.ts` wraps `patrojs/utils`, and the backend has `app/utils/bs_calendar.py` (generated from patrojs; BS 1978–2099). `nepali-datetime` was removed from `pyproject.toml` and `poetry.lock`. All 44,561 days in the supported range were compared, both directions: no differences. **When patrojs is upgraded, regenerate the backend table** (export `daysInBsMonth` for each month) and compare again.
+- **Test fix:** the `test_policy_record` cleanup deleted the PDF files of every record it touched, including the real `YUG/DP/2026/0001`. That file was rebuilt with the same reference and date, and the test now skips policies that already have a record.
+- **Nepali:** 13 more interface texts and 4 error messages.
+- **Tests:** `test_calendar` has 16 more checks for personal events (63 in all). All 19 suites pass (`test_policy_record`: 17 pass, 1 skipped because no active policy is without a record). The frontend type-checks and builds, and lint shows no new problems.
+
+### 33. Calendar: click a date to add an event
+- **Month view:** clicking a date opens the event form for that day (a **+** appears when hovering over a date). This replaces the hidden double-click.
+  - On phones, where days only show dots, the first tap shows that day's events below the grid and tapping the same day again adds an event.
+  - Clicking an event still opens it, and **+N more** shows the day's full list.
+- **Week view:** every day has an **+ Add** button under its events.
+- The toolbar's **New event** button and the day list's **Add** stay as other ways in. Members still add personal events only.

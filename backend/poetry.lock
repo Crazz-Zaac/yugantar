@@ -2705,18 +2705,6 @@ docs = ["myst-parser", "pydata-sphinx-theme", "sphinx", "sphinxcontrib-github-al
 test = ["pep440", "pre-commit", "pytest", "testpath"]
 
 [[package]]
-name = "nepali-datetime"
-version = "1.0.8.5"
-description = "Datetime module that operates on top of Bikram Sambat Date & Nepal Time."
-optional = false
-python-versions = ">=3.5"
-groups = ["main"]
-files = [
-    {file = "nepali_datetime-1.0.8.5-py3-none-any.whl", hash = "sha256:adec683e06333482d31543d0d2bdf195cef12505615eaf747bcae0b82e5f6ad2"},
-    {file = "nepali_datetime-1.0.8.5.tar.gz", hash = "sha256:745093e929cfe164e1062058221e9a9eac25d89083b1b43b3bb2aa8e854f2884"},
-]
-
-[[package]]
 name = "nest-asyncio"
 version = "1.6.0"
 description = "Patch asyncio to allow nested event loops"
@@ -5123,4 +5111,4 @@ dev = ["black (>=19.3b0) ; python_version >= \"3.6\"", "pytest (>=4.6.2)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "f003270eb96fb9ab46a26c244985b0166fbab2ea145e3540c2fdb23ff0c2d8eb"
+content-hash = "965975baad72708a4a958fec7e460555bac0e4683765a3d469e3481982d2fc74"

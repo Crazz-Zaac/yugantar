@@ -276,6 +276,64 @@ MESSAGES: dict[str, dict[str, dict[str, str]]] = {
     },
 }
 
+# Calendar and online meetings ({when} is given in both languages)
+MESSAGES.update({
+    "event_created": {
+        "title": {"en": "New on the calendar: {title}", "ne": "पात्रोमा नयाँ: {title}"},
+        "message": {
+            "en": "{organizer} added \u201c{title}\u201d ({category}) on {when}. See the Calendar for details.",
+            "ne": "{organizer} ले {when} मा \u201c{title}\u201d ({category}) थप्नुभयो। विवरण पात्रोमा हेर्नुहोस्।",
+        },
+    },
+    "meeting_scheduled": {
+        "title": {"en": "Online meeting: {title}", "ne": "अनलाइन बैठक: {title}"},
+        "message": {
+            "en": "{organizer} scheduled an online meeting, \u201c{title}\u201d, on {when}. "
+                  "Join from the Meetings page in Yugantar.",
+            "ne": "{organizer} ले {when} मा \u201c{title}\u201d अनलाइन बैठक तय गर्नुभयो। "
+                  "युगान्तरको बैठक पृष्ठबाट सहभागी हुनुहोस्।",
+        },
+    },
+    "meeting_started": {
+        "title": {"en": "Meeting started: {title}", "ne": "बैठक सुरु भयो: {title}"},
+        "message": {
+            "en": "{organizer} started the online meeting \u201c{title}\u201d. Join now from the Meetings page.",
+            "ne": "{organizer} ले \u201c{title}\u201d अनलाइन बैठक सुरु गर्नुभयो। अहिले नै बैठक पृष्ठबाट सहभागी हुनुहोस्।",
+        },
+    },
+    "event_updated": {
+        "title": {"en": "Changed: {title}", "ne": "परिवर्तन: {title}"},
+        "message": {
+            "en": "{organizer} changed \u201c{title}\u201d. It is now on {when}.",
+            "ne": "{organizer} ले \u201c{title}\u201d परिवर्तन गर्नुभयो। अब यो {when} मा हुनेछ।",
+        },
+    },
+    "event_cancelled": {
+        "title": {"en": "Cancelled: {title}", "ne": "रद्द: {title}"},
+        "message": {
+            "en": "{organizer} cancelled \u201c{title}\u201d ({when}).",
+            "ne": "{organizer} ले \u201c{title}\u201d ({when}) रद्द गर्नुभयो।",
+        },
+    },
+    "event_reminder": {
+        "title": {"en": "Starting soon: {title}", "ne": "छिट्टै सुरु हुँदै: {title}"},
+        "message": {
+            "en": "\u201c{title}\u201d is on {when}.",
+            "ne": "\u201c{title}\u201d {when} मा छ।",
+        },
+    },
+    "meeting_reminder": {
+        "title": {"en": "Meeting starting soon: {title}", "ne": "बैठक छिट्टै सुरु हुँदै: {title}"},
+        "message": {
+            "en": "The online meeting \u201c{title}\u201d is on {when}. You can join from the Meetings page "
+                  "15 minutes before it starts.",
+            "ne": "\u201c{title}\u201d अनलाइन बैठक {when} मा छ। सुरु हुनुभन्दा १५ मिनेट अगाडिदेखि बैठक "
+                  "पृष्ठबाट सहभागी हुन सकिन्छ।",
+        },
+    },
+})
+
+
 EMAIL_WRAPPER = {
     "en": "Hello {first_name},\n\n{message}\n\nPlease log in to the Yugantar portal for details.\n\n"
           "Best regards,\nYugantar System",
@@ -312,6 +370,28 @@ def both(en: str, ne: str) -> dict:
 # Errors and other server texts: exact English -> Nepali
 # ---------------------------------------------------------------------------
 ERRORS: dict[str, str] = {
+    "The calendar is only available to members.": "पात्रो सदस्यहरूका लागि मात्र हो।",
+    "Only office bearers (President, Treasurer, Secretary) can manage events.":
+        "पदाधिकारी (अध्यक्ष, कोषाध्यक्ष, सचिव) ले मात्र कार्यक्रम व्यवस्थापन गर्न सक्नुहुन्छ।",
+    "This event doesn't take place at that time.": "यो कार्यक्रम त्यो समयमा हुँदैन।",
+    "The end of the range must be after its start.": "अवधिको अन्त्य सुरुभन्दा पछि हुनुपर्छ।",
+    "Ask for at most 120 days at a time.": "एक पटकमा बढीमा १२० दिन मात्र माग्नुहोस्।",
+    "Online meetings are not set up yet.": "अनलाइन बैठक अझै सेटअप गरिएको छैन।",
+    "This event was cancelled and can't be changed.": "यो कार्यक्रम रद्द भइसकेकाले परिवर्तन गर्न सकिँदैन।",
+    "This event was cancelled.": "यो कार्यक्रम रद्द गरिएको छ।",
+    "This event is already over.": "यो कार्यक्रम सकिइसकेको छ।",
+    "This event is not an online meeting.": "यो कार्यक्रम अनलाइन बैठक होइन।",
+    "This meeting was cancelled.": "यो बैठक रद्द गरिएको छ।",
+    "The meeting opens 15 minutes before it starts.": "बैठक सुरु हुनुभन्दा १५ मिनेट अगाडि खुल्छ।",
+    "This meeting has ended.": "यो बैठक सकिएको छ।",
+    "Event not found.": "कार्यक्रम फेला परेन।",
+    "Only office bearers can add events for the cooperative. You can add personal events that only you see.":
+        "सहकारीका कार्यक्रम पदाधिकारीले मात्र थप्न सक्नुहुन्छ। तपाईं आफूले मात्र देख्ने व्यक्तिगत कार्यक्रम थप्न सक्नुहुन्छ।",
+    "Online meetings are for the cooperative, not personal events.":
+        "अनलाइन बैठक सहकारीका लागि हो, व्यक्तिगत कार्यक्रमका लागि होइन।",
+    "Replies aren't used for personal events.": "व्यक्तिगत कार्यक्रममा जवाफ दिइँदैन।",
+    "Only personal events can be deleted; cooperative events are cancelled instead.":
+        "व्यक्तिगत कार्यक्रम मात्र मेटाउन सकिन्छ; सहकारीका कार्यक्रम रद्द गरिन्छन्।",
     "User not found": "प्रयोगकर्ता फेला परेन",
     "Loan not found.": "ऋण फेला परेन।",
     "Loan not found": "ऋण फेला परेन",

@@ -38,7 +38,6 @@ dependencies = [
     "matplotlib (>=3.10.8,<4.0.0)",
     "fpdf2 (>=2.8,<3)",
     "uharfbuzz (>=0.50,<1)",
-    "nepali-datetime (>=1.0.8,<2)",
 ]
 
 [tool.poetry]

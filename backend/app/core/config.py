@@ -187,6 +187,23 @@ class Settings(BaseSettings):
     POLICY_SIGNING_DAYS: int = 7
 
     # ---------------------------
+    # Online meetings: Jitsi as a Service (8x8 JaaS)
+    # ---------------------------
+    # The backend signs a short-lived RS256 token per participant with the
+    # private key from the JaaS dashboard (never sent to the browser). Meetings
+    # are disabled when the app ID or the key is missing.
+    JAAS_DOMAIN: str = "8x8.vc"
+    JAAS_APP_ID: str = ""
+    JAAS_API_KEY_ID: str = ""
+    JAAS_PRIVATE_KEY_PATH: str = "/app/secrets/jaas_private_key.pk"
+    # Members can join from this many minutes before a meeting starts, and
+    # until this many minutes after it is scheduled to end
+    MEETING_JOIN_EARLY_MINUTES: int = 15
+    MEETING_JOIN_LATE_MINUTES: int = 60
+    # In-app + email reminder this many minutes before a timed event
+    EVENT_REMINDER_MINUTES: int = 30
+
+    # ---------------------------
     # Redis Settings for Caching
     # ---------------------------
     REDIS_HOST: str = "localhost"

@@ -19,12 +19,12 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Optional
 
-import nepali_datetime
 from fpdf import FPDF
 from fpdf.fonts import FontFace
 from sqlmodel import Session, select
 
 from app.core.document_storage import document_storage
+from app.utils.bs_calendar import BS_MONTHS, ad_to_bs
 from app.models.policy.base_policy import PolicyStatus
 from app.models.policy.deposit_policy import DepositScheduleType
 from app.models.policy.policy_record import PolicyRecord
@@ -190,9 +190,9 @@ def ne_date(dt: Optional[datetime]) -> str:
     if not dt:
         return "-"
     local: date = to_local(dt).date()
-    bs = nepali_datetime.date.from_datetime_date(local)
+    bs = ad_to_bs(local)
     ad = f"ई.सं. {ne_num(str(local.year))} {_NE_MONTHS_AD[local.month - 1]} {ne_num(str(local.day))}"
-    return f"वि.सं. {ne_num(str(bs.year))} {bs.strftime('%N')} {ne_num(str(bs.day))} ({ad})"
+    return f"वि.सं. {ne_num(str(bs.year))} {BS_MONTHS[bs.month - 1]} {ne_num(str(bs.day))} ({ad})"
 
 
 def policy_statement_ne(policy_type: str, policy) -> str:

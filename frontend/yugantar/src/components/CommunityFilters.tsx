@@ -1,3 +1,4 @@
+import { DateField } from "@/components/DateField"
 import { t, n } from "@/lib/i18n"
 import { Search, SlidersHorizontal, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -55,11 +56,11 @@ export function CommunityFilters({ values, onChange, choice, text, resultCount }
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="cf-from" className="text-[11px] text-muted-foreground">{t("From (NPT)")}</Label>
-          <Input id="cf-from" type="date" className="h-9 text-sm" value={values.dateFrom} max={values.dateTo || undefined} onChange={(e) => set({ dateFrom: e.target.value })} />
+          <DateField id="cf-from" clearable value={values.dateFrom} max={values.dateTo || undefined} onChange={(v) => set({ dateFrom: v })} />
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="cf-to" className="text-[11px] text-muted-foreground">{t("To (NPT)")}</Label>
-          <Input id="cf-to" type="date" className="h-9 text-sm" value={values.dateTo} min={values.dateFrom || undefined} onChange={(e) => set({ dateTo: e.target.value })} />
+          <DateField id="cf-to" clearable value={values.dateTo} min={values.dateFrom || undefined} onChange={(v) => set({ dateTo: v })} />
         </div>
         {choice && (
           <div className="flex flex-col gap-1.5">

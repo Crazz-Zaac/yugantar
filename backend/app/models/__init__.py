@@ -17,6 +17,7 @@ from .fine_model import Fine
 # from .expense_model import ExpenditureModel
 from .loan_payment import LoanPayment
 from .notification_model import Notification
+from .calendar_model import CalendarEvent, EventRsvp
 
 from .mixins.money import MoneyMixin
 

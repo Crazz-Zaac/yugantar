@@ -50,7 +50,7 @@ const partsFormat = new Intl.DateTimeFormat("en-US", {
   hourCycle: "h23",
 })
 
-function zoneParts(d: Date): Record<string, number> {
+export function zoneParts(d: Date): Record<string, number> {
   const out: Record<string, number> = {}
   for (const p of partsFormat.formatToParts(d)) {
     if (p.type !== "literal") out[p.type] = Number(p.value)
@@ -130,4 +130,48 @@ export function fromZoneInputValue(value: string): string | null {
 /** Current time as a datetime-local value (NPT). */
 export function nowZoneInputValue(): string {
   return toZoneInputValue(new Date().toISOString())
+}
+
+// ─── Calendar days (NPT) ────────────────────────────────────────────────────
+
+/** "HH:mm" in NPT (Nepali digits in Nepali). */
+export function formatTime(value: string | Date | null | undefined): string {
+  const d = value instanceof Date ? value : parseUtc(value)
+  if (!d) return ""
+  const text = timeFormat.format(d)
+  return getLang() === "ne" ? neDigits(text) : text
+}
+
+/** The NPT calendar day of an instant, as "YYYY-MM-DD". */
+export function dayKey(value: string | Date): string {
+  const d = value instanceof Date ? value : parseUtc(value)
+  if (!d) return ""
+  const p = zoneParts(d)
+  return `${p.year}-${pad(p.month)}-${pad(p.day)}`
+}
+
+export function keyParts(key: string): { year: number; month: number; day: number } {
+  const [year, month, day] = key.split("-").map(Number)
+  return { year, month, day }
+}
+
+export function makeKey(year: number, month: number, day: number): string {
+  const d = new Date(Date.UTC(year, month - 1, day))
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+}
+
+export function addDays(key: string, days: number): string {
+  const { year, month, day } = keyParts(key)
+  return makeKey(year, month, day + days)
+}
+
+/** 0 = Sunday … 6 = Saturday */
+export function weekdayOf(key: string): number {
+  const { year, month, day } = keyParts(key)
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay()
+}
+
+/** Midnight NPT at the start of a calendar day, as an ISO timestamp (UTC). */
+export function dayStartIso(key: string): string {
+  return fromZoneInputValue(`${key}T00:00`) as string
 }

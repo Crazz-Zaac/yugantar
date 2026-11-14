@@ -309,6 +309,7 @@ export function SettingsTab() {
                 { label: "Proxy signatures", desc: "If a policy is signed on your behalf after you were consulted." },
                 { label: "Account", desc: "Email verification, approval of your membership and password changes." },
                 { label: "Office bearers", desc: "Deposits, loans and proxy requests waiting for your review (if you hold an office)." },
+                { label: "Calendar and meetings", desc: "New, changed or cancelled events and meetings, and a reminder 30 minutes before they start." },
               ].map((item) => (
                 <div key={item.label} className="rounded-lg border p-4">
                   <p className="text-sm font-medium text-foreground">{t(item.label)}</p>

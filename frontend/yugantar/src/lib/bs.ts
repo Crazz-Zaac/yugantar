@@ -1,17 +1,13 @@
 /*
  * Bikram Sambat (BS) dates for the Nepali interface.
  *
- * Month lengths for BS 2000–2099 (one digit per month: days − 28), the same
- * table the backend uses (python nepali-datetime), so both sides agree.
- * BS 2000-01-01 = AD 1943-04-14.
+ * Conversions come from patrojs (pinned in package.json), the same library
+ * as the BS date pickers. The backend uses a copy of the same month-length
+ * table (backend/app/utils/bs_calendar.py), so a date on screen, in an email
+ * and in a PDF is always the same. Supported: BS 1978–2099 (AD 1921–2043).
  */
 
-const TABLE =
-  "243432221213334333212122334432212122343432221123243432221213334333212122334432212122343432221123333433122113334333212122334432212122343432221123333433122122334333212122334432212122343432221123333433122122334333212122343432212122343432221213333433212122334333212122343432221122343432221213333433212122334333212122343432221123243432221213334333212122334342212122343432221123243432221213334333212122334432212122343432221123243433122113334333212122334432212122343432221123333433122122334333212122334432212122343432221123333433122122334333212122343432212122343432221123333433212122334333212122343432221122343432221213333433212122334333212122343432221122343432221213334333212122334342212122343432221123243432221213334333212122334432212122343432221123333433121213334333212122334432212122343432221123333433122113334333212122334432212122343432221123333433122122334333212122343432212122343432221123333433212122334333212122343432221122343432221213333433212122334333212122343432221122343432221213334333212122334333212122334332221222343423221222243432221222334333212222234423221222243432221222243432221222334333221222234432221222243432221222334332221222334333212222234432212122343432221222334333121213334333211222"
-
-const FIRST_YEAR = 2000
-const ANCHOR_UTC = Date.UTC(1943, 3, 14)
-const DAY_MS = 86_400_000
+import { ad2Bs, bs2Ad, daysInBsMonth } from "patrojs/utils"
 
 export const BS_MONTHS = ["वैशाख", "जेष्ठ", "असार", "श्रावण", "भदौ", "आश्विन", "कार्तिक", "मंसिर", "पौष", "माघ", "फाल्गुण", "चैत्र"]
 
@@ -21,16 +17,31 @@ export interface BsDate {
   day: number
 }
 
-/** AD calendar date (year, month 1–12, day) -> BS date, or null outside 2000–2099 BS. */
+const pad = (n: number) => String(n).padStart(2, "0")
+const parse = (iso: string) => {
+  const [year, month, day] = iso.split("-").map(Number)
+  return { year, month, day }
+}
+
+/** AD calendar date (year, month 1–12, day) -> BS date, or null outside the supported range. */
 export function adToBs(year: number, month: number, day: number): BsDate | null {
-  let days = Math.round((Date.UTC(year, month - 1, day) - ANCHOR_UTC) / DAY_MS)
-  if (days < 0) return null
-  for (let y = 0; y < TABLE.length / 12; y++) {
-    for (let m = 0; m < 12; m++) {
-      const len = 28 + Number(TABLE[y * 12 + m])
-      if (days < len) return { year: FIRST_YEAR + y, month: m + 1, day: days + 1 }
-      days -= len
-    }
+  try {
+    return parse(ad2Bs(`${year}-${pad(month)}-${pad(day)}`))
+  } catch {
+    return null
   }
-  return null
+}
+
+/** Days in a BS month. */
+export function bsMonthLength(year: number, month: number): number {
+  try {
+    return daysInBsMonth(year, month)
+  } catch {
+    return 30
+  }
+}
+
+/** BS date -> AD calendar date (year, month 1–12, day). */
+export function bsToAd(year: number, month: number, day: number): { year: number; month: number; day: number } {
+  return parse(bs2Ad(`${year}-${pad(month)}-${pad(day)}`))
 }

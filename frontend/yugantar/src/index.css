@@ -164,3 +164,25 @@ body {
   font-family: 'Inter', 'Noto Sans Devanagari', ui-sans-serif, system-ui, sans-serif;
   font-variant-numeric: tabular-nums lining-nums;
 }
+/* ── BS / AD date picker (patrojs) in the app's colours ─────────────────
+   Tokens must be set on ._patro itself; "html ._patro._patro" outranks the
+   package's own light/dark rules, and the app variables follow .dark. */
+html ._patro._patro {
+  --patro-font: inherit;
+  --patro-font-devanagari: "Noto Sans Devanagari", inherit;
+  --patro-surface: hsl(var(--popover));
+  --patro-text: hsl(var(--foreground));
+  --patro-muted: hsl(var(--muted-foreground));
+  --patro-border: hsl(var(--input));
+  --patro-border-hover: hsl(var(--muted-foreground));
+  --patro-hover: hsl(var(--accent));
+  --patro-accent: hsl(var(--primary));
+  --patro-today: hsl(var(--primary));
+  --patro-selected-bg: hsl(var(--primary));
+  --patro-selected-text: hsl(var(--primary-foreground));
+  --patro-selected-secondary: hsl(var(--primary-foreground) / 0.8);
+  --patro-danger: hsl(var(--destructive));
+  --patro-weekend: hsl(var(--destructive));
+  --patro-radius-input: calc(var(--radius) - 2px);
+  --patro-input-width: 100%;
+}

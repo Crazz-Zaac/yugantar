@@ -1,3 +1,4 @@
+import { DateTimeField } from "@/components/DateField"
 import { t } from "@/lib/i18n"
 import { useState, useEffect, useCallback, useMemo } from "react"
 import {
@@ -561,21 +562,19 @@ export function MemberPoliciesTab() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-4 sm:grid-cols-2">
                             <div className="flex flex-col gap-2">
                                 <Label className="text-xs font-medium">{t("Effective From ({0})", TIME_ZONE_LABEL)}</Label>
-                                <Input
-                                    type="datetime-local"
+                                <DateTimeField
                                     value={depositForm.effective_from}
-                                    onChange={(e) => setDepositForm((f) => ({ ...f, effective_from: e.target.value }))}
+                                    onChange={(v) => setDepositForm((f) => ({ ...f, effective_from: v }))}
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
                                 <Label className="text-xs font-medium">{t("Effective To ({0})", TIME_ZONE_LABEL)}</Label>
-                                <Input
-                                    type="datetime-local"
+                                <DateTimeField clearable
                                     value={depositForm.effective_to}
-                                    onChange={(e) => setDepositForm((f) => ({ ...f, effective_to: e.target.value }))}
+                                    onChange={(v) => setDepositForm((f) => ({ ...f, effective_to: v }))}
                                 />
                             </div>
                         </div>
@@ -685,21 +684,19 @@ export function MemberPoliciesTab() {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid gap-4 sm:grid-cols-2">
                             <div className="flex flex-col gap-2">
                                 <Label className="text-xs font-medium">{t("Effective From ({0})", TIME_ZONE_LABEL)}</Label>
-                                <Input
-                                    type="datetime-local"
+                                <DateTimeField
                                     value={loanForm.effective_from}
-                                    onChange={(e) => setLoanForm((f) => ({ ...f, effective_from: e.target.value }))}
+                                    onChange={(v) => setLoanForm((f) => ({ ...f, effective_from: v }))}
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
                                 <Label className="text-xs font-medium">{t("Effective To ({0})", TIME_ZONE_LABEL)}</Label>
-                                <Input
-                                    type="datetime-local"
+                                <DateTimeField clearable
                                     value={loanForm.effective_to}
-                                    onChange={(e) => setLoanForm((f) => ({ ...f, effective_to: e.target.value }))}
+                                    onChange={(v) => setLoanForm((f) => ({ ...f, effective_to: v }))}
                                 />
                             </div>
                         </div>

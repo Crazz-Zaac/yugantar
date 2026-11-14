@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import { apiClient } from "@/api/api"
+import { UpcomingCard } from "@/components/tools/UpcomingCard"
 import { formatDate, TIME_ZONE_LABEL } from "@/lib/datetime"
 import { formatRs, formatRsCompact, monthLabel } from "@/lib/money"
 
@@ -244,6 +245,9 @@ export function HomeTab() {
           </CardContent>
         </Card>
       )}
+
+      {/* Calendar: next events and meetings */}
+      <UpcomingCard />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">

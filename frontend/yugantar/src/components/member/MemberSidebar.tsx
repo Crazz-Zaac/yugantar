@@ -1,5 +1,15 @@
 import { roleName, t } from "@/lib/i18n"
-import { Home, Landmark, CreditCard, ScrollText, Settings, PanelLeftClose, PanelLeft } from "lucide-react"
+import {
+  Home,
+  Landmark,
+  CreditCard,
+  ScrollText,
+  Settings,
+  PanelLeftClose,
+  PanelLeft,
+  CalendarDays,
+  Video,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -11,12 +21,25 @@ import type { MemberTab } from "./MemberDashboard"
 
 type Tab = MemberTab
 
-const navItems = [
-  { id: "home" as Tab, label: "Home", icon: Home },
-  { id: "deposit" as Tab, label: "Deposit", icon: Landmark },
-  { id: "loans" as Tab, label: "Loans", icon: CreditCard },
-  { id: "policies" as Tab, label: "Policies", icon: ScrollText },
-  { id: "settings" as Tab, label: "Settings", icon: Settings },
+// Sections, like Teams: money first, then the tools everyone shares
+const navGroups: { label: string | null; items: { id: Tab; label: string; icon: typeof Home }[] }[] = [
+  {
+    label: null,
+    items: [
+      { id: "home", label: "Home", icon: Home },
+      { id: "deposit", label: "Deposit", icon: Landmark },
+      { id: "loans", label: "Loans", icon: CreditCard },
+      { id: "policies", label: "Policies", icon: ScrollText },
+    ],
+  },
+  {
+    label: "Tools",
+    items: [
+      { id: "calendar", label: "Calendar", icon: CalendarDays },
+      { id: "meetings", label: "Meetings", icon: Video },
+    ],
+  },
+  { label: null, items: [{ id: "settings", label: "Settings", icon: Settings }] },
 ]
 
 export function MemberSidebar({
@@ -32,16 +55,10 @@ export function MemberSidebar({
 }) {
   const { user } = useAuth()
   const displayName = user ? `${user.first_name} ${user.last_name}`.trim() : t("Member")
-  const initials = user
-    ? `${user.first_name?.[0] ?? ""}${user.last_name?.[0] ?? ""}`.toUpperCase()
-    : "M"
+  const initials = user ? `${user.first_name?.[0] ?? ""}${user.last_name?.[0] ?? ""}`.toUpperCase() : "M"
   // Show the member's office (e.g. "Treasurer"), not a pseudo-ID
-  const officeRoles = (user?.cooperative_roles ?? [])
-    .map((r) => String(r).toLowerCase())
-    .filter((r) => r !== "member")
-  const memberId = officeRoles.length
-    ? officeRoles.map((r) => roleName(r)).join(" · ")
-    : t("Member")
+  const officeRoles = (user?.cooperative_roles ?? []).map((r) => String(r).toLowerCase()).filter((r) => r !== "member")
+  const memberId = officeRoles.length ? officeRoles.map((r) => roleName(r)).join(" · ") : t("Member")
 
   return (
     // Tooltips are remounted (closed) whenever the sidebar collapses or expands:
@@ -51,7 +68,7 @@ export function MemberSidebar({
       <aside
         className={cn(
           "flex h-full flex-col bg-sidebar text-sidebar-foreground transition-all duration-200",
-          collapsed ? "w-[68px]" : "w-64"
+          collapsed ? "w-[68px]" : "w-64",
         )}
       >
         {/* Header */}
@@ -70,35 +87,50 @@ export function MemberSidebar({
         <Separator className="bg-sidebar-border" />
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4">
-          <ul className="flex flex-col gap-1" role="list">
-            {navItems.map((item) => (
-              <li key={item.id}>
-                <Tooltip key={collapsed ? "collapsed" : "expanded"}>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => onTabChange(item.id)}
-                      className={cn(
-                        "flex w-full items-center rounded-lg text-sm font-medium transition-colors",
-                        collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
-                        activeTab === item.id
-                          ? "bg-sidebar-accent text-sidebar-primary"
-                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+        <nav className="flex-1 overflow-y-auto px-3 py-4">
+          {navGroups.map((group, gi) => (
+            <div key={gi} className={cn(gi > 0 && "mt-4")}>
+              {group.label ? (
+                collapsed ? (
+                  <Separator className="mx-auto mb-3 w-8 bg-sidebar-border" />
+                ) : (
+                  <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
+                    {t(group.label)}
+                  </p>
+                )
+              ) : (
+                gi > 0 && <Separator className={cn("mb-3 bg-sidebar-border", collapsed ? "mx-auto w-8" : "")} />
+              )}
+              <ul className="flex flex-col gap-1" role="list">
+                {group.items.map((item) => (
+                  <li key={item.id}>
+                    <Tooltip key={collapsed ? "collapsed" : "expanded"}>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => onTabChange(item.id)}
+                          className={cn(
+                            "flex w-full items-center rounded-lg text-sm font-medium transition-colors",
+                            collapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5",
+                            activeTab === item.id
+                              ? "bg-sidebar-accent text-sidebar-primary"
+                              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground",
+                          )}
+                        >
+                          <item.icon className="h-4 w-4 shrink-0" />
+                          {!collapsed && <span>{t(item.label)}</span>}
+                        </button>
+                      </TooltipTrigger>
+                      {collapsed && (
+                        <TooltipContent side="right" sideOffset={8}>
+                          {t(item.label)}
+                        </TooltipContent>
                       )}
-                    >
-                      <item.icon className="h-4 w-4 shrink-0" />
-                      {!collapsed && <span>{t(item.label)}</span>}
-                    </button>
-                  </TooltipTrigger>
-                  {collapsed && (
-                    <TooltipContent side="right" sideOffset={8}>
-                      {t(item.label)}
-                    </TooltipContent>
-                  )}
-                </Tooltip>
-              </li>
-            ))}
-          </ul>
+                    </Tooltip>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </nav>
 
         {/* Collapse toggle */}
@@ -110,7 +142,7 @@ export function MemberSidebar({
                 size="icon"
                 className={cn(
                   "h-8 text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                  collapsed ? "w-full" : "w-8"
+                  collapsed ? "w-full" : "w-8",
                 )}
                 onClick={onToggleCollapse}
                 aria-label={collapsed ? t("Expand sidebar") : t("Collapse sidebar")}
@@ -120,7 +152,8 @@ export function MemberSidebar({
             </TooltipTrigger>
             {collapsed && (
               <TooltipContent side="right" sideOffset={8}>
-                {t("Expand sidebar")}</TooltipContent>
+                {t("Expand sidebar")}
+              </TooltipContent>
             )}
           </Tooltip>
         </div>
