@@ -5,15 +5,14 @@ import {
   CreditCard,
   ScrollText,
   Settings,
-  PanelLeftClose,
-  PanelLeft,
+  ChevronsLeft,
+  ChevronsRight,
   CalendarDays,
   Video,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/AuthContext"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import yugantarLogo from "@/assets/yugantar_logo.svg"
@@ -68,11 +67,11 @@ export function MemberSidebar({
       <aside
         className={cn(
           "flex h-full flex-col bg-sidebar text-sidebar-foreground transition-all duration-200",
-          collapsed ? "w-[68px]" : "w-64",
+          collapsed ? "w-[68px]" : "w-56",
         )}
       >
         {/* Header */}
-        <div className={cn("flex items-center py-5", collapsed ? "justify-center px-3" : "gap-3 px-6")}>
+        <div className={cn("flex items-center py-5", collapsed ? "justify-center px-3" : "gap-3 px-4")}>
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white">
             <img src={yugantarLogo} alt={t("Yugantar")} className="h-10 w-10" />
           </div>
@@ -133,22 +132,29 @@ export function MemberSidebar({
           ))}
         </nav>
 
-        {/* Collapse toggle */}
-        <div className="px-3 pb-1">
+        {/* Collapse / expand */}
+        <div className="hidden px-3 pb-3 lg:block">
           <Tooltip key={collapsed ? "collapsed" : "expanded"}>
             <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  "h-8 text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground",
-                  collapsed ? "w-full" : "w-8",
-                )}
+              <button
+                type="button"
                 onClick={onToggleCollapse}
                 aria-label={collapsed ? t("Expand sidebar") : t("Collapse sidebar")}
+                aria-expanded={!collapsed}
+                className={cn(
+                  "flex h-9 w-full items-center rounded-lg border border-sidebar-border bg-sidebar-accent/40 text-xs font-medium text-sidebar-foreground/80 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+                  collapsed ? "justify-center" : "gap-2 px-3",
+                )}
               >
-                {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-              </Button>
+                {collapsed ? (
+                  <ChevronsRight className="h-4 w-4 shrink-0" />
+                ) : (
+                  <>
+                    <ChevronsLeft className="h-4 w-4 shrink-0" />
+                    <span>{t("Collapse sidebar")}</span>
+                  </>
+                )}
+              </button>
             </TooltipTrigger>
             {collapsed && (
               <TooltipContent side="right" sideOffset={8}>

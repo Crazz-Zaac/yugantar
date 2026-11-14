@@ -1056,7 +1056,7 @@ Checked visually with headless screenshots (Playwright/Chromium in a throwaway c
 
 ---
 
-## ## Adding New Tools
+## Adding New Tools
 
 ### 31. Tools: Calendar and online Meetings (Jitsi as a Service)
 - **Where:** a new **Tools** group in the member sidebar with **Calendar** and **Meetings** (`/dashboard/calendar`, `/dashboard/meetings`), laid out like Teams.
