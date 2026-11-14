@@ -1489,3 +1489,10 @@ Checked visually with headless screenshots (Playwright/Chromium in a throwaway c
 - **Server:** the first name may be 1 character or more (was 3, which refused names like "Om"). Validation errors now show the field and the message (e.g. "phone: String should have at most 15 characters") instead of only "Field required".
 - **Nepali:** translations for the two new messages.
 - **Checked:** a registration with the form's data returns 201 (rolled back); the frontend type-checks, and lint shows no new problems.
+
+### 46. Removed unused UI files that broke the type-check
+
+- **Problem:** `tsc -b` (and so `npm run build`) failed with 5 errors in shadcn UI files that nothing in the app uses. They were written for other package versions: `ui/calendar.tsx` (react-day-picker 9 renamed `IconLeft`), `ui/carousel.tsx` (embla-carousel 7 event types) and `ui/toast.tsx` (`@radix-ui/react-toast` is not installed).
+- **Fix:** deleted `ui/calendar.tsx`, `ui/carousel.tsx`, `ui/toast.tsx`, `ui/toaster.tsx` and `hooks/use-toast.tsx`. Toasts use `sonner` (`ui/sonner.tsx`); the app's calendar is `tools/calendar.ts` with patrojs date pickers.
+- **Checked:** the frontend type-checks and builds in the container.
+- **Packages:** uninstalled `embla-carousel-react` and `react-day-picker`, used only by the deleted files (package.json and package-lock.json updated). Type-check and build pass after.
