@@ -117,8 +117,6 @@ async def send_registration_notification(
         logger.error(f"Failed to send registration email: {e}")
         raise
 
-    print({"message": "Registration email sent successfully"})
-
 
 async def send_password_reset_email(email_to: List[NameEmail], reset_link: str, lang: str = "en") -> None:
     """

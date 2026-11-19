@@ -1,4 +1,4 @@
-import { t } from "@/lib/i18n"
+import { t } from "@/lib/i18n";
 import { createContext, useContext, useState } from "react";
 import { getAllUsers, updateUserRolesApi } from "@/services/user.service";
 import type { AccessRole, CooperativeRole } from "@/constants";
@@ -34,6 +34,8 @@ interface UserContextProps {
 
 const UserContext = createContext<UserContextProps | undefined>(undefined);
 
+// Context hook and provider live together, as in AuthContext; the rule is a dev-only HMR hint
+// eslint-disable-next-line react-refresh/only-export-components
 export const useUser = (): UserContextProps => {
   const context = useContext(UserContext);
   if (!context) {
@@ -53,21 +55,15 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     setError(null);
     try {
       const response = await getAllUsers(skip, limit);
-      console.log("API Response:", response);
-      console.log("Response type:", typeof response);
-      console.log("Users array:", response.users);
-      console.log("Total:", response.total);
-
       if (!response || !response.users) {
         throw new Error("Invalid response format from API");
       }
 
       const normalizedUsers = response.users.map(normalizeUser);
-      console.log("Normalized users:", normalizedUsers);
       setUsers(normalizedUsers);
       setTotalUsers(response.total);
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch users");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to fetch users");
     } finally {
       setLoading(false);
     }
@@ -78,7 +74,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const user = await getUserById(userId);
       return normalizeUser(user);
-    } catch (err) {
+    } catch {
       setError(t("Failed to fetch user"));
       return null;
     }
@@ -111,7 +107,7 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
         prevUsers.map(user => (user.id === userId ? normalizedUser : user))
       );
       return normalizedUser;
-    } catch (err) {
+    } catch {
       setError(t("Failed to toggle user disabled status"));
       return null;
     }
@@ -119,22 +115,15 @@ export const UserProvider = ({ children }: { children: React.ReactNode }) => {
 
   // delete user by ID
   const deleteUser = async (userId: string) => {
-    console.log("🗑️ Deleting user:", userId);
-    console.log("📊 Users before delete:", users.length);
-
     try {
       await deleteUserById(userId);
 
-      console.log("✅ Backend deletion successful");
-
       setUsers(prevUsers => {
         const newUsers = prevUsers.filter(user => user.id !== userId);
-        console.log("📊 Users after delete:", newUsers.length);
         return newUsers;
       });
 
       setTotalUsers(prev => {
-        console.log("📊 Total users:", prev - 1);
         return prev - 1;
       });
     } catch (err) {

@@ -1496,3 +1496,23 @@ Checked visually with headless screenshots (Playwright/Chromium in a throwaway c
 - **Fix:** deleted `ui/calendar.tsx`, `ui/carousel.tsx`, `ui/toast.tsx`, `ui/toaster.tsx` and `hooks/use-toast.tsx`. Toasts use `sonner` (`ui/sonner.tsx`); the app's calendar is `tools/calendar.ts` with patrojs date pickers.
 - **Checked:** the frontend type-checks and builds in the container.
 - **Packages:** uninstalled `embla-carousel-react` and `react-day-picker`, used only by the deleted files (package.json and package-lock.json updated). Type-check and build pass after.
+
+### 47. Writing minutes opens as a page
+
+- **Change:** "Write minutes" and "Edit" now open the minutes form as a page inside the Minutes tab, in place of the list (or the opened minutes), instead of a pop-up dialog. A long form with attendees, agenda items and votes is easier to fill on a full page, and a stray click outside can no longer close it.
+- **Page:** a back button ("All minutes", or "Back to the minutes" when editing), the title and description, the form, and Cancel / Save draft / Submit for approval at the end. The buttons aren't pinned, because the phone's bottom bar would cover them. The page scrolls into view when it opens.
+- **After saving:** the saved minutes open. Cancel goes back to where you came from.
+- **Code:** `MinutesEditor` is now a plain component (`editing`, `onClose`, `onSaved`); `MinutesPanel` renders it instead of the list or viewer; `MinutesView` no longer carries the editor dialog.
+- **Nepali:** "Back to the minutes".
+- **Checked:** type-check passes and lint shows no problems in the two files.
+- **Fix:** closing the form crashed with "destroy is not a function". The scroll-into-view effect was a one-line arrow, so it returned `scrollIntoView()`'s result (a Promise in newer browsers), and React tried to call that as the effect's cleanup. The effect now has a block body and returns nothing.
+
+### 48. Removed debug logs and unused shadcn UI
+
+Follows the codebase scan.
+- **Debug logs removed:**
+  - `UserContext.tsx`: 10 `console.log` calls that dumped full user API responses and emoji delete traces to the browser console (this context backs the admin Members tab, so they ran in production). Kept the real `console.error` on a delete failure.
+  - `email_notify.py`: a stray `print({"message": "Registration email sent successfully"})` on every registration; the `logger.info` beside it already records success.
+- **Unused UI:** deleted 26 unused shadcn components from `components/ui/` (accordion, alert, chart, command, drawer, form, sidebar, sheet, …), computed by following imports between ui files so none that a kept component uses was removed (e.g. `sonner` is imported as `@components/ui/sonner` without the slash — kept).
+- **Deps:** uninstalled the four packages left with no importer: `cmdk`, `vaul`, `input-otp`, `react-resizable-panels`. Kept `class-variance-authority` and `@radix-ui/react-slot` (used by `button`/`badge`) and `recharts` (used elsewhere).
+- **Checked:** backend imports `email_notify` fine; frontend type-checks and builds; no `console.log` left in `src`; UserContext has the same 5 pre-existing lint errors as before (no new ones).

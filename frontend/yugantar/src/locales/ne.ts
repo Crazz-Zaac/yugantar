@@ -1237,6 +1237,7 @@ const ne: Record<string, string> = {
   "Agenda item {0} needs a title.": "कार्यसूची {0} को शीर्षक चाहिन्छ।",
   "Agenda item, e.g. Raise the monthly deposit": "कार्यसूची, जस्तै: मासिक जम्मा बढाउने",
   "All minutes": "सबै माइन्युट",
+  "Back to the minutes": "माइन्युटमा फर्कनुहोस्",
   "Also present, not members (optional)": "सदस्य बाहेक उपस्थित (ऐच्छिक)",
   "Also present: {0}": "अन्य उपस्थित: {0}",
   "Any other business": "अन्य विषय",

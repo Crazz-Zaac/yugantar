@@ -110,23 +110,23 @@ export function MinutesPanel() {
     setReloadKey((k) => k + 1)
   }, [])
 
-  if (openId) {
+  // Writing / editing takes the place of the list or the opened minutes
+  if (editor.open) {
     return (
-      <MinutesView
-        id={openId}
-        onBack={closeView}
-        onEdit={(m) => setEditor({ open: true, editing: m })}
-        editorOpen={editor.open}
-        editor={
-          <MinutesEditor
-            open={editor.open}
-            onOpenChange={(o) => setEditor((e) => ({ ...e, open: o }))}
-            editing={editor.editing}
-            onSaved={() => reload()}
-          />
-        }
+      <MinutesEditor
+        editing={editor.editing}
+        onClose={() => setEditor({ open: false, editing: null })}
+        onSaved={(m) => {
+          setEditor({ open: false, editing: null })
+          reload()
+          setOpenId(m.id)
+        }}
       />
     )
+  }
+
+  if (openId) {
+    return <MinutesView id={openId} onBack={closeView} onEdit={(m) => setEditor({ open: true, editing: m })} />
   }
 
   if (error && !data) {
@@ -187,16 +187,6 @@ export function MinutesPanel() {
           ))}
         </div>
       )}
-
-      <MinutesEditor
-        open={editor.open}
-        onOpenChange={(o) => setEditor((e) => ({ ...e, open: o }))}
-        editing={editor.editing}
-        onSaved={(m) => {
-          reload()
-          setOpenId(m.id)
-        }}
-      />
     </div>
   )
 }
@@ -238,14 +228,10 @@ function MinutesView({
   id,
   onBack,
   onEdit,
-  editor,
-  editorOpen,
 }: {
   id: string
   onBack: () => void
   onEdit: (m: Minutes) => void
-  editor: React.ReactNode
-  editorOpen: boolean
 }) {
   const confirm = useConfirm()
   const [m, setM] = useState<Minutes | null>(null)
@@ -253,7 +239,6 @@ function MinutesView({
   const [signing, setSigning] = useState(false)
 
   useEffect(() => {
-    if (editorOpen) return
     let cancelled = false
     getMinutes(id)
       .then((x) => !cancelled && setM(x))
@@ -261,7 +246,7 @@ function MinutesView({
     return () => {
       cancelled = true
     }
-  }, [id, editorOpen, onBack])
+  }, [id, onBack])
 
   const act = async (fn: () => Promise<Minutes>, done: string) => {
     setBusy(true)
@@ -508,7 +493,6 @@ function MinutesView({
           )}
         </CardContent>
       </Card>
-      {editor}
       <SignatureDialog
         open={signing}
         title={t("Sign the minutes")}

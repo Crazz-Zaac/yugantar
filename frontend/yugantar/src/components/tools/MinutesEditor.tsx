@@ -1,18 +1,10 @@
 import { n, t } from "@/lib/i18n"
-import { useEffect, useMemo, useState } from "react"
-import { ArrowDown, ArrowUp, Loader2, Plus, Send, Trash2, Vote as VoteIcon } from "lucide-react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { ArrowDown, ArrowLeft, ArrowUp, Loader2, Plus, Send, Trash2, Vote as VoteIcon } from "lucide-react"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -42,30 +34,13 @@ import {
  * Write or edit meeting minutes in the standard format: the meeting, who
  * attended, each agenda item (what was discussed, what was concluded, and
  * an optional vote), and any other business. Save as a draft, or save and
- * submit to the President for approval.
+ * submit to the President for approval. Shown as a page in the Minutes tab
+ * (it's a long form), in place of the list or the opened minutes.
  */
 
 const emptyItem = (): AgendaItem => ({ title: "", discussion: "", decision: "", vote: null })
 
 export function MinutesEditor({
-  open,
-  onOpenChange,
-  editing,
-  onSaved,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  editing: Minutes | null
-  onSaved: (m: Minutes) => void
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      {open && <Editor editing={editing} onClose={() => onOpenChange(false)} onSaved={onSaved} />}
-    </Dialog>
-  )
-}
-
-function Editor({
   editing,
   onClose,
   onSaved,
@@ -103,6 +78,11 @@ function Editor({
   )
   const [otherBusiness, setOtherBusiness] = useState(editing?.other_business ?? "")
   const [saving, setSaving] = useState<"draft" | "submit" | null>(null)
+  const top = useRef<HTMLDivElement>(null)
+  // The dashboard's scroll area keeps its position when this page replaces the list
+  useEffect(() => {
+    top.current?.scrollIntoView({ block: "start" })
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -204,7 +184,6 @@ function Editor({
       if (submit) m = await submitMinutes(m.id)
       toast.success(submit ? t("Submitted to the President for approval") : t("Draft saved"))
       onSaved(m)
-      onClose()
     } catch (err) {
       toast.error(apiError(err, t("Couldn't save the minutes.")))
     } finally {
@@ -213,15 +192,19 @@ function Editor({
   }
 
   return (
-    <DialogContent className="max-h-[94dvh] overflow-y-auto sm:max-w-3xl">
-      <DialogHeader>
-        <DialogTitle>{editing ? t("Edit minutes") : t("Write minutes")}</DialogTitle>
-        <DialogDescription>
+    <div ref={top} className="mx-auto flex w-full max-w-3xl scroll-mt-4 flex-col gap-4">
+      <div>
+        <Button variant="ghost" size="sm" onClick={onClose} disabled={saving !== null} className="-ml-2">
+          <ArrowLeft className="mr-1.5 h-4 w-4" />
+          {editing ? t("Back to the minutes") : t("All minutes")}
+        </Button>
+        <h2 className="mt-2 text-lg font-semibold">{editing ? t("Edit minutes") : t("Write minutes")}</h2>
+        <p className="text-sm text-muted-foreground">
           {t(
             "The record of the meeting: who attended, what was discussed, what was concluded and how each resolution was voted.",
           )}
-        </DialogDescription>
-      </DialogHeader>
+        </p>
+      </div>
       {editing?.return_note && (
         <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
           {t("Returned by {0}: {1}", editing.reviewed_by_name ?? "", editing.return_note)}
@@ -538,7 +521,7 @@ function Editor({
         )}
       </div>
 
-      <DialogFooter className="gap-2 sm:gap-0">
+      <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-end">
         <Button variant="outline" onClick={onClose} disabled={saving !== null}>
           {t("Cancel")}
         </Button>
@@ -550,7 +533,7 @@ function Editor({
           {saving === "submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
           {t("Submit for approval")}
         </Button>
-      </DialogFooter>
-    </DialogContent>
+      </div>
+    </div>
   )
 }
