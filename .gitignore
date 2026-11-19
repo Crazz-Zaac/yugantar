@@ -1,6 +1,4 @@
-# alembic migrations
-versions/
-# !alembic/versions/__init__.py
+# Alembic migrations are tracked so they ship inside the backend release image.
 
 
 # unnecessary docs folder
