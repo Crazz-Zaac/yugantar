@@ -10,6 +10,7 @@ imp_docs/
 .env.*
 !.env.example
 !.env.development
+!.env.prod.example
 *.env
 docker/secrets/
 

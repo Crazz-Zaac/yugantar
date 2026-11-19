@@ -1,0 +1,108 @@
+# Production stack for the server: pulls the released images from GHCR
+# (built by .github/workflows/release.yml) instead of building locally.
+#
+# On the server, in a folder of your choosing:
+#   1. Put this file as docker-compose.yml
+#   2. Create .env from .env.prod.example and fill it in
+#   3. Put the JaaS private key at ./secrets/jaas_private_key.pk (if using meetings)
+#   4. docker login ghcr.io       # only if the packages are private
+#   5. VERSION=v1.0.0 docker compose pull
+#   6. VERSION=v1.0.0 docker compose up -d
+#
+# VERSION and GHCR_OWNER come from .env (or the shell). Data lives in named
+# volumes — back up receipts-data, documents-data and db_data.
+
+name: yugantar
+
+x-backend-image: &backend-image ghcr.io/${GHCR_OWNER:-crazz-zaac}/yugantar-backend:${VERSION:-latest}
+
+services:
+  db:
+    image: postgres:16
+    container_name: yugantar-db
+    env_file: [.env]
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks: [yugantar-network]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.4
+    container_name: yugantar-redis
+    networks: [yugantar-network]
+    restart: unless-stopped
+
+  backend:
+    image: *backend-image
+    container_name: yugantar-backend
+    env_file: [.env]
+    environment:
+      ROLE: web
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - receipts-data:/data/receipts
+      - documents-data:/data/documents
+      - upload-data:/tmp/ocr_uploads
+      - ./secrets/jaas_private_key.pk:/app/secrets/jaas_private_key.pk:ro
+    networks: [yugantar-network]
+    restart: unless-stopped
+
+  celery_worker:
+    image: *backend-image
+    container_name: yugantar-celery-worker
+    env_file: [.env]
+    environment:
+      ROLE: worker
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - receipts-data:/data/receipts
+      - upload-data:/tmp/ocr_uploads
+      - ./secrets/jaas_private_key.pk:/app/secrets/jaas_private_key.pk:ro
+    networks: [yugantar-network]
+    restart: unless-stopped
+
+  celery_beat:
+    image: *backend-image
+    container_name: yugantar-celery-beat
+    env_file: [.env]
+    environment:
+      ROLE: beat
+    depends_on:
+      redis:
+        condition: service_started
+    volumes:
+      - ./secrets/jaas_private_key.pk:/app/secrets/jaas_private_key.pk:ro
+    networks: [yugantar-network]
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/${GHCR_OWNER:-crazz-zaac}/yugantar-frontend:${VERSION:-latest}
+    container_name: yugantar-frontend
+    depends_on: [backend]
+    ports:
+      - "${HTTP_PORT:-80}:80" # nginx serves the app and proxies /api to backend:8000
+    networks: [yugantar-network]
+    restart: unless-stopped
+
+volumes:
+  db_data: # the database — back this up
+  receipts-data: # receipt images (kept RECEIPT_RETENTION_DAYS) — back this up
+  documents-data: # generated PDFs / records (permanent) — back this up
+  upload-data: # temporary OCR uploads
+
+networks:
+  yugantar-network:
+    driver: bridge

@@ -11,6 +11,14 @@ RUN npm ci --legacy-peer-deps
 # Copy source and build
 COPY frontend/yugantar/ ./
 
+# API base is baked in at build time. Default to a relative path so the
+# browser calls this image's own nginx, which proxies /api to the backend
+# (see docker/nginx.conf). Override with --build-arg for a different setup.
+# Written to .env.production, which Vite's production build prefers over .env.
+ARG VITE_API_BASE=/api/v1
+ARG VITE_APP_TITLE="Yugantar Wealth Management System"
+RUN printf 'VITE_API_BASE=%s\nVITE_APP_TITLE=%s\n' "$VITE_API_BASE" "$VITE_APP_TITLE" > .env.production
+
 # Build the app
 RUN npm run build
 
