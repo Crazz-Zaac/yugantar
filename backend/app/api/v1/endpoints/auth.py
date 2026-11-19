@@ -180,7 +180,11 @@ async def verify_email_token(
         )
 
     if user.is_verified:
-        return {"msg": "Email is already verified"}
+        return {
+            "msg": "Your email is already verified.",
+            "already": True,
+            "approved": user.is_approved,
+        }
 
     user.is_verified = True
     from datetime import datetime, timezone
@@ -195,9 +199,11 @@ async def verify_email_token(
         _notify_admins_pending_approval(session, background_tasks, user)
         return {
             "msg": "Email verified successfully. An administrator will review your registration; "
-            "you'll get an email once your account is approved."
+            "you'll get an email once your account is approved.",
+            "already": False,
+            "approved": False,
         }
-    return {"msg": "Email verified successfully."}
+    return {"msg": "Email verified successfully.", "already": False, "approved": True}
 
 
 def _notify_admins_pending_approval(session: Session, background_tasks: BackgroundTasks, user: User) -> None:
