@@ -1561,3 +1561,11 @@ Every outgoing email now uses one branded HTML template with a signature block, 
 - **Fix:** exposed `i18n_key` on `NotificationResponse` (the model already had it) and in the frontend `ApiNotification`; `NotificationPanel` now routes `member_awaiting_approval` → `/admin/members`.
 - **Rename:** the admin "Members" tab is now labelled **User Management** (sidebar + page title). The tab id (`members`) and path (`/admin/members`) are unchanged, so routing, URLs and the notification target stay stable. English + Nepali.
 - **Checked:** the notifications API returns `i18n_key` for the member notification; frontend type-checks, builds, lints clean.
+
+### 53. Redesigned the "Coming up" card (Home)
+
+Made the dashboard's "Coming up" card more professional and compact, without touching the shared `ItemRow` (still used by the Calendar and Meetings tabs).
+- **Header:** tighter, with a small count badge and a subtle "Calendar →" link (was a button).
+- **Rows:** replaced the bordered boxes with thick coloured left-bars by lightweight, borderless agenda rows — a small category-colour dot, the title (with online/lock icons), and a single dense meta line (date · time · location; a green "Happening now" pulse when live; "Cancelled" when cancelled). A compact Join button shows only on a live/open meeting.
+- **Density:** reduced card and row padding; still a 2-column grid on wider screens.
+- **Checked:** type-checks, builds, lints clean; rendered a preview to confirm the look.
