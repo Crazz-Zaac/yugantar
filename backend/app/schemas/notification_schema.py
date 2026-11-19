@@ -10,6 +10,7 @@ class NotificationResponse(SQLModel):
     title: str
     message: str
     notification_type: str
+    i18n_key: Optional[str] = None
     policy_id: Optional[uuid.UUID] = None
     policy_type: Optional[str] = None
     loan_id: Optional[uuid.UUID] = None

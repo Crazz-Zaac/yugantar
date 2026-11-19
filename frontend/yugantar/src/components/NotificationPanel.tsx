@@ -1,152 +1,180 @@
-import { t } from "@/lib/i18n"
-import { Bell, AlertTriangle, CheckCircle2, Info, ShieldAlert, FileCheck, X, CalendarDays, Video } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { useState, useEffect, useCallback } from "react"
-import { apiClient } from "@/api/api"
-import { useLocation } from "wouter"
-import { formatShortDate, parseUtc } from "@/lib/datetime"
+import { t } from "@/lib/i18n";
+import {
+  Bell,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  ShieldAlert,
+  FileCheck,
+  X,
+  CalendarDays,
+  Video,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { useState, useEffect, useCallback } from "react";
+import { apiClient } from "@/api/api";
+import { useLocation } from "wouter";
+import { formatShortDate, parseUtc } from "@/lib/datetime";
 
 interface ApiNotification {
-  id: string
-  user_id: string
-  title: string
-  message: string
-  notification_type: string
-  policy_id: string | null
-  policy_type: string | null
-  loan_id: string | null
-  is_read: boolean
-  created_at: string
+  id: string;
+  user_id: string;
+  title: string;
+  message: string;
+  notification_type: string;
+  i18n_key: string | null;
+  policy_id: string | null;
+  policy_type: string | null;
+  loan_id: string | null;
+  is_read: boolean;
+  created_at: string;
 }
 
 export function NotificationPanel() {
-  const [items, setItems] = useState<ApiNotification[]>([])
-  const [open, setOpen] = useState(false)
-  const [, navigate] = useLocation()
+  const [items, setItems] = useState<ApiNotification[]>([]);
+  const [open, setOpen] = useState(false);
+  const [, navigate] = useLocation();
 
   const fetchNotifications = useCallback(async () => {
     try {
-      const res = await apiClient.get("/notifications")
-      setItems(res.data)
+      const res = await apiClient.get("/notifications");
+      setItems(res.data);
     } catch {
       // silently fail — header component
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    fetchNotifications()
+    fetchNotifications();
     // Poll every 30 seconds
-    const interval = setInterval(fetchNotifications, 30_000)
-    return () => clearInterval(interval)
-  }, [fetchNotifications])
+    const interval = setInterval(fetchNotifications, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
 
   // Re-fetch when popover opens
   useEffect(() => {
-    if (open) fetchNotifications()
-  }, [open, fetchNotifications])
+    if (open) fetchNotifications();
+  }, [open, fetchNotifications]);
 
-  const unreadCount = items.filter((item) => !item.is_read).length
+  const unreadCount = items.filter(item => !item.is_read).length;
 
   const markAllRead = async () => {
     try {
-      await apiClient.patch("/notifications/read-all")
-      setItems((prev) => prev.map((item) => ({ ...item, is_read: true })))
+      await apiClient.patch("/notifications/read-all");
+      setItems(prev => prev.map(item => ({ ...item, is_read: true })));
     } catch {
       // silent
     }
-  }
+  };
 
   const markRead = async (id: string) => {
     try {
-      await apiClient.patch(`/notifications/${id}/read`)
-      setItems((prev) => prev.map((item) => (item.id === id ? { ...item, is_read: true } : item)))
+      await apiClient.patch(`/notifications/${id}/read`);
+      setItems(prev =>
+        prev.map(item => (item.id === id ? { ...item, is_read: true } : item))
+      );
     } catch {
       // silent
     }
-  }
+  };
 
   const getNotificationTarget = (notification: ApiNotification): string => {
-    const isAdminArea = window.location.pathname.startsWith("/admin")
+    const isAdminArea = window.location.pathname.startsWith("/admin");
 
     switch (notification.notification_type) {
       case "loan_application":
       case "loan_fund_verified":
-        return "/dashboard/loans?subtab=review"
+        return "/dashboard/loans?subtab=review";
       case "loan_approved":
       case "loan_rejected":
-        return "/dashboard/loans?subtab=my-loans"
+        return "/dashboard/loans?subtab=my-loans";
       case "deposit_submitted":
-        return "/dashboard/deposit?subtab=review"
+        return "/dashboard/deposit?subtab=review";
       case "deposit_verified":
       case "deposit_rejected":
-        return "/dashboard/deposit?subtab=my"
+        return "/dashboard/deposit?subtab=my";
       case "policy_approval":
       case "policy_approved":
       case "policy_rejected":
       case "policy_finalized":
-        return isAdminArea ? "/admin/policies" : "/dashboard/policies"
+        return isAdminArea ? "/admin/policies" : "/dashboard/policies";
       case "event":
-        return isAdminArea ? "/admin/calendar" : "/dashboard/calendar"
+        return isAdminArea ? "/admin/calendar" : "/dashboard/calendar";
       case "meeting":
-        return isAdminArea ? "/admin/meetings" : "/dashboard/meetings"
+        return isAdminArea ? "/admin/meetings" : "/dashboard/meetings";
       case "expense":
-        return "/dashboard/expenses"
+        return "/dashboard/expenses";
       case "minutes":
-        return isAdminArea ? "/admin/meetings?view=minutes" : "/dashboard/meetings?view=minutes"
+        return isAdminArea
+          ? "/admin/meetings?view=minutes"
+          : "/dashboard/meetings?view=minutes";
       default:
+        // A verified registration waiting for approval -> User Management
+        if (notification.i18n_key === "member_awaiting_approval")
+          return "/admin/members";
         // e.g. proxy-signature notifications (type "general") about a policy
-        if (notification.policy_id) return isAdminArea ? "/admin/policies" : "/dashboard/policies"
-        return isAdminArea ? "/admin" : "/dashboard"
+        if (notification.policy_id)
+          return isAdminArea ? "/admin/policies" : "/dashboard/policies";
+        return isAdminArea ? "/admin" : "/dashboard";
     }
-  }
+  };
 
   const handleNotificationClick = async (notification: ApiNotification) => {
     if (!notification.is_read) {
-      await markRead(notification.id)
+      await markRead(notification.id);
     }
-    setOpen(false)
-    navigate(getNotificationTarget(notification))
-  }
+    setOpen(false);
+    navigate(getNotificationTarget(notification));
+  };
 
   const getIcon = (type: string) => {
     switch (type) {
       case "policy_approval":
-        return <ShieldAlert className="h-4 w-4 text-warning" />
+        return <ShieldAlert className="h-4 w-4 text-warning" />;
       case "policy_approved":
-        return <CheckCircle2 className="h-4 w-4 text-success" />
+        return <CheckCircle2 className="h-4 w-4 text-success" />;
       case "policy_rejected":
-        return <AlertTriangle className="h-4 w-4 text-destructive" />
+        return <AlertTriangle className="h-4 w-4 text-destructive" />;
       case "policy_finalized":
-        return <FileCheck className="h-4 w-4 text-chart-2" />
+        return <FileCheck className="h-4 w-4 text-chart-2" />;
       case "event":
-        return <CalendarDays className="h-4 w-4 text-chart-2" />
+        return <CalendarDays className="h-4 w-4 text-chart-2" />;
       case "meeting":
-        return <Video className="h-4 w-4 text-sky-500" />
+        return <Video className="h-4 w-4 text-sky-500" />;
       default:
-        return <Info className="h-4 w-4 text-chart-2" />
+        return <Info className="h-4 w-4 text-chart-2" />;
     }
-  }
+  };
 
   const formatTime = (iso: string) => {
-    const d = parseUtc(iso) ?? new Date()
-    const now = new Date()
-    const diffMs = now.getTime() - d.getTime()
-    const diffMins = Math.floor(diffMs / 60_000)
-    if (diffMins < 1) return t("Just now")
-    if (diffMins < 60) return t("{0}m ago", diffMins)
-    const diffHrs = Math.floor(diffMins / 60)
-    if (diffHrs < 24) return t("{0}h ago", diffHrs)
-    const diffDays = Math.floor(diffHrs / 24)
-    if (diffDays < 7) return t("{0}d ago", diffDays)
-    return formatShortDate(iso)
-  }
+    const d = parseUtc(iso) ?? new Date();
+    const now = new Date();
+    const diffMs = now.getTime() - d.getTime();
+    const diffMins = Math.floor(diffMs / 60_000);
+    if (diffMins < 1) return t("Just now");
+    if (diffMins < 60) return t("{0}m ago", diffMins);
+    const diffHrs = Math.floor(diffMins / 60);
+    if (diffHrs < 24) return t("{0}h ago", diffHrs);
+    const diffDays = Math.floor(diffHrs / 24);
+    if (diffDays < 7) return t("{0}d ago", diffDays);
+    return formatShortDate(iso);
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-lg" aria-label={t("Notifications")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative h-9 w-9 rounded-lg"
+          aria-label={t("Notifications")}
+        >
           <Bell className="h-4 w-4" />
           {unreadCount > 0 && (
             <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
@@ -158,15 +186,24 @@ export function NotificationPanel() {
       <PopoverContent className="w-96 p-0" align="end">
         <div className="flex items-center justify-between border-b px-4 py-3">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-foreground">{t("Notifications")}</h3>
+            <h3 className="text-sm font-semibold text-foreground">
+              {t("Notifications")}
+            </h3>
             {unreadCount > 0 && (
               <Badge variant="secondary" className="text-xs">
-                {t("{0} new", unreadCount)}</Badge>
+                {t("{0} new", unreadCount)}
+              </Badge>
             )}
           </div>
           {unreadCount > 0 && (
-            <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={markAllRead}>
-              {t("Mark all read")}</Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs text-muted-foreground"
+              onClick={markAllRead}
+            >
+              {t("Mark all read")}
+            </Button>
           )}
         </div>
         {/* Native scrolling: Radix ScrollArea's viewport can't size itself against a max-height */}
@@ -178,18 +215,27 @@ export function NotificationPanel() {
             </div>
           ) : (
             <div className="divide-y">
-              {items.map((notification) => (
+              {items.map(notification => (
                 <div
                   key={notification.id}
-                  className={`flex gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-accent/30 ${notification.is_read ? "bg-transparent" : "bg-accent/50"
-                    }`}
+                  className={`flex gap-3 px-4 py-3 transition-colors cursor-pointer hover:bg-accent/30 ${
+                    notification.is_read ? "bg-transparent" : "bg-accent/50"
+                  }`}
                   onClick={() => handleNotificationClick(notification)}
                 >
-                  <div className="mt-0.5 shrink-0">{getIcon(notification.notification_type)}</div>
+                  <div className="mt-0.5 shrink-0">
+                    {getIcon(notification.notification_type)}
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-foreground">{notification.title}</p>
-                    <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">{notification.message}</p>
-                    <p className="mt-1 text-[11px] text-muted-foreground/70">{formatTime(notification.created_at)}</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {notification.title}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground leading-relaxed">
+                      {notification.message}
+                    </p>
+                    <p className="mt-1 text-[11px] text-muted-foreground/70">
+                      {formatTime(notification.created_at)}
+                    </p>
                   </div>
                   {!notification.is_read && (
                     <div className="mt-2 h-2 w-2 shrink-0 rounded-full bg-primary" />
@@ -201,5 +247,5 @@ export function NotificationPanel() {
         </div>
       </PopoverContent>
     </Popover>
-  )
+  );
 }

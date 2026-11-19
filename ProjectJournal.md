@@ -1516,3 +1516,48 @@ Follows the codebase scan.
 - **Unused UI:** deleted 26 unused shadcn components from `components/ui/` (accordion, alert, chart, command, drawer, form, sidebar, sheet, …), computed by following imports between ui files so none that a kept component uses was removed (e.g. `sonner` is imported as `@components/ui/sonner` without the slash — kept).
 - **Deps:** uninstalled the four packages left with no importer: `cmdk`, `vaul`, `input-otp`, `react-resizable-panels`. Kept `class-variance-authority` and `@radix-ui/react-slot` (used by `button`/`badge`) and `recharts` (used elsewhere).
 - **Checked:** backend imports `email_notify` fine; frontend type-checks and builds; no `console.log` left in `src`; UserContext has the same 5 pre-existing lint errors as before (no new ones).
+
+### 49. Branded email templates + Organization settings
+
+Every outgoing email now uses one branded HTML template with a signature block, and the Admin can edit the cooperative's official details.
+
+**Organization settings**
+- New singleton table `organization_settings` (name, email, phone, address, website), migration `b10689b48995`.
+- `GET /organization` (any member) / `PUT /organization` (Admin only); service `get_org`/`update_org` creates the row with defaults on first use.
+- Admin dashboard → new **Organization** tab (`OrganizationTab.tsx`) with a simple form; wired into the sidebar, routes (`/admin/organization`) and titles.
+
+**Email template** (`email_notify.py`, rewritten)
+- One `_shell()`: header band with the org name, greeting, body, a signature block, and a footer (org name · address · phone + "automated message").
+- Signature block matches the reference: logo (embedded via a `cid:` inline attachment), signer name in orange, role in blue, org name in bold, org contact email as a blue link.
+- The signer's **name + role** reflect who the message is from — `signer_for(session, ntype)` maps finance notifications → Treasurer, loan decisions → President, minutes → Secretary, everything else → Administration (the org itself). The **email and org name always come from Organization settings**.
+- All three senders (registration with verify button, password reset with reset button, and every notification) go through the shell; English + Nepali throughout.
+- `i18n.render_email` now returns `(subject, title, message)` and the email layer builds the HTML; removed the old plain-text `EMAIL_WRAPPER`. Updated the 4 call sites (notify, admin ×2, calendar reminders).
+
+**Checked:** backend imports clean; `signer_for` and the `/organization` endpoints tested (member read-only, Admin edits, bad email → 422); a finance notification renders the Treasurer-signed HTML (preview rendered to confirm it matches the reference); `test_expenses` (33) and `test_minutes` (45) pass; frontend type-checks, builds, and lints clean.
+
+### 50. Signer name on report PDFs + Admin can delete members
+
+**Signer name on financial report PDFs**
+- The "Approval and notes" sign-off boxes used to read "Checked by — Treasurer" and "Approved by — President" as bare role labels. They now show the **actual office bearers' names** (e.g. "Checked by — Hemsagar Khatiwada", "Approved by — Ramesh Lama"), resolved at generate time from the current Treasurer / President; it falls back to the role label when the office is vacant.
+- `reports/service.generate` resolves the holders (`_office_holder_name`) and passes `checked_by` / `approved_by` through `build_report_pdf` → `build_single_pdf` / `build_complete_pdf` → `_approval_and_notes` (all new params optional, so nothing else changed). Minutes PDFs already named the recorder (Secretary) and approver (President), so they were left as is.
+
+**Admin can delete a member**
+- The Members tab only offered Suspend. Added a **Delete** action (dropdown item, with a confirm dialog) wired to the existing `DELETE /admin/users/{id}`.
+- Made the delete safe: the user-referencing foreign keys (deposit, loan, fine, receipt, signatures) have no cascade, so deleting a member with financial history would have 500'd. `admin_delete_user` now clears the member's own notifications, then deletes; if a foreign key still references them it rolls back and the endpoint returns **409** with "This member has records… suspend instead". A clean account (no financial footprint) deletes with 204. Deleting yourself is still refused (400).
+- English + Nepali strings for the delete dialog.
+- **Checked:** `admin_delete_user` tested (clean → 204 and notifications cleared; member with a deposit → 409 and kept; self → 400); report PDF rendered to confirm the sign-off shows the real Treasurer/President names; `test_reports` (62) passes; frontend type-checks, builds, and adds no new lint problems.
+
+### 51. Email verification page: clearer message + redesigned card
+
+- **Problem:** after clicking the verification link, the page said "Your email is now verified / Email is already verified / Sign In", but signing in then failed with "Your account is awaiting approval by an administrator." The page never mentioned that approval is still pending.
+- **Backend** (`auth.py` verify-email): the response now carries `approved` (and `already`). The "already verified" branch previously returned only a bare message; it now reports the approval status too.
+- **Frontend** (`VerifyEmail.tsx`): states are now `loading / pending / ready / error`. When the email is verified but the account isn't approved yet (`approved: false`, whether fresh or already-verified), the card explains the email is confirmed and the account is **awaiting administrator approval** — "we'll email you once it's approved" — with a "Back to sign in" button rather than implying they can sign in. When approved, it shows "You're all set" with "Go to Sign In".
+- **UI redesign:** softer gradient background, a status icon in a tinted ring, an amber "Awaiting administrator approval" banner, and a 3-step progress indicator (Email verified → Admin approval → Sign in) with coloured connectors. English + Nepali.
+- **Checked:** verify-email tested — fresh-unapproved and already-verified both return `approved: false` (→ pending), fresh-approved returns `approved: true` (→ ready); the pending card rendered to confirm the design; frontend type-checks, builds, and lints clean.
+
+### 52. Member-approval notification routes to User Management; tab renamed
+
+- **Problem:** clicking the "New member awaiting approval" notification landed on the admin overview, not the members list. That notification is `GENERAL` type (key `member_awaiting_approval`), which fell through to the default route.
+- **Fix:** exposed `i18n_key` on `NotificationResponse` (the model already had it) and in the frontend `ApiNotification`; `NotificationPanel` now routes `member_awaiting_approval` → `/admin/members`.
+- **Rename:** the admin "Members" tab is now labelled **User Management** (sidebar + page title). The tab id (`members`) and path (`/admin/members`) are unchanged, so routing, URLs and the notification target stay stable. English + Nepali.
+- **Checked:** the notifications API returns `i18n_key` for the member notification; frontend type-checks, builds, lints clean.
