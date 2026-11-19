@@ -1,33 +1,47 @@
-import { t } from "@/lib/i18n"
-import { useState, useMemo } from "react"
-import { useLocation } from "wouter"
-import { AdminSidebar } from "./AdminSidebar"
-import { OverviewTab } from "./OverviewTab"
-import { MembersTab } from "./MembersTab"
-import { ActivityTab } from "./ActivityTab"
-import { PoliciesTab } from "./PoliciesTab"
-import { CalendarTab } from "@/components/tools/CalendarTab"
-import { MeetingsTab } from "@/components/tools/MeetingsTab"
-import { ThemeToggle } from "@/components/ThemeToggle"
-import { LanguageToggle } from "@/components/LanguageToggle"
-import { NotificationPanel } from "@/components/NotificationPanel"
-import { Button } from "@/components/ui/button"
-import { Menu, LogOut } from "lucide-react"
-import { Separator } from "@/components/ui/separator"
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { t } from "@/lib/i18n";
+import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
+import { AdminSidebar } from "./AdminSidebar";
+import { OverviewTab } from "./OverviewTab";
+import { MembersTab } from "./MembersTab";
+import { ActivityTab } from "./ActivityTab";
+import { PoliciesTab } from "./PoliciesTab";
+import { OrganizationTab } from "./OrganizationTab";
+import { CalendarTab } from "@/components/tools/CalendarTab";
+import { MeetingsTab } from "@/components/tools/MeetingsTab";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { LanguageToggle } from "@/components/LanguageToggle";
+import { NotificationPanel } from "@/components/NotificationPanel";
+import { Button } from "@/components/ui/button";
+import { Menu, LogOut } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 // Calendar and Meetings: the Admin stands in for the organisers (events,
 // meetings, minutes) when they are absent
-export type AdminTab = "overview" | "members" | "activity" | "policies" | "calendar" | "meetings"
+export type AdminTab =
+  | "overview"
+  | "members"
+  | "activity"
+  | "policies"
+  | "calendar"
+  | "meetings"
+  | "organization";
 
 const tabTitles: Record<AdminTab, string> = {
   overview: "Overview",
-  members: "Members",
+  members: "User Management",
   activity: "Activity Log",
   policies: "Policies",
   calendar: "Calendar",
   meetings: "Meetings",
-}
+  organization: "Organization",
+};
 
 /** Map URL segment to tab id */
 const segmentToTab: Record<string, AdminTab> = {
@@ -37,7 +51,8 @@ const segmentToTab: Record<string, AdminTab> = {
   policies: "policies",
   calendar: "calendar",
   meetings: "meetings",
-}
+  organization: "organization",
+};
 
 /** Map tab id to URL path */
 const tabToPath: Record<AdminTab, string> = {
@@ -47,63 +62,66 @@ const tabToPath: Record<AdminTab, string> = {
   policies: "/admin/policies",
   calendar: "/admin/calendar",
   meetings: "/admin/meetings",
-}
+  organization: "/admin/organization",
+};
 
-export function AdminDashboard({
-  onLogout,
-}: {
-  onLogout: () => void
-}) {
-  const [location, navigate] = useLocation()
+export function AdminDashboard({ onLogout }: { onLogout: () => void }) {
+  const [location, navigate] = useLocation();
 
   // Derive the active tab from the current URL
   const activeTab: AdminTab = useMemo(() => {
-    const segment = location.replace(/^\/admin\/?/, "").split("/")[0] || ""
-    return segmentToTab[segment] ?? "overview"
-  }, [location])
+    const segment = location.replace(/^\/admin\/?/, "").split("/")[0] || "";
+    return segmentToTab[segment] ?? "overview";
+  }, [location]);
 
   const handleTabChange = (tab: AdminTab) => {
-    navigate(tabToPath[tab])
-    setSidebarOpen(false)
-  }
+    navigate(tabToPath[tab]);
+    setSidebarOpen(false);
+  };
 
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const renderContent = () => {
     switch (activeTab) {
       case "overview":
-        return <OverviewTab />
+        return <OverviewTab />;
       case "members":
-        return <MembersTab />
+        return <MembersTab />;
       case "activity":
-        return <ActivityTab />
+        return <ActivityTab />;
       case "policies":
-        return <PoliciesTab />
+        return <PoliciesTab />;
       case "calendar":
-        return <CalendarTab />
+        return <CalendarTab />;
       case "meetings":
-        return <MeetingsTab />
+        return <MeetingsTab />;
+      case "organization":
+        return <OrganizationTab />;
     }
-  }
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
-        <div className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden" onClick={() => setSidebarOpen(false)} />
+        <div
+          className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
       )}
 
       {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 lg:static lg:translate-x-0 ${sidebarOpen ? "translate-x-0" : "-translate-x-full"
-          }`}
+        className={`fixed inset-y-0 left-0 z-50 transform transition-transform duration-200 lg:static lg:translate-x-0 ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
       >
         <AdminSidebar
           activeTab={activeTab}
           onTabChange={handleTabChange}
           collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed((prev) => !prev)}
+          onToggleCollapse={() => setSidebarCollapsed(prev => !prev)}
         />
       </div>
 
@@ -112,10 +130,18 @@ export function AdminDashboard({
         {/* Top bar */}
         <header className="flex h-14 shrink-0 items-center justify-between border-b bg-card px-4 lg:px-6">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="h-9 w-9 lg:hidden" onClick={() => setSidebarOpen(true)} aria-label={t("Open menu")}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 lg:hidden"
+              onClick={() => setSidebarOpen(true)}
+              aria-label={t("Open menu")}
+            >
               <Menu className="h-5 w-5" />
             </Button>
-            <h2 className="text-sm font-semibold text-foreground">{t(tabTitles[activeTab])}</h2>
+            <h2 className="text-sm font-semibold text-foreground">
+              {t(tabTitles[activeTab])}
+            </h2>
           </div>
           <div className="flex items-center gap-1">
             <NotificationPanel />
@@ -147,5 +173,5 @@ export function AdminDashboard({
         </div>
       </main>
     </div>
-  )
+  );
 }

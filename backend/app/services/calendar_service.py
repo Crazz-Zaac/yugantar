@@ -707,9 +707,12 @@ class CalendarService:
         for u in audience(session, event):
             if not u.email:
                 continue
-            subject, body = i18n.render_email(key, u.preferred_language, u.first_name, values)
+            subject, title, message = i18n.render_email(key, u.preferred_language, u.first_name, values)
             try:
-                result = send_generic_email([NameEmail(name=u.first_name, email=u.email)], subject, body)
+                result = send_generic_email(
+                    [NameEmail(name=u.first_name, email=u.email)],
+                    subject, title, message, u.first_name, u.preferred_language,
+                )
                 if asyncio.iscoroutine(result):
                     asyncio.run(result)
             except Exception:  # noqa: BLE001 - a failed email must not stop the other reminders

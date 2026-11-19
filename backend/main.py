@@ -18,6 +18,7 @@ from app.api.v1.endpoints import (
     report,
     expense,
     minutes,
+    organization,
 )
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -73,5 +74,6 @@ app.include_router(calendar.router, prefix="/api/v1")
 app.include_router(report.router, prefix="/api/v1")
 app.include_router(expense.router, prefix="/api/v1")
 app.include_router(minutes.router, prefix="/api/v1")
+app.include_router(organization.router, prefix="/api/v1")
 
 # app.dependency_overrides[get_session] = get_session

@@ -18,7 +18,7 @@ from sqlmodel import Session
 from app import i18n
 from app.models.notification_model import Notification, NotificationType
 from app.models.user_model import User
-from app.services.email_notify import send_generic_email
+from app.services.email_notify import send_generic_email, signer_for
 
 
 def _jsonable(value):
@@ -49,6 +49,7 @@ def notify(
     """Notify `users` with catalogue message `key` (see app/i18n.py)."""
     values = {k: _jsonable(v) for k, v in args.items()}
     title_en, message_en = i18n.render(key, "en", values)
+    signer = signer_for(session, ntype)  # the office bearer this notification is from
     for user in users:
         if user is None:
             continue
@@ -67,9 +68,11 @@ def notify(
                 )
             )
         if send_email and background_tasks is not None and user.email:
-            subject, body = i18n.render_email(key, user.preferred_language, user.first_name, values)
+            subject, title, message = i18n.render_email(key, user.preferred_language, user.first_name, values)
             background_tasks.add_task(
-                send_generic_email, [NameEmail(name=user.first_name, email=user.email)], subject, body
+                send_generic_email,
+                [NameEmail(name=user.first_name, email=user.email)],
+                subject, title, message, user.first_name, user.preferred_language, signer,
             )
     if commit:
         session.commit()

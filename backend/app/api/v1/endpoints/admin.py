@@ -182,12 +182,14 @@ async def approve_user(
     session.commit()
     session.refresh(user)
 
-    subject, body = i18n.render_email(
+    subject, title, message = i18n.render_email(
         "membership_approved" if user.is_verified else "membership_approved_verify",
         user.preferred_language, user.first_name,
     )
     background_tasks.add_task(
-        send_generic_email, [NameEmail(name=user.first_name, email=user.email)], subject, body
+        send_generic_email,
+        [NameEmail(name=user.first_name, email=user.email)],
+        subject, title, message, user.first_name, user.preferred_language,
     )
     return user
 
@@ -213,6 +215,8 @@ async def reject_registration(
     session.delete(user)
     session.commit()
     revoke_all_refresh_tokens(user_id)
-    subject, body = i18n.render_email("registration_rejected", lang, first_name)
-    background_tasks.add_task(send_generic_email, [NameEmail(name=first_name, email=email)], subject, body)
+    subject, title, message = i18n.render_email("registration_rejected", lang, first_name)
+    background_tasks.add_task(
+        send_generic_email, [NameEmail(name=first_name, email=email)], subject, title, message, first_name, lang
+    )
     return None

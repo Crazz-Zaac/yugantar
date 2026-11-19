@@ -413,12 +413,6 @@ MESSAGES.update({
 })
 
 
-EMAIL_WRAPPER = {
-    "en": "Hello {first_name},\n\n{message}\n\nPlease log in to the Yugantar portal for details.\n\n"
-          "Best regards,\nYugantar System",
-    "ne": "नमस्ते {first_name},\n\n{message}\n\nविस्तृत जानकारीका लागि कृपया युगान्तर पोर्टलमा लगइन गर्नुहोस्।\n\n"
-          "शुभकामना सहित,\nयुगान्तर प्रणाली",
-}
 EMAIL_SUBJECT = {"en": "{title} — Yugantar", "ne": "{title} — युगान्तर"}
 
 
@@ -430,14 +424,15 @@ def render(key: str, lang: str, args: Optional[dict] = None) -> tuple[str, str]:
     return entry["title"][lang].format(**values), entry["message"][lang].format(**values)
 
 
-def render_email(key: str, lang: str, first_name: str, args: Optional[dict] = None) -> tuple[str, str]:
-    """(subject, body) of the plain-text email for a catalogue key."""
+def render_email(
+    key: str, lang: str, first_name: str = "", args: Optional[dict] = None
+) -> tuple[str, str, str]:
+    """(subject, title, message) for a catalogue key. The email layer
+    (services/email_notify.py) wraps these in the branded HTML template, so
+    the greeting and signature are added there, not here."""
     title, message = render(key, lang, args)
     lang = normalize_lang(lang)
-    return (
-        EMAIL_SUBJECT[lang].format(title=title),
-        EMAIL_WRAPPER[lang].format(first_name=first_name, message=message),
-    )
+    return EMAIL_SUBJECT[lang].format(title=title), title, message
 
 
 def both(en: str, ne: str) -> dict:
