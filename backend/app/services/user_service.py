@@ -151,11 +151,30 @@ class UserService:
         session.refresh(user)
         return user
 
-    def admin_delete_user(self, session: Session, user_id: uuid.UUID) -> bool:
-        """Admin delete of user."""
+    def admin_delete_user(self, session: Session, user_id: uuid.UUID) -> str:
+        """Admin delete of a user.
+
+        Returns "not_found", "has_records" (the member has financial records —
+        loans, deposits, fines, receipts or signatures — so the account is kept
+        and should be suspended instead), or "deleted".
+        """
+        from sqlalchemy.exc import IntegrityError
+        from sqlmodel import delete
+
+        from app.models.notification_model import Notification
+
         user = self.get_user_by_id(session, user_id)
         if not user:
-            return False
-        session.delete(user)
-        session.commit()
-        return True
+            return "not_found"
+        # The member's own notifications have no record value and aren't a DB
+        # foreign key; clear them so they don't linger pointing at a gone user.
+        session.exec(delete(Notification).where(Notification.user_id == user_id))
+        try:
+            session.delete(user)
+            session.commit()
+            return "deleted"
+        except IntegrityError:
+            # A foreign key (deposit, loan, fine, receipt, signature…) still
+            # references this member: keep the record intact.
+            session.rollback()
+            return "has_records"

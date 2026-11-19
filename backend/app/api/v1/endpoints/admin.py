@@ -115,11 +115,17 @@ async def delete_user_as_admin(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Admin users cannot delete themselves",
         )
-    success = user_service.admin_delete_user(session=session, user_id=user_id)
-    if not success:
+    result = user_service.admin_delete_user(session=session, user_id=user_id)
+    if result == "not_found":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User not found",
+        )
+    if result == "has_records":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This member has records in the system (loans, deposits, signatures). "
+            "Suspend the account instead to keep the record intact.",
         )
     revoke_all_refresh_tokens(user_id)
     return None

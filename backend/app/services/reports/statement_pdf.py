@@ -705,7 +705,8 @@ def _day_d(d) -> str:
 # Approval and notes
 # ---------------------------------------------------------------------------
 def _approval_and_notes(pdf: FPDF, kinds: Iterable[str], reference: str, prepared_by: str, generated_at: datetime,
-                        number: str = "", outline: bool = False):
+                        number: str = "", outline: bool = False,
+                        checked_by: str = "Treasurer", approved_by: str = "President"):
     basis, limitations = [], []
     for k in kinds:
         for note in NOTES[k][0]:
@@ -724,8 +725,8 @@ def _approval_and_notes(pdf: FPDF, kinds: Iterable[str], reference: str, prepare
     gap = 6
     w = (pdf.epw - 2 * gap) / 3
     y = pdf.get_y()
-    for i, (role, name) in enumerate((("Prepared by", prepared_by), ("Checked by", "Treasurer"),
-                                     ("Approved by", "President"))):
+    for i, (role, name) in enumerate((("Prepared by", prepared_by), ("Checked by", checked_by),
+                                     ("Approved by", approved_by))):
         x = pdf.l_margin + i * (w + gap)
         pdf.set_draw_color(*RULE)
         pdf.set_fill_color(*ZEBRA)
@@ -791,7 +792,7 @@ def _title_block(pdf: FPDF, kind: str, statement: MonthlyStatement, prepared_by:
 
 
 def build_single_pdf(statement: MonthlyStatement, kind: str, reference: str, prepared_by: str,
-                     generated_at: datetime) -> bytes:
+                     generated_at: datetime, checked_by: str = "Treasurer", approved_by: str = "President") -> bytes:
     pdf = _new_doc(kind, reference, generated_at, "P" if kind == FINANCIAL_POSITION else "L")
     pdf.set_title(_latin1(f"{TITLES[kind]}, {period_text(statement)} - {reference}"))
     pdf.add_page()
@@ -800,7 +801,8 @@ def build_single_pdf(statement: MonthlyStatement, kind: str, reference: str, pre
         _write_position(pdf, statement, heading=False)
     else:
         _write_monthly(pdf, statement, kind, heading=False)
-    _approval_and_notes(pdf, (kind,), reference, prepared_by, generated_at)
+    _approval_and_notes(pdf, (kind,), reference, prepared_by, generated_at,
+                        checked_by=checked_by, approved_by=approved_by)
     pdf.alias_nb_pages()
     return bytes(pdf.output())
 
@@ -922,7 +924,8 @@ def _render_contents(pdf: FPDF, outline):
         pdf.line(pdf.l_margin, pdf.get_y(), pdf.l_margin + width, pdf.get_y())
 
 
-def build_complete_pdf(statement: MonthlyStatement, reference: str, prepared_by: str, generated_at: datetime) -> bytes:
+def build_complete_pdf(statement: MonthlyStatement, reference: str, prepared_by: str, generated_at: datetime,
+                       checked_by: str = "Treasurer", approved_by: str = "President") -> bytes:
     """Executive summary, then the three reports, then one approval."""
     pdf = _new_doc(COMPLETE_REPORT, reference, generated_at, "L")
     pdf.cover = True
@@ -941,15 +944,16 @@ def build_complete_pdf(statement: MonthlyStatement, reference: str, prepared_by:
     _write_expenses(pdf, statement, "4. ", outline=True)
     pdf.add_page()  # approval and all notes together on their own page
     _approval_and_notes(pdf, (FINANCIAL_POSITION, FINANCIAL_STATEMENT, ACCRUAL_REPORT), reference, prepared_by,
-                        generated_at, "5. ", outline=True)
+                        generated_at, "5. ", outline=True, checked_by=checked_by, approved_by=approved_by)
     pdf.alias_nb_pages()
     return bytes(pdf.output())
 
 
 def build_report_pdf(
-    statement: MonthlyStatement, kind: str, reference: str, prepared_by: str, generated_at: datetime
+    statement: MonthlyStatement, kind: str, reference: str, prepared_by: str, generated_at: datetime,
+    checked_by: str = "Treasurer", approved_by: str = "President"
 ) -> bytes:
     if kind == COMPLETE_REPORT:
-        return build_complete_pdf(statement, reference, prepared_by, generated_at)
-    return build_single_pdf(statement, kind, reference, prepared_by, generated_at)
+        return build_complete_pdf(statement, reference, prepared_by, generated_at, checked_by, approved_by)
+    return build_single_pdf(statement, kind, reference, prepared_by, generated_at, checked_by, approved_by)
 

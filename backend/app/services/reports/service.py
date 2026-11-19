@@ -19,7 +19,7 @@ from sqlmodel import Session, select
 
 from app.core.document_storage import document_storage
 from app.models.report_model import GeneratedReport
-from app.models.user_model import User
+from app.models.user_model import CooperativeRole, User
 from app.services.duties import is_active_member, name_with_role
 from app.services.reports.monthly_statement import MonthlyStatement, build_monthly_statement
 from app.services.reports.statement_pdf import (
@@ -62,6 +62,18 @@ def next_reference(session: Session, kind: str, when: datetime) -> str:
     return f"{prefix}{seq:04d}"
 
 
+def _office_holder_name(session: Session, role_value: str, fallback: str) -> str:
+    """The name of the member who holds `role_value`, else the role label."""
+    holder = next(
+        (u for u in session.exec(select(User)).all()
+         if is_active_member(u) and role_value in (u.cooperative_roles or [])),
+        None,
+    )
+    if holder is None:
+        return fallback
+    return f"{holder.first_name} {holder.last_name}".strip() or fallback
+
+
 class ReportService:
     def preview(self, session: Session, user: User, period_from: str, period_to: str) -> MonthlyStatement:
         require_member(user)
@@ -73,11 +85,15 @@ class ReportService:
         now = datetime.now(timezone.utc)
         statement = build_monthly_statement(session, period_from, period_to, now)
         prepared_by = name_with_role(user) or f"{user.first_name} {user.last_name}".strip()
+        # The Treasurer checks and the President approves the report — name them
+        # on the sign-off, falling back to the role label when the office is vacant.
+        checked_by = _office_holder_name(session, CooperativeRole.TREASURER.value, "Treasurer")
+        approved_by = _office_holder_name(session, CooperativeRole.PRESIDENT.value, "President")
         # Two members generating at the same moment could pick the same next
         # number: the unique reference makes one fail; it then takes the next.
         for attempt in range(3):
             reference = next_reference(session, kind, now)
-            data = build_report_pdf(statement, kind, reference, prepared_by, now)
+            data = build_report_pdf(statement, kind, reference, prepared_by, now, checked_by, approved_by)
             key, digest = document_storage.save(data, prefix="reports")
             report = GeneratedReport(
                 kind=kind,
