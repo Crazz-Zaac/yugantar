@@ -472,7 +472,16 @@ export function LoansTab() {
             <>
               {/* One policy choice, shared by the calculator and the application form */}
               <section className="flex flex-col gap-2" aria-label={t("Loan policy")}>
-                <h3 className="text-sm font-semibold">{t("1. Choose a loan policy")}</h3>
+                <div className="flex flex-col gap-0.5">
+                  <h3 className="text-sm font-semibold">
+                    {policies.length > 1 ? t("Choose a loan policy") : t("Loan policy")}
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {policies.length > 1
+                      ? t("The latest policy is selected by default — pick another if it suits you better.")
+                      : t("Your cooperative's current loan terms.")}
+                  </p>
+                </div>
                 <div className="grid gap-3 sm:grid-cols-2" role="radiogroup">
                   {[...policies]
                     .sort((a, b) => new Date(b.effective_from).getTime() - new Date(a.effective_from).getTime())

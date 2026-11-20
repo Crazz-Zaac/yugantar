@@ -26,7 +26,10 @@ const ne: Record<string, string> = {
   "Password must contain an uppercase letter and a number.": "पासवर्डमा कम्तीमा एउटा ठूलो अक्षर (A-Z) र एउटा अङ्क हुनुपर्छ।",
   "(account disabled, not counted)": "(खाता निष्क्रिय, गणना गरिएन)",
   "(optional)": "(ऐच्छिक)",
-  "1. Choose a loan policy": "१. ऋण नीति छान्नुहोस्",
+  "Choose a loan policy": "ऋण नीति छान्नुहोस्",
+  "The latest policy is selected by default — pick another if it suits you better.":
+    "पछिल्लो नीति स्वतः छानिएको छ — अर्को उपयुक्त लागे त्यो रोज्नुहोस्।",
+  "Your cooperative's current loan terms.": "तपाईंको सहकारीको हालको ऋण सर्तहरू।",
   "1. Open the link to verify your email address.": "१. इमेल ठेगाना प्रमाणित गर्न लिङ्क खोल्नुहोस्।",
   "2. An administrator then reviews and approves your registration.": "२. त्यसपछि एडमिनले तपाईंको दर्ता हेरेर स्वीकृत गर्नुहुन्छ।",
   "3. You'll get an email once your account is approved, and can then sign in.": "३. खाता स्वीकृत भएपछि तपाईंलाई इमेल आउँछ, र त्यसपछि लगइन गर्न सक्नुहुन्छ।",
