@@ -215,6 +215,7 @@ export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenS
   const [retireReason, setRetireReason] = useState("")
   const [retireNote, setRetireNote] = useState<Record<string, string>>({})
   const [retireBusy, setRetireBusy] = useState(false)
+  const [view, setView] = useState<"current" | "archived">("current")
   const refetchChanges = useCallback(async () => {
     try {
       const r = await apiClient.get("/policy-changes")
@@ -310,6 +311,31 @@ export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenS
 
   return (
     <div className="flex flex-col gap-8">
+      {/* Current vs archived */}
+      <div className="flex gap-1 self-start rounded-lg bg-muted p-1" role="tablist" aria-label={t("Policy view")}>
+        {(
+          [
+            ["current", t("Current")],
+            ["archived", t("Not adopted or ended")],
+          ] as const
+        ).map(([id, text]) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={view === id}
+            onClick={() => setView(id)}
+            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+              view === id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {text}
+            {id === "archived" && past.length > 0 && (
+              <span className="rounded-full bg-muted-foreground/20 px-1.5 text-[10px]">{n(past.length)}</span>
+            )}
+          </button>
+        ))}
+      </div>
       {/* Type filter */}
       <div className="flex gap-1 self-start rounded-lg bg-muted p-1" role="tablist" aria-label={t("Policy type")}>
         {(
@@ -335,6 +361,8 @@ export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenS
         ))}
       </div>
 
+      {view === "current" && (
+        <>
       {/* 1 ── Open for signing ─────────────────────────────── */}
       {open.length > 0 && (
         <section className="flex flex-col gap-3">
@@ -561,9 +589,18 @@ export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenS
         </section>
       )}
 
+        </>
+      )}
+
+      {view === "archived" && (
+        <>
+      {past.length === 0 &&
+        changeRequests.filter((r) => r.status !== "pending").length === 0 && (
+          <p className="py-10 text-center text-sm text-muted-foreground">{t("Nothing archived yet.")}</p>
+        )}
       {/* 4 ── Not adopted / ended ──────────────────────────── */}
       {past.length > 0 && (
-        <Collapsible>
+        <Collapsible defaultOpen>
           <CollapsibleTrigger className="group flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground">
             <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
             {t("Not adopted or ended")}<span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">{n(past.length)}</span>
@@ -606,7 +643,7 @@ export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenS
       )}
 
       {canSeeChanges && changeRequests.filter((r) => r.status !== "pending").length > 0 && (
-        <Collapsible>
+        <Collapsible defaultOpen>
           <CollapsibleTrigger className="group flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground">
             <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
             {t("Policy retirement log")}
@@ -640,6 +677,8 @@ export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenS
             </div>
           </CollapsibleContent>
         </Collapsible>
+      )}
+        </>
       )}
     </div>
   )
