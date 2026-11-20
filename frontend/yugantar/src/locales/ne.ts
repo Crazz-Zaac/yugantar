@@ -203,6 +203,7 @@ const ne: Record<string, string> = {
   "Deposit submitted in pending status. The Secretary has been notified for verification.": "जम्मा विचाराधीन स्थितिमा पेस भयो। प्रमाणीकरणका लागि सचिवलाई सूचना दिइएको छ।",
   "Deposit voucher": "जम्मा भौचर",
   "Deposit withdrawn. You can edit details and submit again.": "जम्मा फिर्ता लिइयो। विवरण सम्पादन गरी फेरि पेस गर्न सक्नुहुन्छ।",
+  "Deposit withdrawn.": "जम्मा फिर्ता लिइयो।",
   "Withdraw": "फिर्ता लिनुहोस्",
   "Editing your pending deposit. Adjust the values and resubmit.": "तपाईंको विचाराधीन जम्मा सम्पादन गर्दै। मान मिलाएर फेरि पेस गर्नुहोस्।",
   "Could not load the deposit for editing.": "सम्पादनका लागि जम्मा लोड गर्न सकिएन।",

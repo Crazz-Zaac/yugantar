@@ -650,9 +650,7 @@ export function DepositTab() {
       await apiClient.delete(`/deposits/deposit/${depositId}/me`)
       fetchMyDeposits()
       fetchHistoryDeposits()
-      setActiveTab("make")
-      setSubmitSuccess(false)
-      toast.success(t("Deposit withdrawn. You can edit details and submit again."))
+      toast.success(t("Deposit withdrawn."))
     } catch (err) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       toast.error(detail ?? t("Failed to withdraw deposit"))
