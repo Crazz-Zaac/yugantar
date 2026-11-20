@@ -113,6 +113,20 @@ class SmartDepositCreate(SQLModel):
     allocations: List[SmartDepositAllocation]
 
 
+class SmartDepositEditState(SQLModel):
+    """Full editable state of a pending smart deposit, used to re-populate the
+    deposit form so the member can adjust and resubmit it."""
+
+    deposit_id: uuid.UUID
+    policy_id: Optional[uuid.UUID] = None
+    ocr_amount: Decimal
+    ocr_charge: Decimal = Decimal(0)
+    ocr_date: datetime
+    ocr_reference: Optional[str] = None
+    receipt_id: Optional[uuid.UUID] = None
+    allocations: List[SmartDepositAllocation]
+
+
 class SmartDepositResponse(SQLModel):
     """Returned after a successful smart deposit."""
 

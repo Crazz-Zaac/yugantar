@@ -15,6 +15,7 @@ from app.models.loan_model import Loan, LoanStatus
 from app.models.loan_payment import LoanPayment, LoanPaymentType, LoanPaymentStatus
 from app.models.mixins.money import MoneyMixin
 from app.services.receipt_service import ReceiptService
+from app.models.receipt_model import Receipt
 from app.services.loan_service import service_charge_due_paisa
 from app.services.policy_lifecycle import require_current_deposit_policy
 from app.utils.deposit_date_utils import (
@@ -32,6 +33,7 @@ from app.schemas.smart_deposit_schema import (
     SmartDepositCreate,
     SmartDepositAllocation,
     SmartDepositResponse,
+    SmartDepositEditState,
 )
 
 
@@ -291,3 +293,110 @@ class SmartDepositService:
             total_allocated_rupees=total_allocated,
             message="Deposit submitted; awaiting treasurer verification",
         )
+
+    def _require_editable(
+        self, session: Session, deposit_id: uuid.UUID, user_id: uuid.UUID
+    ) -> Deposit:
+        deposit = session.get(Deposit, deposit_id)
+        if not deposit or deposit.user_id != user_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Deposit not found")
+        if deposit.verification_status != DepositVerificationStatus.PENDING:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "Only pending deposits can be edited",
+            )
+        return deposit
+
+    def get_edit_state(
+        self, session: Session, deposit_id: uuid.UUID, user_id: uuid.UUID
+    ) -> SmartDepositEditState:
+        """Reconstruct a pending deposit's full split so the form can be
+        pre-populated for editing. Allocations live across the Deposit itself
+        (regular/advance), a linked Fine, and linked LoanPayments."""
+        deposit = self._require_editable(session, deposit_id, user_id)
+
+        allocations: list[SmartDepositAllocation] = []
+        regular = Decimal(deposit.regular_paisa or 0) / 100
+        advance = Decimal(deposit.advance_paisa or 0) / 100
+        if regular > 0:
+            allocations.append(
+                SmartDepositAllocation(category=SplitCategory.DEPOSIT, amount_rupees=regular)
+            )
+        if advance > 0:
+            allocations.append(
+                SmartDepositAllocation(
+                    category=SplitCategory.ADVANCE_DEPOSIT, amount_rupees=advance
+                )
+            )
+
+        fine = session.exec(select(Fine).where(Fine.deposit_id == deposit.id)).first()
+        if fine and fine.amount_paisa:
+            allocations.append(
+                SmartDepositAllocation(
+                    category=SplitCategory.FINE, amount_rupees=Decimal(fine.amount_paisa) / 100
+                )
+            )
+
+        # LoanPayment has no RENEWAL type (renewal is stored as PRINCIPAL), so a
+        # principal payment comes back as loan_principal; the member can switch
+        # it to renewal on the row if needed.
+        cat_by_type = {
+            LoanPaymentType.INTEREST: SplitCategory.LOAN_INTEREST,
+            LoanPaymentType.SERVICE_CHARGE: SplitCategory.SERVICE_CHARGE,
+            LoanPaymentType.PRINCIPAL: SplitCategory.LOAN_PRINCIPAL,
+        }
+        payments = session.exec(
+            select(LoanPayment).where(LoanPayment.deposit_id == deposit.id)
+        ).all()
+        for p in payments:
+            allocations.append(
+                SmartDepositAllocation(
+                    category=cat_by_type.get(p.payment_type, SplitCategory.LOAN_PRINCIPAL),
+                    amount_rupees=Decimal(p.amount_paisa) / 100,
+                    loan_id=p.loan_id,
+                )
+            )
+
+        receipt = (
+            session.get(Receipt, deposit.receipt_id) if deposit.receipt_id else None
+        )
+        ocr_charge = (
+            Decimal(receipt.ocr_charge_paisa) / 100
+            if receipt and receipt.ocr_charge_paisa
+            else Decimal(0)
+        )
+
+        return SmartDepositEditState(
+            deposit_id=deposit.id,
+            policy_id=deposit.policy_id,
+            ocr_amount=Decimal(deposit.amount_paisa) / 100,
+            ocr_charge=ocr_charge,
+            ocr_date=deposit.deposited_date,
+            ocr_reference=receipt.reference if receipt else None,
+            receipt_id=deposit.receipt_id,
+            allocations=allocations,
+        )
+
+    def replace(
+        self,
+        session: Session,
+        deposit_id: uuid.UUID,
+        req: SmartDepositCreate,
+        user_id: uuid.UUID,
+    ) -> SmartDepositResponse:
+        """Edit a pending deposit by replacing it: delete the old deposit and
+        its linked fine + loan payments (which frees the receipt), then run the
+        normal create path with the new split. Everything stays in one
+        transaction, so a validation error leaves the original deposit intact."""
+        deposit = self._require_editable(session, deposit_id, user_id)
+
+        for p in session.exec(
+            select(LoanPayment).where(LoanPayment.deposit_id == deposit.id)
+        ).all():
+            session.delete(p)
+        for f in session.exec(select(Fine).where(Fine.deposit_id == deposit.id)).all():
+            session.delete(f)
+        session.delete(deposit)
+        session.flush()
+
+        return self.execute(session, req, user_id)

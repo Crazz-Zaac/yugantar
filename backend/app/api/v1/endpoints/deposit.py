@@ -25,6 +25,7 @@ from app.schemas.smart_deposit_schema import (
     DepositPreviewResponse,
     SmartDepositCreate,
     SmartDepositResponse,
+    SmartDepositEditState,
 )
 from app.api.dependencies.auth import get_current_active_user
 from app.models.user_model import User
@@ -337,6 +338,55 @@ def create_smart_deposit(
     """
     result = smart_deposit_service.execute(
         session=session,
+        req=req,
+        user_id=current_user.id,
+    )
+
+    if result.deposit_id:
+        _notify_treasurers_new_deposit(
+            session=session,
+            background_tasks=background_tasks,
+            depositor=current_user,
+            amount_rupees=f"{result.deposit_amount_paisa / 100:,.2f}",
+        )
+
+    return result
+
+
+@router.get(
+    "/deposit/{deposit_id}/smart-edit",
+    response_model=SmartDepositEditState,
+)
+def get_smart_deposit_edit_state(
+    deposit_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session),
+):
+    """Return a pending deposit's full split so the form can be pre-filled for
+    editing. Only the owner may read it, and only while it is pending."""
+    return smart_deposit_service.get_edit_state(
+        session=session,
+        deposit_id=deposit_id,
+        user_id=current_user.id,
+    )
+
+
+@router.put(
+    "/deposit/{deposit_id}/smart",
+    response_model=SmartDepositResponse,
+)
+def update_smart_deposit(
+    deposit_id: UUID,
+    req: SmartDepositCreate,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_active_user),
+    session: Session = Depends(get_session),
+):
+    """Edit a pending deposit by replacing it with a new split (same receipt).
+    The treasurer is re-notified since the amounts may have changed."""
+    result = smart_deposit_service.replace(
+        session=session,
+        deposit_id=deposit_id,
         req=req,
         user_id=current_user.id,
     )

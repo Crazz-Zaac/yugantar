@@ -17,6 +17,7 @@ import {
   Banknote,
   Receipt,
   Plus,
+  Pencil,
   ShieldCheck,
   Clock,
   Users,
@@ -266,6 +267,10 @@ export function DepositTab() {
   const [ocrDetected, setOcrDetected] = useState<OcrResult | null>(null)
   // Stored voucher image (kept 15 days for treasurer review)
   const [receiptId, setReceiptId] = useState<string | null>(null)
+  const [editingDepositId, setEditingDepositId] = useState<string | null>(null)
+  // When loading a pending deposit to edit, keep the loaded split instead of
+  // letting the next preview fetch re-default the allocations.
+  const preserveAllocationsRef = useRef(false)
   const [reviewReceiptId, setReviewReceiptId] = useState<string | null>(null)
   const [ocrError, setOcrError] = useState<string | null>(null)
 
@@ -417,8 +422,13 @@ export function DepositTab() {
         })),
       }
       setPreview(normalized)
-      // Start from a sensible split the member can tweak, not a blank slate.
-      setAllocations(buildDefaultAllocations(normalized))
+      if (preserveAllocationsRef.current) {
+        // Keep the split we loaded for editing instead of re-defaulting it.
+        preserveAllocationsRef.current = false
+      } else {
+        // Start from a sensible split the member can tweak, not a blank slate.
+        setAllocations(buildDefaultAllocations(normalized))
+      }
     } catch (err: unknown) {
       setPreviewError(err instanceof Error ? err.message : t("Failed to compute deposit preview"))
     } finally {
@@ -571,6 +581,8 @@ export function DepositTab() {
     setAllocations([])
     setSubmitError(null)
     setSubmitSuccess(false)
+    setEditingDepositId(null)
+    preserveAllocationsRef.current = false
   }
 
   const handleSubmit = async () => {
@@ -594,7 +606,12 @@ export function DepositTab() {
         })),
       }
 
-      await apiClient.post("/deposits/smart", payload)
+      if (editingDepositId) {
+        await apiClient.put(`/deposits/deposit/${editingDepositId}/smart`, payload)
+      } else {
+        await apiClient.post("/deposits/smart", payload)
+      }
+      setEditingDepositId(null)
       setSubmitSuccess(true)
       fetchMyDeposits()
       fetchHistoryDeposits()
@@ -645,6 +662,42 @@ export function DepositTab() {
     }
   }
 
+  const handleEditDeposit = async (depositId: string) => {
+    setActionLoadingId(depositId)
+    setActionType(null)
+    try {
+      const res = await apiClient.get(`/deposits/deposit/${depositId}/smart-edit`)
+      const d = res.data
+      setSelectedPolicyId(d.policy_id ?? "")
+      setOcrResult({
+        amount: d.ocr_amount != null ? Number(d.ocr_amount) : null,
+        charge: d.ocr_charge != null ? Number(d.ocr_charge) : null,
+        date: d.ocr_date ?? null,
+        reference: d.ocr_reference ?? null,
+      })
+      setOcrDetected(null)
+      setReceiptId(d.receipt_id ?? null)
+      const loaded = (d.allocations ?? []).map((a: { category: SplitCategory; amount_rupees: number | string; loan_id: string | null }) => ({
+        category: a.category,
+        label: categoryLabel(a.category),
+        amount_rupees: Number(a.amount_rupees),
+        loan_id: a.loan_id ?? null,
+      }))
+      preserveAllocationsRef.current = true
+      setAllocations(loaded)
+      setEditingDepositId(depositId)
+      setSubmitSuccess(false)
+      setSubmitError(null)
+      setActiveTab("make")
+      toast.success(t("Editing your pending deposit. Adjust the values and resubmit."))
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      toast.error(detail ?? t("Could not load the deposit for editing."))
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
   const allocTotal = allocations.reduce((sum, a) => sum + a.amount_rupees, 0)
   const netAmount = preview?.net_amount ?? 0
   const allocationDiff = netAmount - allocTotal
@@ -683,15 +736,26 @@ export function DepositTab() {
               {depositStatusBadge(dep.verification_status)}
             </div>
             {showWithdrawAction && dep.verification_status === "pending" && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 self-start text-xs"
-                onClick={() => handleWithdrawDeposit(dep.id)}
-                disabled={actionLoadingId === dep.id}
-              >
-                {actionLoadingId === dep.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Ban className="mr-1 h-3.5 w-3.5" />}
-                {t("Withdraw & Edit")}</Button>
+              <div className="flex gap-2 self-start">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs"
+                  onClick={() => handleEditDeposit(dep.id)}
+                  disabled={actionLoadingId === dep.id}
+                >
+                  {actionLoadingId === dep.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Pencil className="mr-1 h-3.5 w-3.5" />}
+                  {t("Edit")}</Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 text-xs text-destructive"
+                  onClick={() => handleWithdrawDeposit(dep.id)}
+                  disabled={actionLoadingId === dep.id}
+                >
+                  <Ban className="mr-1 h-3.5 w-3.5" />
+                  {t("Withdraw")}</Button>
+              </div>
             )}
           </li>
         ))
@@ -736,19 +800,30 @@ export function DepositTab() {
                 {showWithdrawAction && (
                   <TableCell className="text-right">
                     {dep.verification_status === "pending" ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs"
-                        onClick={() => handleWithdrawDeposit(dep.id)}
-                        disabled={actionLoadingId === dep.id}
-                      >
-                        {actionLoadingId === dep.id ? (
-                          <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
-                        ) : (
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs"
+                          onClick={() => handleEditDeposit(dep.id)}
+                          disabled={actionLoadingId === dep.id}
+                        >
+                          {actionLoadingId === dep.id ? (
+                            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Pencil className="mr-1 h-3.5 w-3.5" />
+                          )}
+                          {t("Edit")}</Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs text-destructive"
+                          onClick={() => handleWithdrawDeposit(dep.id)}
+                          disabled={actionLoadingId === dep.id}
+                        >
                           <Ban className="mr-1 h-3.5 w-3.5" />
-                        )}
-                        {t("Withdraw & Edit")}</Button>
+                          {t("Withdraw")}</Button>
+                      </div>
                     ) : (
                       <span className="text-xs text-muted-foreground">—</span>
                     )}
@@ -793,6 +868,14 @@ export function DepositTab() {
         </TabsList>
 
         <TabsContent value="make" className="mt-4 flex flex-col gap-6">
+          {editingDepositId && (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+              <p className="text-sm text-primary">
+                {t("You're editing a pending deposit — submitting will replace it.")}</p>
+              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={clearFile}>
+                {t("Cancel edit")}</Button>
+            </div>
+          )}
           {thisPeriod && (
             <div
               className={`flex flex-wrap items-center gap-3 rounded-xl border p-4 ${
