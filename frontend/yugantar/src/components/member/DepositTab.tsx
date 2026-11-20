@@ -280,7 +280,7 @@ export function DepositTab() {
   // This period's deposit: is it due, and has it been paid? (same source as Home)
   const [thisPeriod, setThisPeriod] = useState<{ due_date: string; amount: number | string; paid: boolean; days_left: number } | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [submittedTick, setSubmittedTick] = useState(0)
 
   const [myDeposits, setMyDeposits] = useState<DepositItem[]>([])
   const [communityDeposits, setCommunityDeposits] = useState<DepositItem[]>([])
@@ -324,7 +324,7 @@ export function DepositTab() {
     return () => {
       cancelled = true
     }
-  }, [submitSuccess])
+  }, [submittedTick])
 
   const processOcr = async (file: File) => {
     setOcrLoading(true)
@@ -579,7 +579,6 @@ export function DepositTab() {
     setPreview(null)
     setAllocations([])
     setSubmitError(null)
-    setSubmitSuccess(false)
     setEditingDepositId(null)
     preserveAllocationsRef.current = false
   }
@@ -609,15 +608,16 @@ export function DepositTab() {
       } else {
         await apiClient.post("/deposits/smart", payload)
       }
-      setEditingDepositId(null)
-      setSubmitSuccess(true)
       fetchMyDeposits()
       fetchHistoryDeposits()
       if (isDepositReviewer) fetchReviewDeposits()
-
-      setTimeout(() => {
-        clearFile()
-      }, 2500)
+      clearFile()
+      setSubmittedTick((n) => n + 1)
+      toast.success(
+        isTreasurer
+          ? t("Deposit submitted — the Secretary has been notified for verification.")
+          : t("Deposit submitted — the Treasurer has been notified for verification."),
+      )
     } catch (err) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setSubmitError(detail ?? (err instanceof Error ? err.message : t("Failed to submit deposit")))
@@ -683,7 +683,6 @@ export function DepositTab() {
       preserveAllocationsRef.current = true
       setAllocations(loaded)
       setEditingDepositId(depositId)
-      setSubmitSuccess(false)
       setSubmitError(null)
       setActiveTab("make")
       toast.success(t("Editing your pending deposit. Adjust the values and resubmit."))
@@ -1279,15 +1278,6 @@ export function DepositTab() {
                   </div>
                 )}
 
-                {submitSuccess && (
-                  <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                    <p className="text-sm font-medium text-emerald-700">
-                      {isTreasurer
-                        ? t("Deposit submitted in pending status. The Secretary has been notified for verification.")
-                        : t("Deposit submitted in pending status. Treasurer has been notified for verification.")}</p>
-                  </div>
-                )}
 
                 <Button className="h-10 w-full sm:w-auto sm:self-end" disabled={!canSubmit} onClick={handleSubmit}>
                   {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowRight className="mr-2 h-4 w-4" />}

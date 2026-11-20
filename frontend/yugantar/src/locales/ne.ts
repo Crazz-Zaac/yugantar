@@ -199,6 +199,8 @@ const ne: Record<string, string> = {
   "Deposit policy updated": "जम्मा नीति अद्यावधिक गरियो",
   "Deposit policy: {0}": "जम्मा नीति: {0}",
   "Deposit receipt": "जम्मा रसिद",
+  "Deposit submitted — the Treasurer has been notified for verification.": "जम्मा पेस भयो — प्रमाणीकरणका लागि कोषाध्यक्षलाई सूचना दिइएको छ।",
+  "Deposit submitted — the Secretary has been notified for verification.": "जम्मा पेस भयो — प्रमाणीकरणका लागि सचिवलाई सूचना दिइएको छ।",
   "Deposit submitted in pending status. Treasurer has been notified for verification.": "जम्मा विचाराधीन स्थितिमा पेस भयो। प्रमाणीकरणका लागि कोषाध्यक्षलाई सूचना दिइएको छ।",
   "Deposit submitted in pending status. The Secretary has been notified for verification.": "जम्मा विचाराधीन स्थितिमा पेस भयो। प्रमाणीकरणका लागि सचिवलाई सूचना दिइएको छ।",
   "Deposit voucher": "जम्मा भौचर",
