@@ -544,6 +544,7 @@ const ne: Record<string, string> = {
   "Preview PDF": "PDF पूर्वावलोकन",
   "Principal": "साँवा",
   "Processing voucher...": "भौचर प्रशोधन हुँदै...",
+  "Reading the voucher is taking longer than expected.": "भौचर पढ्न अपेक्षाभन्दा बढी समय लाग्दैछ।",
   "Profile": "प्रोफाइल",
   "Profile updated successfully!": "प्रोफाइल सफलतापूर्वक अद्यावधिक भयो!",
   "Proxy request sent. It takes effect once the President, Treasurer and Secretary authorise it.": "प्रतिनिधि अनुरोध पठाइयो। अध्यक्ष, कोषाध्यक्ष र सचिवले अनुमति दिएपछि यो लागू हुन्छ।",

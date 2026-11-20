@@ -186,7 +186,12 @@ function categoryLabel(category: SplitCategory): string {
   return t(map[category])
 }
 
-const OCR_POLL_INTERVAL = 2000
+// The OCR itself runs in well under a second, so poll briskly rather than
+// making the member wait out a slow tick. Give up after OCR_POLL_TIMEOUT_MS
+// (e.g. the worker is down or overwhelmed) and fall back to manual entry
+// instead of spinning forever.
+const OCR_POLL_INTERVAL = 500
+const OCR_POLL_TIMEOUT_MS = 45_000
 
 export function DepositTab() {
   const { user } = useAuth()
@@ -313,6 +318,7 @@ export function DepositTab() {
 
       const taskId = uploadRes.data.task_id
       setReceiptId(uploadRes.data.receipt_id ?? null)
+      const startedAt = Date.now()
       const poll = async (): Promise<OcrResult> => {
         const statusRes = await apiClient.get(`/v1/ocr/task-status/${taskId}`)
         const data = statusRes.data
@@ -323,6 +329,9 @@ export function DepositTab() {
         }
         if (data.status === "failed") {
           throw new Error(data.message || t("OCR processing failed"))
+        }
+        if (Date.now() - startedAt > OCR_POLL_TIMEOUT_MS) {
+          throw new Error(t("Reading the voucher is taking longer than expected."))
         }
         await new Promise((r) => setTimeout(r, OCR_POLL_INTERVAL))
         return poll()
