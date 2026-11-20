@@ -889,9 +889,9 @@ export function LoansTab() {
                     { value: "paid", label: "Paid" },
                   ],
                 }}
-                resultCount={communityLoading ? undefined : communityLoans.length}
+                resultCount={communityLoading && communityLoans.length === 0 ? undefined : communityLoans.length}
               />
-              {communityLoading ? (
+              {communityLoading && communityLoans.length === 0 ? (
                 <div className="flex items-center justify-center py-8 text-muted-foreground">
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {t(" Loading…")}</div>
               ) : communityLoans.length === 0 ? (
