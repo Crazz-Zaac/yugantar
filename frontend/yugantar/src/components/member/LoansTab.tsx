@@ -806,7 +806,7 @@ export function LoansTab() {
                       <CardTitle className="text-sm font-semibold">
                         {loan.purpose ?? t("Loan")} – {formatRs(loan.principal_rupees)}
                       </CardTitle>
-                      <CardDescription>{t("Applied {0}", formatDate(loan.created_at))}</CardDescription>
+                      <CardDescription>{t("Applied {0}", formatDateBoth(loan.created_at))}</CardDescription>
                     </div>
                     <StatusBadge status={loan.status} />
                   </div>
@@ -869,9 +869,9 @@ export function LoansTab() {
                   )}
 
                   <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                    <span>{t("Start: {0}", formatDate(loan.start_date))}</span>
-                    <span>{t("Maturity: {0}", formatDate(loan.maturity_date))}</span>
-                    {loan.disbursed_at && <span>{t("Disbursed: {0}", formatDate(loan.disbursed_at))}</span>}
+                    <span>{t("Start: {0}", formatDateBoth(loan.start_date))}</span>
+                    <span>{t("Maturity: {0}", formatDateBoth(loan.maturity_date))}</span>
+                    {loan.disbursed_at && <span>{t("Disbursed: {0}", formatDateBoth(loan.disbursed_at))}</span>}
                     {loan.approved_by && <span>{t("Approved by: {0}", loan.approved_by_name ?? t("an office bearer"))}</span>}
                   </div>
                 </CardContent>
@@ -1004,10 +1004,10 @@ export function LoansTab() {
                             {formatRs(loan.total_paid_rupees)}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {formatDate(loan.created_at)}
+                            {formatDateBoth(loan.created_at)}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {formatDate(loan.maturity_date)}
+                            {formatDateBoth(loan.maturity_date)}
                           </TableCell>
                           <TableCell>
                             <StatusBadge status={loan.status} />

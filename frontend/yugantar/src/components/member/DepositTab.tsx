@@ -753,9 +753,9 @@ export function DepositTab() {
                 <p className="font-nums text-sm font-semibold">{formatRsFromRupees(Number(dep.deposited_amount))}</p>
                 <p className="truncate text-xs text-muted-foreground">
                   {showUser && <>{dep.depositor_name ?? t("Member")} · </>}
-                  {formatDate(dep.deposited_date || dep.created_at)} · <span className="capitalize">{enumLabel(dep.deposit_type)}</span>
+                  {formatDateBoth(dep.deposited_date || dep.created_at)} · <span className="capitalize">{enumLabel(dep.deposit_type)}</span>
                 </p>
-                <p className="text-xs text-muted-foreground">{t("Due {0}", formatDate(dep.due_deposit_date))}</p>
+                <p className="text-xs text-muted-foreground">{t("Due {0}", formatDateBoth(dep.due_deposit_date))}</p>
               </div>
               {depositStatusBadge(dep.verification_status)}
             </div>
@@ -813,13 +813,13 @@ export function DepositTab() {
           ) : (
             rows.map((dep) => (
               <TableRow key={dep.id}>
-                <TableCell className="text-xs">{formatDate(dep.deposited_date || dep.created_at)}</TableCell>
+                <TableCell className="text-xs">{formatDateBoth(dep.deposited_date || dep.created_at)}</TableCell>
                 {showUser && (
                   <TableCell className="text-xs">{dep.depositor_name ?? `${dep.user_id.slice(0, 8)}…`}</TableCell>
                 )}
                 <TableCell className="text-xs font-medium">{formatRsFromRupees(Number(dep.deposited_amount))}</TableCell>
                 <TableCell className="text-xs capitalize">{enumLabel(dep.deposit_type)}</TableCell>
-                <TableCell className="text-xs">{formatDate(dep.due_deposit_date)}</TableCell>
+                <TableCell className="text-xs">{formatDateBoth(dep.due_deposit_date)}</TableCell>
                 <TableCell>{depositStatusBadge(dep.verification_status)}</TableCell>
                 {showWithdrawAction && (
                   <TableCell className="text-right">
