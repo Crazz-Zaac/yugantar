@@ -88,6 +88,15 @@ export function formatDate(value: string | null | undefined): string {
   return bs ? `${bs.year} ${bs.month} ${bs.day}` : dateFormat.format(d)
 }
 
+/** English AD and Nepali BS together: "11 Nov 2026 · २०८३ कार्तिक २५" */
+export function formatDateBoth(value: string | null | undefined): string {
+  const d = parseUtc(value)
+  if (!d) return "—"
+  const en = dateFormat.format(d)
+  const bs = bsParts(d)
+  return bs ? `${en} · ${bs.year} ${bs.month} ${bs.day}` : en
+}
+
 /** "11 Nov" (in NPT); Nepali: "कार्तिक २५" */
 export function formatShortDate(value: string | null | undefined): string {
   const d = parseUtc(value)

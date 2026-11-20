@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/dialog"
 import { apiClient } from "@/api/api"
 import { useSearch } from "wouter"
-import { formatDate, formatDateTime } from "@/lib/datetime"
+import { formatDate, formatDateBoth, formatDateTime } from "@/lib/datetime"
 import { downloadLoanAgreement } from "@/lib/download"
 import { GuaranteeRequests } from "./GuaranteeRequests"
 import { toast } from "sonner"
@@ -903,10 +903,12 @@ export function LoansTab() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="text-xs">{t("Member")}</TableHead>
+                        <TableHead className="text-xs">{t("Loanee")}</TableHead>
                         <TableHead className="text-right text-xs">{t("Amount")}</TableHead>
+                        <TableHead className="text-xs">{t("Loan issued date")}</TableHead>
                         <TableHead className="text-xs">{t("Maturity")}</TableHead>
                         <TableHead className="text-xs">{t("Status")}</TableHead>
+                        <TableHead className="text-xs">{t("Approved by")}</TableHead>
                         <TableHead className="text-xs">{t("Guarantor")}</TableHead>
                         <TableHead className="text-xs"><span className="sr-only">{t("Agreement")}</span></TableHead>
                       </TableRow>
@@ -918,12 +920,16 @@ export function LoansTab() {
                           <TableCell className="font-nums text-right text-sm font-medium">
                             {formatRs(loan.principal_rupees)}
                           </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {loan.disbursed_at ? formatDateBoth(loan.disbursed_at) : "—"}
+                          </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {formatDate(loan.maturity_date)}
                           </TableCell>
                           <TableCell>
                             <StatusBadge status={loan.status} />
                           </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{loan.approved_by_name ?? "—"}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">{loan.guarantor_name ?? "—"}</TableCell>
                           <TableCell className="text-right">
                             {loan.has_agreement &&

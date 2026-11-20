@@ -396,6 +396,8 @@ const ne: Record<string, string> = {
   "Loan principal": "ऋणको साँवा",
   "Loan rejected": "ऋण अस्वीकृत",
   "Loan renewal": "ऋण नवीकरण",
+  "Loanee": "ऋणी",
+  "Loan issued date": "ऋण जारी मिति",
   "Loan term in months": "ऋणको अवधि (महिनामा)",
   "Loans": "ऋण",
   "Loans of {0} – {1}": "{0} – {1} सम्मको ऋण",
