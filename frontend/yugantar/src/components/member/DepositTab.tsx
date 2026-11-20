@@ -26,6 +26,7 @@ import {
   Ban,
 } from "lucide-react"
 import { useAuth } from "@/contexts/AuthContext"
+import { toast } from "sonner"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -222,8 +223,17 @@ export function DepositTab() {
   // deposits. The backend only returns deposits this user may act on.
   const isDepositReviewer =
     normalizedRoles.includes("treasurer") || normalizedRoles.includes("secretary")
+  const isTreasurer = normalizedRoles.includes("treasurer")
 
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const ocrResultRef = useRef<HTMLDivElement>(null)
+  // Bumped when OCR finishes, so the effect below scrolls the read values into
+  // view. We deliberately don't scroll on every manual edit of those fields.
+  const [ocrScrollTick, setOcrScrollTick] = useState(0)
+  useEffect(() => {
+    if (ocrScrollTick === 0) return
+    ocrResultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }, [ocrScrollTick])
 
   const [activeTab, setActiveTab] = useState("make")
 
@@ -366,6 +376,8 @@ export function DepositTab() {
       setOcrDetected(null)
     } finally {
       setOcrLoading(false)
+      // Reveal the read values without the member having to scroll down.
+      setOcrScrollTick((n) => n + 1)
     }
   }
 
@@ -624,9 +636,10 @@ export function DepositTab() {
       fetchHistoryDeposits()
       setActiveTab("make")
       setSubmitSuccess(false)
-      setSubmitError(t("Deposit withdrawn. You can edit details and submit again."))
-    } catch (err: any) {
-      setSubmitError(err?.response?.data?.detail ?? t("Failed to withdraw deposit"))
+      toast.success(t("Deposit withdrawn. You can edit details and submit again."))
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      toast.error(detail ?? t("Failed to withdraw deposit"))
     } finally {
       setActionLoadingId(null)
     }
@@ -957,7 +970,7 @@ export function DepositTab() {
                     ) : null
 
                   return (
-                    <div className="rounded-lg border p-4">
+                    <div ref={ocrResultRef} className="rounded-lg border p-4">
                       <div className="mb-1 flex items-center gap-2">
                         <ScanLine className="h-4 w-4 text-primary" />
                         <p className="text-xs font-semibold uppercase tracking-wider text-primary">{t("Voucher Details")}</p>
@@ -1190,7 +1203,9 @@ export function DepositTab() {
                   <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3">
                     <CheckCircle2 className="h-4 w-4 text-emerald-600" />
                     <p className="text-sm font-medium text-emerald-700">
-                      {t("Deposit submitted in pending status. Treasurer has been notified for verification.")}</p>
+                      {isTreasurer
+                        ? t("Deposit submitted in pending status. The Secretary has been notified for verification.")
+                        : t("Deposit submitted in pending status. Treasurer has been notified for verification.")}</p>
                   </div>
                 )}
 
