@@ -187,7 +187,7 @@ class SmartDepositService:
             if fine_due > 0 and fine_alloc + Decimal("1") < fine_due:
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    f"This deposit is late — also allocate the Rs. {fine_due:,.0f} late fine.",
+                    f"This deposit is late — also allocate the Rs. {fine_due:,.0f} late deposit fine.",
                 )
 
         if fine_alloc > fine_due + Decimal("1"):
@@ -196,7 +196,7 @@ class SmartDepositService:
             )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                f"The late fine due is Rs. {fine_due:,.0f}{due_note}. "
+                f"The late deposit fine due is Rs. {fine_due:,.0f}{due_note}. "
                 f"You allocated Rs. {fine_alloc:,.0f}.",
             )
 

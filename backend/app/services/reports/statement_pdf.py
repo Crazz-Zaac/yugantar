@@ -85,7 +85,7 @@ SECTION_ROW = FontFace(emphasis="BOLD", color=BLUE, fill_color=SOFT_BLUE)
 NOTES = {
     FINANCIAL_POSITION: (
         (
-            "Income is recognised when received (cash basis): late fines paid with verified deposits, verified interest "
+            "Income is recognised when received (cash basis): late deposit fines paid with verified deposits, verified interest "
             "and penalty payments, and loan service charges, whether deducted from the payout or paid later with a deposit.",
             "Share Capital is the total of deposits each member was required to make so far under the deposit policy in "
             "force on each due date. What was not paid is shown as a receivable; what was paid beyond it is Capital Advance.",
@@ -109,7 +109,7 @@ NOTES = {
     ),
     FINANCIAL_STATEMENT: (
         (
-            "Capital is the regular and advance part of each deposit; late fines and loan payments in the same voucher are "
+            "Capital is the regular and advance part of each deposit; late deposit fines and loan payments in the same voucher are "
             "not capital.",
             "Outstanding capital contribution / capital paid in advance compare the cumulative capital deposited with the "
             "deposits required by the deposit policy in force on each due date since the member joined; at most one of "

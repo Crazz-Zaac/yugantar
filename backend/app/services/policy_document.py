@@ -134,7 +134,7 @@ def policy_statement(policy_type: str, policy) -> str:
     if policy_type == "deposit":
         fine_pct = _num(policy.late_deposit_fine)
         fine = (
-            f"A deposit made after the due date carries a late fine of {fine_pct}% of the deposit "
+            f"A deposit made after the due date carries a late deposit fine of {fine_pct}% of the deposit "
             f"({rs(late_fine_amount(policy))})."
             if policy.late_deposit_fine
             else "There is no fine for late deposits."
@@ -293,7 +293,7 @@ def policy_terms(policy_type: str, policy) -> list[tuple[str, str]]:
         return [
             ("Deposit amount", rs(deposit_amount(policy))),
             ("Schedule", schedule),
-            ("Late fine", fine),
+            ("Late deposit fine", fine),
             ("Effective from", _day(policy.effective_from)),
             ("Effective until", until),
         ]

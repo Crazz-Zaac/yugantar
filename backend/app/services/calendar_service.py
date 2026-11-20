@@ -348,7 +348,7 @@ class CalendarService:
                                 f"{i18n.translate_text(policy_label('deposit', policy), lang)}। "
                                 "ढिलो जम्मामा जरिवाना लाग्छ।"
                                 if ne
-                                else f"{policy_label('deposit', policy)}. A late fine applies after this day."
+                                else f"{policy_label('deposit', policy)}. A late deposit fine applies after this day."
                             ),
                             category="due_date",
                             start=_local_midnight(day),
