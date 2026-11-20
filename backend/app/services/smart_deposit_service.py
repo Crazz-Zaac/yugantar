@@ -14,7 +14,7 @@ from app.models.fine_model import Fine, FineType
 from app.models.loan_model import Loan, LoanStatus
 from app.models.loan_payment import LoanPayment, LoanPaymentType, LoanPaymentStatus
 from app.models.mixins.money import MoneyMixin
-from app.services.receipt_service import ReceiptService
+from app.services.receipt_service import ReceiptService, reference_key
 from app.models.receipt_model import Receipt
 from app.services.loan_service import service_charge_due_paisa
 from app.services.policy_lifecycle import require_current_deposit_policy
@@ -50,7 +50,7 @@ class SmartDepositService:
 
         net_amount = req.ocr_amount
         required_deposit = policy.amount_rupees  # Decimal in rupees
-        now = req.ocr_date or datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
         due_date = calculate_due_date(policy=policy, reference_date=now)
 
         late = is_deposit_late(now, due_date)
@@ -115,7 +115,7 @@ class SmartDepositService:
         req: SmartDepositCreate,
         user_id: uuid.UUID,
     ) -> SmartDepositResponse:
-        now = req.ocr_date or datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
         alloc_total = sum(a.amount_rupees for a in req.allocations)
 
         net_amount = alloc_total
@@ -200,11 +200,37 @@ class SmartDepositService:
                 f"You allocated Rs. {fine_alloc:,.0f}.",
             )
 
+        # The voucher reference the member submits is authoritative (they may
+        # have corrected OCR). Require it, store it, and refuse a reference this
+        # member has already used for another deposit.
         receipt_id = None
         if req.receipt_id is not None:
-            receipt_id = ReceiptService().claim_for_deposit(
-                session, req.receipt_id, user_id
-            ).id
+            receipt = ReceiptService().claim_for_deposit(session, req.receipt_id, user_id)
+            submitted_ref = (req.ocr_reference or "").strip()[:64] or None
+            if not submitted_ref:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    "Please enter the voucher reference from your bank receipt.",
+                )
+            submitted_key = reference_key(submitted_ref)
+            if submitted_key:
+                dup = session.exec(
+                    select(Deposit)
+                    .join(Receipt, Deposit.receipt_id == Receipt.id)
+                    .where(
+                        Deposit.user_id == user_id,
+                        Receipt.reference_key == submitted_key,
+                    )
+                ).first()
+                if dup:
+                    raise HTTPException(
+                        status.HTTP_400_BAD_REQUEST,
+                        f"You've already submitted a deposit with voucher reference {submitted_ref}.",
+                    )
+            receipt.reference = submitted_ref
+            receipt.reference_key = submitted_key
+            session.add(receipt)
+            receipt_id = receipt.id
 
         total_deposit = deposit_amount + advance_amount
         due_date = calculate_due_date(policy=policy, reference_date=now)

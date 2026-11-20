@@ -131,11 +131,11 @@ class OCRService:
 
     @classmethod
     def extract_transaction_data(cls, text: str) -> dict:
+        # Only the amount and bank reference are read from the voucher; the
+        # deposit date/time is taken from the system clock at submission.
         text = text.replace("|", " ")
         return {
             "amount": cls._to_float(cls._first_match(_AMOUNT_PATTERNS, text)),
-            "charge": cls._to_float(cls._first_match(_CHARGE_PATTERNS, text)),
-            "date": cls._extract_date(text),
             "reference": cls._first_match(_REFERENCE_PATTERNS, text),
         }
 
@@ -158,7 +158,7 @@ class OCRService:
             for key, value in extracted.items():
                 if value is not None and key not in details:
                     details[key] = value
-            if all(k in details for k in ("amount", "date", "reference")):
+            if all(k in details for k in ("amount", "reference")):
                 break
 
         return details

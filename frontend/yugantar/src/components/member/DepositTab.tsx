@@ -1,4 +1,3 @@
-import { DateTimeField } from "@/components/DateField"
 import { enumLabel, n, t } from "@/lib/i18n"
 import { useState, useEffect, useRef, useCallback } from "react"
 import {
@@ -40,7 +39,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { apiClient } from "@/api/api"
 import ReceiptReviewDialog from "./ReceiptReviewDialog"
 import { useSearch } from "wouter"
-import { formatDate, formatDateTime, fromZoneInputValue, nowZoneInputValue, toZoneInputValue, TIME_ZONE_LABEL } from "@/lib/datetime"
+import { formatDate, formatDateTime } from "@/lib/datetime"
 import { CommunityFilters } from "@/components/CommunityFilters"
 import { communityFilterParams, EMPTY_COMMUNITY_FILTERS, type CommunityFilterValues } from "@/lib/communityFilters"
 
@@ -87,15 +86,10 @@ function normalizeOcrResult(raw: Partial<OcrResult> | null | undefined): OcrResu
   }
 }
 
-// A voucher needs a positive amount and a date that isn't in the future
-// (the date decides whether a late fine applies).
+// A voucher needs a positive amount and a reference. The deposit date/time is
+// taken from the system clock at submission, not from the voucher.
 function voucherIsComplete(v: OcrResult): boolean {
-  return (
-    v.amount != null &&
-    v.amount > 0 &&
-    !!v.date &&
-    new Date(v.date).getTime() <= Date.now() + 60_000
-  )
+  return v.amount != null && v.amount > 0 && !!v.reference?.trim()
 }
 
 interface LoanSummary {
@@ -399,7 +393,6 @@ export function DepositTab() {
         policy_id: selectedPolicyId,
         ocr_amount: ocrResult.amount,
         ocr_charge: ocrResult.charge ?? 0,
-        ocr_date: ocrResult.date ?? new Date().toISOString(),
         ocr_reference: ocrResult.reference,
       })
       const data = res.data as PreviewResponse
@@ -602,7 +595,6 @@ export function DepositTab() {
         policy_id: selectedPolicyId || null,
         ocr_amount: ocrResult.amount,
         ocr_charge: ocrResult.charge ?? 0,
-        ocr_date: ocrResult.date ?? new Date().toISOString(),
         ocr_reference: ocrResult.reference,
         receipt_id: receiptId,
         allocations: allocations.map((a) => ({
@@ -1065,10 +1057,7 @@ export function DepositTab() {
                 {ocrResult && (() => {
                   const detected = ocrDetected
                   const amountEdited = !!detected && ocrResult.amount !== detected.amount
-                  const dateEdited = !!detected && ocrResult.date !== detected.date
                   const refEdited = !!detected && (ocrResult.reference ?? "") !== (detected.reference ?? "")
-                  const dateInFuture =
-                    !!ocrResult.date && new Date(ocrResult.date).getTime() > Date.now() + 60_000
                   const ocrHint = (edited: boolean, original: string) =>
                     edited ? (
                       <p className="flex items-center gap-1 text-xs text-warning">
@@ -1115,35 +1104,21 @@ export function DepositTab() {
                           )}
                         </div>
                         <div className="flex flex-col gap-1">
-                          <Label htmlFor="voucher-date" className="text-xs font-medium text-muted-foreground">
-                            {t("Deposited Date & Time ({0})", TIME_ZONE_LABEL)}</Label>
-                          <DateTimeField
-                            id="voucher-date"
-                            max={nowZoneInputValue()}
-                            value={toZoneInputValue(ocrResult.date)}
-                            onChange={(v) => updateVoucher({ date: v ? fromZoneInputValue(v) : null })}
-                          />
-                          {ocrHint(dateEdited, detected?.date ? formatDateTime(detected.date) : t("nothing"))}
-                          {dateInFuture && (
-                            <p className="text-xs text-destructive">{t("The date can't be in the future.")}</p>
-                          )}
+                          <Label htmlFor="voucher-ref" className="text-xs font-medium text-muted-foreground">
+                            {t("Voucher Reference")}</Label>
+                          <div className="relative">
+                            <Receipt className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              id="voucher-ref"
+                              maxLength={64}
+                              placeholder={t("Reference code / transaction ID")}
+                              className="pl-8 font-mono"
+                              value={ocrResult.reference ?? ""}
+                              onChange={(e) => updateVoucher({ reference: e.target.value || null })}
+                            />
+                          </div>
+                          {ocrHint(refEdited, detected?.reference || "nothing")}
                         </div>
-                      </div>
-                      <div className="mt-3 flex flex-col gap-1">
-                        <Label htmlFor="voucher-ref" className="text-xs font-medium text-muted-foreground">
-                          {t("Voucher Reference")}</Label>
-                        <div className="relative">
-                          <Receipt className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                          <Input
-                            id="voucher-ref"
-                            maxLength={64}
-                            placeholder={t("Reference code / transaction ID")}
-                            className="pl-8 font-mono"
-                            value={ocrResult.reference ?? ""}
-                            onChange={(e) => updateVoucher({ reference: e.target.value || null })}
-                          />
-                        </div>
-                        {ocrHint(refEdited, detected?.reference || "nothing")}
                       </div>
                     </div>
                   )
