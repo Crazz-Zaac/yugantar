@@ -195,7 +195,7 @@ const endPassed = (to: string | null) => {
 // ─── Board ───────────────────────────────────────────────────────────────────
 
 export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenSignatures, onOpenForSigning, onEdit, onDelete, onChanged }: Props) {
-  const [filter, setFilter] = useState<"all" | PolicyType>("all")
+  const [filter, setFilter] = useState<"all" | PolicyType | "archived">("all")
   const [summaries, setSummaries] = useState<Record<string, SigningSummary>>({})
   // Deposits strictly use one current deposit policy; other active ones are superseded
   const [currentDepositId, setCurrentDepositId] = useState<string | null>(null)
@@ -215,7 +215,6 @@ export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenS
   const [retireReason, setRetireReason] = useState("")
   const [retireNote, setRetireNote] = useState<Record<string, string>>({})
   const [retireBusy, setRetireBusy] = useState(false)
-  const [view, setView] = useState<"current" | "archived">("current")
   const refetchChanges = useCallback(async () => {
     try {
       const r = await apiClient.get("/policy-changes")
@@ -302,47 +301,25 @@ export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenS
     }
   }, [reloadKey])
 
-  const visible = items.filter((i) => filter === "all" || i.type === filter)
+  const view = filter === "archived" ? "archived" : "current"
+  const typeFilter = filter === "archived" ? "all" : filter
+  const visible = items.filter((i) => typeFilter === "all" || i.type === typeFilter)
   const open = visible.filter((i) => i.policy.status === "finalized")
   const active = visible.filter((i) => i.policy.status === "active")
   const drafts = visible.filter((i) => i.policy.status === "draft")
-  const past = visible.filter((i) => i.policy.status === "void" || i.policy.status === "expired")
+  const past = items.filter((i) => i.policy.status === "void" || i.policy.status === "expired")
   const target = (i: Item): SigningTarget => ({ type: i.type, id: i.policy.policy_id, label: label(i) })
 
   return (
     <div className="flex flex-col gap-8">
-      {/* Current vs archived */}
-      <div className="flex gap-1 self-start rounded-lg bg-muted p-1" role="tablist" aria-label={t("Policy view")}>
-        {(
-          [
-            ["current", t("Current")],
-            ["archived", t("Not adopted or ended")],
-          ] as const
-        ).map(([id, text]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={view === id}
-            onClick={() => setView(id)}
-            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-              view === id ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {text}
-            {id === "archived" && past.length > 0 && (
-              <span className="rounded-full bg-muted-foreground/20 px-1.5 text-[10px]">{n(past.length)}</span>
-            )}
-          </button>
-        ))}
-      </div>
-      {/* Type filter */}
+      {/* Policy tabs: type + archived */}
       <div className="flex gap-1 self-start rounded-lg bg-muted p-1" role="tablist" aria-label={t("Policy type")}>
         {(
           [
             ["all", "All policies", null],
             ["deposit", "Deposit", Landmark],
             ["loan", "Loan", CreditCard],
+            ["archived", "Not Adopted/Ended Policy", null],
           ] as const
         ).map(([id, text, Icon]) => (
           <button
@@ -357,6 +334,9 @@ export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenS
           >
             {Icon && <Icon className="h-3.5 w-3.5" />}
             {t(text)}
+            {id === "archived" && past.length > 0 && (
+              <span className="rounded-full bg-muted-foreground/20 px-1.5 text-[10px]">{n(past.length)}</span>
+            )}
           </button>
         ))}
       </div>

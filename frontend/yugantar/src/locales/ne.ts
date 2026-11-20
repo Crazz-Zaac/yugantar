@@ -588,6 +588,7 @@ const ne: Record<string, string> = {
   "Policy retirement log": "नीति हटाउने अभिलेख",
   "Policy view": "नीति दृश्य",
   "Nothing archived yet.": "अहिलेसम्म कुनै अभिलेख छैन।",
+  "Not Adopted/Ended Policy": "अस्वीकृत/समाप्त नीति",
   "Processing voucher...": "भौचर प्रशोधन हुँदै...",
   "Depositor": "जम्माकर्ता",
   "Deposit date": "जम्मा मिति",
