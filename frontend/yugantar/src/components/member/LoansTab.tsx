@@ -302,7 +302,7 @@ export function LoansTab() {
     setCommunityLoading(true)
     try {
       const res = await apiClient.get("/loans/community", {
-        params: { limit: 100, ...communityFilterParams(communityFilters, { choice: "status", text: "purpose" }) },
+        params: { limit: 100, ...communityFilterParams(communityFilters, { choice: "status" }) },
       })
       setCommunityLoans(res.data.loans ?? [])
     } catch {
@@ -374,8 +374,9 @@ export function LoansTab() {
       setApplyCollateral("")
       setApplyNotes("")
       setGuarantorId("")
-    } catch (err: any) {
-      setApplyError(err?.response?.data?.detail ?? t("Failed to submit application."))
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setApplyError(detail ?? t("Failed to submit application."))
     } finally {
       setApplyLoading(false)
     }
@@ -888,7 +889,6 @@ export function LoansTab() {
                     { value: "paid", label: "Paid" },
                   ],
                 }}
-                text={{ label: "Purpose", placeholder: "e.g. school" }}
                 resultCount={communityLoading ? undefined : communityLoans.length}
               />
               {communityLoading ? (
