@@ -40,6 +40,7 @@ import { useAuth } from "@/contexts/AuthContext"
 import PolicySigningDialog from "@/components/policies/PolicySigningDialog"
 import ProxyRequestsPanel from "@/components/policies/ProxyRequestsPanel"
 import { PolicyBoard } from "@/components/policies/PolicyBoard"
+import { PolicyRetirementPanel } from "@/components/policies/PolicyRetirementPanel"
 import type { SigningTarget } from "@/components/policies/signing"
 import { formatDateTime, fromZoneInputValue, nowZoneInputValue, toZoneInputValue, TIME_ZONE_LABEL } from "@/lib/datetime"
 import { SignatureDialog } from "@/components/signature/SignatureDialog"
@@ -195,6 +196,8 @@ export function MemberPoliciesTab() {
     // Role check: president can approve draft policies
     // Office bearers authorise Admin proxy signatures for absent members
     const isOfficeBearer = ["president", "treasurer", "secretary"].some((r) => user?.cooperative_roles?.includes(r))
+    const isPresident = !!user?.cooperative_roles?.includes("president")
+    const isAdminUser = !!user?.access_roles?.includes("admin")
 
     // State
     const [depositPolicies, setDepositPolicies] = useState<DepositPolicy[]>([])
@@ -489,6 +492,16 @@ export function MemberPoliciesTab() {
                         : openLoanEdit(item.policy as LoanPolicy)
                 }
                 onDelete={(type, id) => setDeleteConfirm({ type, id })}
+            />
+
+            <PolicyRetirementPanel
+                depositPolicies={depositPolicies}
+                loanPolicies={loanPolicies}
+                isTreasurer={!!canManage}
+                isPresident={isPresident}
+                canView={isOfficeBearer || isAdminUser}
+                reloadKey={boardReloadKey}
+                onChanged={() => setBoardReloadKey((k) => k + 1)}
             />
 
             {/* ═══════ DEPOSIT POLICY DIALOG ═══════ */}
