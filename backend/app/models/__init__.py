@@ -21,6 +21,7 @@ from .notification_model import Notification
 from .calendar_model import CalendarEvent, EventRsvp
 from .report_model import GeneratedReport
 from .organization_model import OrganizationSettings
+from .policy_change_request_model import PolicyChangeRequest, PolicyChangeAction, PolicyChangeStatus
 
 from .mixins.money import MoneyMixin
 

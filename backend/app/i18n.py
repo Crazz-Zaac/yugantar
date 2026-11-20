@@ -226,6 +226,27 @@ MESSAGES: dict[str, dict[str, dict[str, str]]] = {
                   "हस्ताक्षर गर्नुभएको थिएन। कोषाध्यक्षले यसलाई संशोधन गरी फेरि खोल्न सक्नुहुन्छ।",
         },
     },
+    "policy_retire_requested": {
+        "title": {"en": "Policy retirement requested", "ne": "नीति हटाउने अनुरोध"},
+        "message": {
+            "en": "The Treasurer asked to retire the {label}. Reason: {reason}. Your approval is needed.",
+            "ne": "कोषाध्यक्षले {label} हटाउन अनुरोध गर्नुभयो। कारण: {reason}। तपाईंको स्वीकृति आवश्यक छ।",
+        },
+    },
+    "policy_retire_approved": {
+        "title": {"en": "Policy retirement approved", "ne": "नीति हटाउने स्वीकृत"},
+        "message": {
+            "en": "The President approved retiring the {label}. It is no longer in force.",
+            "ne": "अध्यक्षले {label} हटाउन स्वीकृत गर्नुभयो। यो अब लागू छैन।",
+        },
+    },
+    "policy_retire_rejected": {
+        "title": {"en": "Policy retirement declined", "ne": "नीति हटाउने अस्वीकृत"},
+        "message": {
+            "en": "The President declined to retire the {label}. {note}",
+            "ne": "अध्यक्षले {label} हटाउन अस्वीकार गर्नुभयो। {note}",
+        },
+    },
     "proxy_request": {
         "title": {"en": "Proxy signature needs your authorisation", "ne": "प्रतिनिधि हस्ताक्षरका लागि तपाईंको अनुमति आवश्यक"},
         "message": {

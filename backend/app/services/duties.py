@@ -50,6 +50,7 @@ class Duty(str, Enum):
     MANAGE_POLICY = "create or edit policies"
     APPROVE_EXPENSE = "approve or reject expenses"
     APPROVE_MINUTES = "approve meeting minutes"
+    DECIDE_POLICY_CHANGE = "approve or reject policy retirement"
 
 
 PRIMARY_ROLE: dict[Duty, str] = {
@@ -60,8 +61,9 @@ PRIMARY_ROLE: dict[Duty, str] = {
     Duty.MANAGE_POLICY: CooperativeRole.TREASURER.value,
     Duty.APPROVE_EXPENSE: CooperativeRole.PRESIDENT.value,
     Duty.APPROVE_MINUTES: CooperativeRole.PRESIDENT.value,
+    Duty.DECIDE_POLICY_CHANGE: CooperativeRole.PRESIDENT.value,
 }
-NO_BACKUP = {Duty.MANAGE_POLICY}
+NO_BACKUP = {Duty.MANAGE_POLICY, Duty.DECIDE_POLICY_CHANGE}
 
 
 def coop_roles(user: Optional[User]) -> set[str]:
