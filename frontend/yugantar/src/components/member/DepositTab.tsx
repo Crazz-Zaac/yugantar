@@ -481,10 +481,20 @@ export function DepositTab() {
     }
   }, [communityFilters])
 
-  // Re-query when filters change (debounced for typing)
+  // Re-query when filters change; on reopening the tab, only refetch when the
+  // data is stale (older than 30s), otherwise keep what's already loaded — no
+  // spinner, no redundant request on quick tab-switching.
+  const communityFetchRef = useRef({ at: 0, key: "" })
   useEffect(() => {
     if (activeTab !== "community") return
-    const timer = setTimeout(fetchCommunityDeposits, 300)
+    const key = JSON.stringify(communityFilters)
+    const filtersChanged = communityFetchRef.current.key !== key
+    const stale = Date.now() - communityFetchRef.current.at > 30_000
+    if (!filtersChanged && !stale) return
+    const timer = setTimeout(() => {
+      communityFetchRef.current = { at: Date.now(), key }
+      fetchCommunityDeposits()
+    }, filtersChanged ? 300 : 0)
     return () => clearTimeout(timer)
   }, [communityFilters, activeTab, fetchCommunityDeposits])
 
