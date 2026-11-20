@@ -85,7 +85,7 @@ def _validate_image(contents: bytes) -> str:
     if width * height > MAX_IMAGE_PIXELS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Image dimensions are too large.",
+            detail="The image is too large. Please upload a smaller photo.",
         )
     return ALLOWED_FORMATS[fmt]
 

@@ -124,7 +124,7 @@ class SmartDepositService:
             if abs(alloc_total - net_amount) > Decimal("1"):
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    f"Allocation total ({alloc_total}) does not match net amount ({net_amount})",
+                    f"Your allocations add up to Rs. {alloc_total:,.0f}, but the deposit is Rs. {net_amount:,.0f}. They need to match.",
                 )
 
         deposit_amount = Decimal(0)
@@ -150,13 +150,13 @@ class SmartDepositService:
         if alloc_total <= 0:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "At least one allocation with a positive amount is required",
+                "Enter at least one amount for how this deposit should be applied.",
             )
 
         if not req.policy_id:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                "policy_id is required for smart deposit submission",
+                "No deposit policy is selected. Please refresh the page and try again.",
             )
 
         policy = require_current_deposit_policy(session, req.policy_id)
@@ -249,7 +249,7 @@ class SmartDepositService:
             if not la.loan_id:
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    "loan_id is required for loan split allocations",
+                    "Please choose which loan each loan payment is for.",
                 )
             if la.amount_rupees <= 0:
                 continue
@@ -257,16 +257,17 @@ class SmartDepositService:
             loan = session.get(Loan, la.loan_id)
             if not loan:
                 raise HTTPException(
-                    status.HTTP_404_NOT_FOUND, f"Loan {la.loan_id} not found"
+                    status.HTTP_404_NOT_FOUND,
+                    "One of the selected loans could not be found. Please refresh and try again.",
                 )
             if loan.user_id != user_id:
                 raise HTTPException(
-                    status.HTTP_403_FORBIDDEN, "Cannot pay someone else's loan"
+                    status.HTTP_403_FORBIDDEN, "You can only make payments toward your own loans."
                 )
             if loan.status not in (LoanStatus.ACTIVE, LoanStatus.APPROVED):
                 raise HTTPException(
                     status.HTTP_400_BAD_REQUEST,
-                    f"Cannot make payments on a loan with status '{loan.status.value}'",
+                    "Payments can only be made toward an active loan.",
                 )
 
             paisa = MoneyMixin.rupees_to_paisa(la.amount_rupees)
@@ -277,8 +278,7 @@ class SmartDepositService:
                 if paisa < outstanding:
                     raise HTTPException(
                         status.HTTP_400_BAD_REQUEST,
-                        f"Loan renewal requires at least {outstanding / 100} rupees "
-                        f"to cover outstanding principal",
+                        f"A loan renewal must cover the loan's full remaining amount of Rs. {outstanding / 100:,.0f}.",
                     )
 
             if la.category == SplitCategory.SERVICE_CHARGE:
@@ -291,7 +291,7 @@ class SmartDepositService:
                 if paisa > due:
                     raise HTTPException(
                         status.HTTP_400_BAD_REQUEST,
-                        f"The service charge left on this loan is Rs. {due / 100:,.2f}.",
+                        f"You allocated more than the service charge left on this loan (Rs. {due / 100:,.2f}).",
                     )
 
             payment_type = (

@@ -96,24 +96,24 @@ class ReceiptService:
         if not receipt or (
             receipt.user_id != user.id and not is_office_bearer(user)
         ):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Voucher not found.")
         return receipt
 
     def claim_for_deposit(self, session: Session, receipt_id: uuid.UUID, user_id: uuid.UUID) -> Receipt:
         """Validate that the member may attach this receipt to a new deposit."""
         receipt = session.get(Receipt, receipt_id)
         if not receipt or receipt.user_id != user_id:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Voucher not found.")
         if receipt.file_key is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This receipt has expired. Please upload the voucher again.",
+                detail="This voucher has expired. Please upload it again.",
             )
         already_used = session.exec(select(Deposit).where(Deposit.receipt_id == receipt.id)).first()
         if already_used:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="This receipt is already attached to another deposit.",
+                detail="This voucher has already been used for another deposit.",
             )
         return receipt
 
