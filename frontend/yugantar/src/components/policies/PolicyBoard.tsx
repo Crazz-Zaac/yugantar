@@ -1,5 +1,5 @@
 import { t, n } from "@/lib/i18n"
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import {
   AlertTriangle,
   CheckCircle2,
@@ -9,6 +9,7 @@ import {
   FileDown,
   FileSignature,
   Landmark,
+  Loader2,
   Pencil,
   Send,
   Trash2,
@@ -23,11 +24,27 @@ import { downloadPolicyRecord } from "@/lib/download"
 import { toast } from "sonner"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { apiClient } from "@/api/api"
-import { formatDate, formatDateTime, parseUtc } from "@/lib/datetime"
+import { Switch } from "@/components/ui/switch"
+import { Textarea } from "@/components/ui/textarea"
+import { useAuth } from "@/contexts/AuthContext"
+import { formatDate, formatDateBoth, formatDateTime, parseUtc } from "@/lib/datetime"
 import { formatRs } from "@/lib/money"
 import { timeLeft, type PolicyType, type SigningSummary, type SigningTarget } from "./signing"
 
 type Status = "draft" | "finalized" | "active" | "expired" | "void"
+
+interface ChangeRequest {
+  id: string
+  policy_id: string
+  status: "pending" | "approved" | "rejected"
+  reason: string
+  requested_by_name: string
+  decided_by_name?: string | null
+  decision_note?: string | null
+  decided_at?: string | null
+  created_at: string
+}
+const reqErr = (e: unknown) => (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail
 
 export interface BoardDepositPolicy {
   policy_id: string
@@ -73,6 +90,7 @@ interface Props {
   onOpenForSigning: (type: PolicyType, id: string) => void
   onEdit: (item: Item) => void
   onDelete: (type: PolicyType, id: string) => void
+  onChanged?: () => void
 }
 
 // ─── Plain-language descriptions ─────────────────────────────────────────────
@@ -176,11 +194,71 @@ const endPassed = (to: string | null) => {
 
 // ─── Board ───────────────────────────────────────────────────────────────────
 
-export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenSignatures, onOpenForSigning, onEdit, onDelete }: Props) {
+export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenSignatures, onOpenForSigning, onEdit, onDelete, onChanged }: Props) {
   const [filter, setFilter] = useState<"all" | PolicyType>("all")
   const [summaries, setSummaries] = useState<Record<string, SigningSummary>>({})
   // Deposits strictly use one current deposit policy; other active ones are superseded
   const [currentDepositId, setCurrentDepositId] = useState<string | null>(null)
+
+  const { user } = useAuth()
+  const isPresident = !!user?.cooperative_roles?.includes("president")
+  const canSeeChanges =
+    !!user &&
+    (canManage ||
+      isPresident ||
+      !!user.cooperative_roles?.includes("secretary") ||
+      !!user.access_roles?.includes("admin"))
+
+  // Retirement requests live on the cards; this is also the audit trail.
+  const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([])
+  const [retireFor, setRetireFor] = useState<string | null>(null)
+  const [retireReason, setRetireReason] = useState("")
+  const [retireNote, setRetireNote] = useState<Record<string, string>>({})
+  const [retireBusy, setRetireBusy] = useState(false)
+  const refetchChanges = useCallback(async () => {
+    try {
+      const r = await apiClient.get("/policy-changes")
+      setChangeRequests((r.data as ChangeRequest[]) ?? [])
+    } catch {
+      /* non-fatal */
+    }
+  }, [])
+  useEffect(() => {
+    if (canSeeChanges) refetchChanges()
+  }, [canSeeChanges, reloadKey, refetchChanges])
+  const pendingReq = (policyId: string) =>
+    changeRequests.find((r) => r.policy_id === policyId && r.status === "pending")
+  const approvedReq = (policyId: string) =>
+    changeRequests.find((r) => r.policy_id === policyId && r.status === "approved")
+  const sendRetire = async (type: PolicyType, policyId: string) => {
+    if (!retireReason.trim()) return
+    setRetireBusy(true)
+    try {
+      await apiClient.post("/policy-changes", { policy_type: type, policy_id: policyId, reason: retireReason.trim() })
+      toast.success(t("Retirement request sent for the President's approval."))
+      setRetireFor(null)
+      setRetireReason("")
+      await refetchChanges()
+      onChanged?.()
+    } catch (e) {
+      toast.error(reqErr(e) ?? t("Could not send the request."))
+    } finally {
+      setRetireBusy(false)
+    }
+  }
+  const decideRetire = async (id: string, action: "approve" | "reject") => {
+    setRetireBusy(true)
+    try {
+      await apiClient.post(`/policy-changes/${id}/${action}`, { note: retireNote[id]?.trim() || null })
+      toast.success(action === "approve" ? t("Policy retired.") : t("Retirement request rejected."))
+      await refetchChanges()
+      onChanged?.()
+    } catch (e) {
+      toast.error(reqErr(e) ?? t("Action failed."))
+    } finally {
+      setRetireBusy(false)
+    }
+  }
 
   const items: Item[] = useMemo(
     () => [
@@ -340,7 +418,7 @@ export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenS
                       <TypeIcon type={i.type} />
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold leading-snug">{title(i)}</p>
-                        <p className="text-xs text-muted-foreground">{t("Since {0}", formatDate(i.policy.effective_from))}</p>
+                        <p className="text-xs text-muted-foreground">{t("Since {0}", formatDateBoth(i.policy.effective_from))}</p>
                       </div>
                       {isCurrent && (
                         <Badge variant="outline" className="shrink-0 border-primary/40 bg-primary/10 text-[11px] text-primary">
@@ -367,6 +445,70 @@ export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenS
                         <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
                         {t("End date ")}{formatDate(i.policy.effective_to)} {t(" has passed, but it's still marked active. The Treasurer should review it.")}</p>
                     )}
+                    {canSeeChanges && (() => {
+                      const pend = pendingReq(i.policy.policy_id)
+                      if (pend) {
+                        return (
+                          <div className="flex flex-col gap-2 rounded-md border border-amber-300/60 bg-amber-50/60 p-2 dark:border-amber-900/40 dark:bg-amber-950/20">
+                            <p className="flex items-center gap-1 text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                              <Clock className="h-3 w-3" /> {t("Retirement requested by {0}", pend.requested_by_name)}
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">{t("Reason:")} {pend.reason}</p>
+                            {isPresident ? (
+                              <>
+                                <Textarea
+                                  value={retireNote[pend.id] ?? ""}
+                                  onChange={(e) => setRetireNote((m) => ({ ...m, [pend.id]: e.target.value }))}
+                                  placeholder={t("Optional note…")}
+                                  maxLength={500}
+                                  className="min-h-10 text-xs"
+                                />
+                                <div className="flex gap-2">
+                                  <Button size="sm" className="h-7 text-xs" disabled={retireBusy} onClick={() => decideRetire(pend.id, "approve")}>
+                                    {retireBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <CheckCircle2 className="mr-1 h-3 w-3" />}
+                                    {t("Approve & retire")}</Button>
+                                  <Button size="sm" variant="outline" className="h-7 text-xs text-destructive" disabled={retireBusy} onClick={() => decideRetire(pend.id, "reject")}>
+                                    <XCircle className="mr-1 h-3 w-3" />
+                                    {t("Reject")}</Button>
+                                </div>
+                              </>
+                            ) : (
+                              <p className="text-[11px] text-muted-foreground">{t("Awaiting President approval.")}</p>
+                            )}
+                          </div>
+                        )
+                      }
+                      if (canManage && retireFor === i.policy.policy_id) {
+                        return (
+                          <div className="flex flex-col gap-2 rounded-md border p-2">
+                            <Textarea
+                              autoFocus
+                              value={retireReason}
+                              onChange={(e) => setRetireReason(e.target.value)}
+                              placeholder={t("Why retire this policy?")}
+                              maxLength={500}
+                              className="min-h-12 text-xs"
+                            />
+                            <div className="flex gap-2">
+                              <Button size="sm" className="h-7 text-xs" disabled={!retireReason.trim() || retireBusy} onClick={() => sendRetire(i.type, i.policy.policy_id)}>
+                                {retireBusy && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                                {t("Send for approval")}</Button>
+                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setRetireFor(null); setRetireReason("") }}>
+                                {t("Cancel")}</Button>
+                            </div>
+                          </div>
+                        )
+                      }
+                      if (canManage) {
+                        return (
+                          <label className="flex items-center justify-between gap-2 rounded-md border px-2 py-1.5">
+                            <span className="text-[11px] text-muted-foreground">{t("In force — toggle off to request retirement")}</span>
+                            <Switch checked onCheckedChange={() => { setRetireFor(i.policy.policy_id); setRetireReason("") }} aria-label={t("Request retirement")} />
+                          </label>
+                        )
+                      }
+                      return null
+                    })()}
                     <div className="mt-auto flex items-center justify-between gap-2 pt-1 text-xs">
                       {s && s.required > 0 ? (
                         <button type="button" className="font-medium text-primary hover:underline" onClick={() => onOpenSignatures(target(i))}>
@@ -436,9 +578,17 @@ export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenS
                     <p className="text-xs text-muted-foreground">{facts(i).join(" · ")}</p>
                     {i.policy.status === "expired" && (
                       <p className="text-xs text-muted-foreground">
-                        {t("Active {0} – {1}", formatDate(i.policy.effective_from), i.policy.effective_to ? formatDate(i.policy.effective_to) : t("now"))}
+                        {t("Active {0} – {1}", formatDateBoth(i.policy.effective_from), i.policy.effective_to ? formatDateBoth(i.policy.effective_to) : t("now"))}
                       </p>
                     )}
+                    {(() => {
+                      const ap = approvedReq(i.policy.policy_id)
+                      return ap ? (
+                        <p className="text-[11px] text-muted-foreground">
+                          {t("Retired by {0}", ap.decided_by_name ?? t("the President"))} · {t("Reason:")} {ap.reason}
+                        </p>
+                      ) : null
+                    })()}
                   </div>
                   <Badge variant="outline" className="text-[11px] text-muted-foreground">
                     {i.policy.status === "void" ? t("Not adopted") : t("Expired")}
@@ -450,6 +600,43 @@ export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenS
                   )}
                 </div>
               ))}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+
+      {canSeeChanges && changeRequests.filter((r) => r.status !== "pending").length > 0 && (
+        <Collapsible>
+          <CollapsibleTrigger className="group flex items-center gap-2 text-sm font-semibold text-muted-foreground hover:text-foreground">
+            <ChevronDown className="h-4 w-4 transition-transform group-data-[state=open]:rotate-180" />
+            {t("Policy retirement log")}
+            <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium">
+              {n(changeRequests.filter((r) => r.status !== "pending").length)}
+            </span>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="mt-3 flex flex-col divide-y rounded-xl border bg-card">
+              {changeRequests
+                .filter((r) => r.status !== "pending")
+                .map((r) => (
+                  <div key={r.id} className="flex flex-col gap-1 p-3 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-muted-foreground">
+                        {t("Requested by {0}", r.requested_by_name)}
+                        {r.decided_by_name ? ` · ${t("decided by {0}", r.decided_by_name)}` : ""}
+                        {r.decided_at ? ` · ${formatDateTime(r.decided_at)}` : ""}
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className={r.status === "approved" ? "border-success/30 bg-success/10 text-success text-[11px]" : "border-destructive/30 bg-destructive/10 text-destructive text-[11px]"}
+                      >
+                        {r.status === "approved" ? t("Retired") : t("Rejected")}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-foreground/80">{t("Reason:")} {r.reason}</p>
+                    {r.decision_note && <p className="text-xs text-muted-foreground">{t("Note:")} {r.decision_note}</p>}
+                  </div>
+                ))}
             </div>
           </CollapsibleContent>
         </Collapsible>
