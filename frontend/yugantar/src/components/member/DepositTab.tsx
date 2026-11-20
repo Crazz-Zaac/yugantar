@@ -703,9 +703,26 @@ export function DepositTab() {
   const netAmount = preview?.net_amount ?? 0
   const allocationDiff = netAmount - allocTotal
 
+  // Mirror the server rule: the policy minimum applies to the regular-deposit
+  // portion only (a fine- or loan-only voucher is exempt), and a fine can't
+  // exceed the fine actually due.
+  const depositAlloc = allocations.filter((a) => a.category === "deposit").reduce((s, a) => s + a.amount_rupees, 0)
+  const fineAlloc = allocations.filter((a) => a.category === "fine").reduce((s, a) => s + a.amount_rupees, 0)
+  const requiredDeposit = preview?.required_deposit ?? 0
+  const fineDue = preview?.fine_amount ?? 0
+  const blockReason: string | null = !preview
+    ? null
+    : depositAlloc > 0 && depositAlloc + 1 < requiredDeposit
+      ? t("A regular deposit must be at least {0}.", formatRsFromRupees(requiredDeposit))
+      : depositAlloc > 0 && fineDue > 0 && fineAlloc + 1 < fineDue
+        ? t("This deposit is late — also allocate the {0} late fine.", formatRsFromRupees(fineDue))
+        : fineAlloc > fineDue + 1
+          ? t("The late fine due is {0}{1}. You allocated {2}.", formatRsFromRupees(fineDue), fineDue === 0 ? t(" (this deposit is not late)") : "", formatRsFromRupees(fineAlloc))
+          : null
+
   const canSubmit =
     !!preview &&
-    !preview.is_insufficient &&
+    !blockReason &&
     !submitting &&
     allocations.length > 0 &&
     Math.abs(allocationDiff) < 1
@@ -1166,11 +1183,10 @@ export function DepositTab() {
                       </div>
                     </div>
 
-                    {preview.is_insufficient && (
+                    {blockReason && (
                       <div className="mb-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
-                        <p className="text-xs text-destructive/90">
-                          {t("This is below the required deposit — you must deposit at least {0} to submit.", formatRsFromRupees(preview.required_deposit + preview.fine_amount))}</p>
+                        <p className="text-xs text-destructive/90">{blockReason}</p>
                       </div>
                     )}
 

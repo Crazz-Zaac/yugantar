@@ -161,9 +161,11 @@ class SmartDepositService:
 
         policy = require_current_deposit_policy(session, req.policy_id)
 
-        # Reject deposits below the policy's required amount (+ late fine). The
-        # preview flags these as "insufficient"; the server now enforces it so a
-        # short deposit can't be submitted for approval at all.
+        # The policy minimum applies to the *regular* (period) deposit only, not
+        # to a voucher that is purely a fine or loan payment. When the member
+        # makes a regular deposit it must meet the policy amount and, if late,
+        # cover the late fine too. A fine allocation can never exceed the fine
+        # actually due (loan allocations are validated further below).
         due_for_fine = calculate_due_date(policy=policy, reference_date=now)
         required = policy.amount_rupees
         fine_due = Decimal(0)
@@ -174,13 +176,28 @@ class SmartDepositService:
                 late_deposit_fine_percentage=policy.late_deposit_fine,
                 amount_to_be_deposited=required,
             )
-        mandatory = required + fine_due
-        if net_amount + Decimal("1") < mandatory:
-            fine_note = f" + late fine Rs. {fine_due:,.0f}" if fine_due > 0 else ""
+
+        if deposit_amount > 0:
+            if deposit_amount + Decimal("1") < required:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"A regular deposit must be at least Rs. {required:,.0f} "
+                    f"(you allocated Rs. {deposit_amount:,.0f} to Regular Deposit).",
+                )
+            if fine_due > 0 and fine_alloc + Decimal("1") < fine_due:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"This deposit is late — also allocate the Rs. {fine_due:,.0f} late fine.",
+                )
+
+        if fine_alloc > fine_due + Decimal("1"):
+            due_note = (
+                " (this deposit is not late)" if fine_due == 0 else ""
+            )
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                f"Deposit must be at least Rs. {mandatory:,.0f} "
-                f"(policy Rs. {required:,.0f}{fine_note}). You entered Rs. {net_amount:,.0f}.",
+                f"The late fine due is Rs. {fine_due:,.0f}{due_note}. "
+                f"You allocated Rs. {fine_alloc:,.0f}.",
             )
 
         receipt_id = None
