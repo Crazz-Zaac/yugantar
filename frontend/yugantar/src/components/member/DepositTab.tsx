@@ -1323,25 +1323,6 @@ export function DepositTab() {
                 {t("Your submitted deposits. Pending deposits can be withdrawn for editing and resubmission.")}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
-              {!myLoading && myDeposits.length > 0 && (
-                <dl className="grid grid-cols-3 gap-3 rounded-lg bg-muted/40 p-3 text-sm">
-                  {[
-                    ["Verified", myDeposits.filter((d) => d.verification_status === "verified"), "text-success"],
-                    ["Awaiting verification", myDeposits.filter((d) => d.verification_status === "pending"), "text-warning-foreground dark:text-warning"],
-                    ["Rejected", myDeposits.filter((d) => d.verification_status === "rejected"), "text-destructive"],
-                  ].map(([label, list, cls]) => (
-                    <div key={label as string}>
-                      <dt className="text-xs text-muted-foreground">{t(label as string)}</dt>
-                      <dd className={`font-nums font-semibold ${cls as string}`}>
-                        {formatRsFromRupees((list as DepositItem[]).reduce((sum, d) => sum + Number(d.deposited_amount), 0))}
-                        <span className="block text-xs font-normal text-muted-foreground">
-                          {t("{0} deposit{1}", (list as DepositItem[]).length, (list as DepositItem[]).length === 1 ? "" : "s")}
-                        </span>
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
               {renderDepositTable(myDeposits, myLoading, false, true)}
             </CardContent>
           </Card>
