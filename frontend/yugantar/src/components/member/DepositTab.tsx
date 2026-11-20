@@ -193,6 +193,25 @@ function categoryLabel(category: SplitCategory): string {
 const OCR_POLL_INTERVAL = 500
 const OCR_POLL_TIMEOUT_MS = 45_000
 
+// Build the default split from what the preview already computed: cover the
+// late fine first, then the regular deposit, and park any leftover as an
+// advance. Loans are never auto-paid — repaying a loan stays a deliberate
+// choice the member makes via "Add category".
+function buildDefaultAllocations(p: PreviewResponse): SplitAllocation[] {
+  const rows: SplitAllocation[] = []
+  let remaining = p.net_amount
+  const take = (category: SplitCategory, want: number) => {
+    const amt = Math.min(Math.max(want, 0), remaining)
+    if (amt <= 0) return
+    rows.push({ category, label: categoryLabel(category), amount_rupees: amt, loan_id: null })
+    remaining = Math.round((remaining - amt) * 100) / 100
+  }
+  take("fine", p.fine_amount)
+  take("deposit", p.required_deposit)
+  if (remaining > 0) take("advance", remaining)
+  return rows
+}
+
 export function DepositTab() {
   const { user } = useAuth()
   const search = useSearch()
@@ -245,8 +264,6 @@ export function DepositTab() {
   const [previewError, setPreviewError] = useState<string | null>(null)
 
   const [allocations, setAllocations] = useState<SplitAllocation[]>([])
-  const [newCategory, setNewCategory] = useState<SplitCategory>("deposit")
-  const [selectedLoanId, setSelectedLoanId] = useState<string>("")
 
   const [submitting, setSubmitting] = useState(false)
   // This period's deposit: is it due, and has it been paid? (same source as Home)
@@ -367,7 +384,7 @@ export function DepositTab() {
         ocr_reference: ocrResult.reference,
       })
       const data = res.data as PreviewResponse
-      setPreview({
+      const normalized: PreviewResponse = {
         ...data,
         ocr_amount: Number(data.ocr_amount),
         ocr_charge: Number(data.ocr_charge),
@@ -386,8 +403,10 @@ export function DepositTab() {
           interest_rate: Number(ln.interest_rate),
           service_charge_due_paisa: Number(ln.service_charge_due_paisa ?? 0),
         })),
-      })
-      setAllocations([])
+      }
+      setPreview(normalized)
+      // Start from a sensible split the member can tweak, not a blank slate.
+      setAllocations(buildDefaultAllocations(normalized))
     } catch (err: unknown) {
       setPreviewError(err instanceof Error ? err.message : t("Failed to compute deposit preview"))
     } finally {
@@ -482,24 +501,40 @@ export function DepositTab() {
 
   const addAllocation = () => {
     if (!preview) return
-    const isLoanCategory = LOAN_CATEGORIES.includes(newCategory)
-
-    if (isLoanCategory && !selectedLoanId) return
-
-    const duplicate = allocations.some(
-      (a) => a.category === newCategory && (a.loan_id || null) === (isLoanCategory ? selectedLoanId : null)
-    )
-    if (duplicate) return
-
+    // Append a blank row the member fills in; its category and loan are
+    // editable on the row itself. Advance is a sensible default extra split.
     setAllocations((prev) => [
       ...prev,
-      {
-        category: newCategory,
-        label: categoryLabel(newCategory),
-        amount_rupees: 0,
-        loan_id: isLoanCategory ? selectedLoanId : null,
-      },
+      { category: "advance", label: categoryLabel("advance"), amount_rupees: 0, loan_id: null },
     ])
+  }
+
+  const updateAllocationCategory = (index: number, category: SplitCategory) => {
+    setAllocations((prev) => {
+      const next = [...prev]
+      const isLoan = LOAN_CATEGORIES.includes(category)
+      let loanId = next[index].loan_id
+      if (isLoan) {
+        const applicable = (preview?.active_loans ?? []).filter(
+          (ln) => category !== "service_charge" || ln.service_charge_due_paisa > 0,
+        )
+        if (!loanId || !applicable.some((ln) => ln.loan_id === loanId)) {
+          loanId = applicable[0]?.loan_id ?? null
+        }
+      } else {
+        loanId = null
+      }
+      next[index] = { ...next[index], category, label: categoryLabel(category), loan_id: loanId }
+      return next
+    })
+  }
+
+  const updateAllocationLoan = (index: number, loanId: string) => {
+    setAllocations((prev) => {
+      const next = [...prev]
+      next[index] = { ...next[index], loan_id: loanId }
+      return next
+    })
   }
 
   const updateAllocationAmount = (index: number, value: number) => {
@@ -1042,69 +1077,56 @@ export function DepositTab() {
                     )}
 
                     <Separator className="my-3" />
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {t("Manually Allocate Your Deposit")}</p>
-
-                    <div className="mb-3 flex flex-wrap items-center gap-2">
-                      <Select value={newCategory} onValueChange={(v) => setNewCategory(v as SplitCategory)}>
-                        <SelectTrigger className="w-48">
-                          <SelectValue placeholder={t("Select category")} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="deposit">{t("Regular Deposit")}</SelectItem>
-                          <SelectItem value="fine">{t("Late Fine")}</SelectItem>
-                          <SelectItem value="advance">{t("Advance Deposit")}</SelectItem>
-                          <SelectItem value="loan_principal">{t("Loan Principal")}</SelectItem>
-                          <SelectItem value="loan_interest">{t("Loan Interest")}</SelectItem>
-                          <SelectItem value="loan_renewal">{t("Loan Renewal")}</SelectItem>
-                          {preview.active_loans.some((ln) => ln.service_charge_due_paisa > 0) && (
-                            <SelectItem value="service_charge">{t("Service Charge")}</SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-
-                      {LOAN_CATEGORIES.includes(newCategory) && (
-                        <Select value={selectedLoanId} onValueChange={setSelectedLoanId}>
-                          <SelectTrigger className="w-56">
-                            <SelectValue placeholder={t("Select loan")} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {preview.active_loans
-                              .filter((ln) => newCategory !== "service_charge" || ln.service_charge_due_paisa > 0)
-                              .map((ln) => (
-                                <SelectItem key={ln.loan_id} value={ln.loan_id}>
-                                  {newCategory === "service_charge"
-                                    ? t("Loan of {0} · service charge {1} left", formatRs(ln.principal_paisa / 100), formatRs(ln.service_charge_due_paisa / 100))
-                                    : t("Loan of {0} · {1} left", formatRs(ln.principal_paisa / 100), formatRs(ln.outstanding_principal_paisa / 100))}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-
-                      <Button variant="outline" className="gap-1" onClick={addAllocation}>
-                        <Plus className="h-4 w-4" />
-                        {t("Add Category")}</Button>
+                    <div className="mb-2 flex flex-col gap-0.5">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        {t("How this deposit is applied")}</p>
+                      <p className="text-[11px] text-muted-foreground">
+                        {t("Auto-filled from your deposit — adjust the amounts if you need to.")}</p>
                     </div>
 
                     <div className="flex flex-col gap-2">
                       {allocations.length === 0 ? (
                         <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                          {t("No allocations yet. Add categories manually.")}</div>
+                          {t("Nothing to allocate yet.")}</div>
                       ) : (
                         allocations.map((alloc, idx) => (
-                          <div key={`${alloc.category}-${alloc.loan_id ?? idx}`} className="flex items-center gap-2 rounded-md border bg-background p-2.5">
-                            <Badge variant="outline" className="text-[10px]">
-                              {categoryLabel(alloc.category)}
-                            </Badge>
-                            {alloc.loan_id && (() => {
-                              const ln = preview?.active_loans.find((l) => l.loan_id === alloc.loan_id)
-                              return (
-                                <span className="text-[11px] text-muted-foreground">
-                                  {ln ? t("Loan of {0}", formatRs(ln.principal_paisa / 100)) : t("Loan")}
-                                </span>
-                              )
-                            })()}
+                          <div key={idx} className="flex flex-wrap items-center gap-2 rounded-md border bg-background p-2.5">
+                            <Select value={alloc.category} onValueChange={(v) => updateAllocationCategory(idx, v as SplitCategory)}>
+                              <SelectTrigger className="h-8 w-44 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="deposit">{t("Regular Deposit")}</SelectItem>
+                                <SelectItem value="fine">{t("Late Fine")}</SelectItem>
+                                <SelectItem value="advance">{t("Advance Deposit")}</SelectItem>
+                                <SelectItem value="loan_principal">{t("Loan Principal")}</SelectItem>
+                                <SelectItem value="loan_interest">{t("Loan Interest")}</SelectItem>
+                                <SelectItem value="loan_renewal">{t("Loan Renewal")}</SelectItem>
+                                {preview.active_loans.some((ln) => ln.service_charge_due_paisa > 0) && (
+                                  <SelectItem value="service_charge">{t("Service Charge")}</SelectItem>
+                                )}
+                              </SelectContent>
+                            </Select>
+
+                            {LOAN_CATEGORIES.includes(alloc.category) && (
+                              <Select value={alloc.loan_id ?? ""} onValueChange={(v) => updateAllocationLoan(idx, v)}>
+                                <SelectTrigger className="h-8 w-52 text-xs">
+                                  <SelectValue placeholder={t("Select loan")} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {preview.active_loans
+                                    .filter((ln) => alloc.category !== "service_charge" || ln.service_charge_due_paisa > 0)
+                                    .map((ln) => (
+                                      <SelectItem key={ln.loan_id} value={ln.loan_id}>
+                                        {alloc.category === "service_charge"
+                                          ? t("Loan of {0} · service charge {1} left", formatRs(ln.principal_paisa / 100), formatRs(ln.service_charge_due_paisa / 100))
+                                          : t("Loan of {0} · {1} left", formatRs(ln.principal_paisa / 100), formatRs(ln.outstanding_principal_paisa / 100))}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+
                             <div className="ml-auto flex items-center gap-1">
                               <span className="text-xs text-muted-foreground">{t("Rs.")}</span>
                               <Input
@@ -1128,6 +1150,19 @@ export function DepositTab() {
                           </div>
                         ))
                       )}
+                    </div>
+
+                    {preview.active_loans.some((ln) => ln.outstanding_principal_paisa > 0 || ln.service_charge_due_paisa > 0) &&
+                      !allocations.some((a) => LOAN_CATEGORIES.includes(a.category)) && (
+                        <p className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <AlertTriangle className="h-3 w-3 shrink-0 text-amber-500" />
+                          {t("You have a loan due — use “Add category” to put part of this deposit toward it.")}</p>
+                      )}
+
+                    <div className="mt-3">
+                      <Button variant="outline" size="sm" className="gap-1" onClick={addAllocation}>
+                        <Plus className="h-4 w-4" />
+                        {t("Add category")}</Button>
                     </div>
 
                     <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
