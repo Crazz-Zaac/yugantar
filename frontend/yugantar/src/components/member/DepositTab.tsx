@@ -39,7 +39,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { apiClient } from "@/api/api"
 import ReceiptReviewDialog from "./ReceiptReviewDialog"
 import { useSearch } from "wouter"
-import { formatDate, formatDateTime } from "@/lib/datetime"
+import { formatDate, formatDateBoth, formatDateTime } from "@/lib/datetime"
 import { CommunityFilters } from "@/components/CommunityFilters"
 import { communityFilterParams, EMPTY_COMMUNITY_FILTERS, type CommunityFilterValues } from "@/lib/communityFilters"
 
@@ -1341,7 +1341,41 @@ export function DepositTab() {
                 choice={{ label: "Type", options: [{ value: "current", label: "Current" }, { value: "advance", label: "Advance" }] }}
                 resultCount={communityLoading ? undefined : communityDeposits.length}
               />
-              {renderDepositTable(communityDeposits, communityLoading, true)}
+              {communityLoading ? (
+                <div className="flex items-center justify-center py-8 text-muted-foreground">
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {t(" Loading…")}</div>
+              ) : communityDeposits.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  {Object.values(communityFilters).some(Boolean) ? t("No deposits match these filters.") : t("No community deposits yet.")}
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">{t("Depositor")}</TableHead>
+                        <TableHead className="text-right text-xs">{t("Amount")}</TableHead>
+                        <TableHead className="text-xs">{t("Deposit date")}</TableHead>
+                        <TableHead className="text-xs">{t("Type")}</TableHead>
+                        <TableHead className="text-xs">{t("Verified by")}</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {communityDeposits.map((d) => (
+                        <TableRow key={d.id}>
+                          <TableCell className="text-sm font-medium">{d.depositor_name ?? "—"}</TableCell>
+                          <TableCell className="font-nums text-right text-sm font-medium">
+                            {formatRsFromRupees(Number(d.deposited_amount))}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">{formatDateBoth(d.deposited_date)}</TableCell>
+                          <TableCell className="text-sm capitalize">{enumLabel(d.deposit_type)}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{d.verified_by ?? "—"}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
