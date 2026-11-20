@@ -514,7 +514,7 @@ export function MemberPoliciesTab() {
                                 />
                             </div>
                             <div className="flex flex-col gap-2">
-                                <Label className="text-xs font-medium">{t("Late Fine (%)")}</Label>
+                                <Label className="text-xs font-medium">{t("Late Deposit Fine (%)")}</Label>
                                 <Input
                                     type="number"
                                     step="0.01"

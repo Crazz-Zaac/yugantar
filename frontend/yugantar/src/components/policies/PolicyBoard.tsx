@@ -102,7 +102,7 @@ function facts(item: Item): string[] {
           : t("Period not set"),
       Number(p.late_deposit_fine)
         ? t(
-            "Late fine {0}% ({1})",
+            "Late deposit fine {0}% ({1})",
             Number(p.late_deposit_fine),
             formatRs(Math.round((Number(p.amount_paisa) * Number(p.late_deposit_fine)) / 100) / 100),
           )

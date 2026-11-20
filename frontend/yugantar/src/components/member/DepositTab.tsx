@@ -178,7 +178,7 @@ function depositStatusBadge(status: DepositItem["verification_status"]) {
 function categoryLabel(category: SplitCategory): string {
   const map: Record<SplitCategory, string> = {
     deposit: "Regular Deposit",
-    fine: "Late Fine",
+    fine: "Late Deposit Fine",
     advance: "Advance Deposit",
     loan_principal: "Loan Principal",
     loan_interest: "Loan Interest",
@@ -1174,7 +1174,7 @@ export function DepositTab() {
                         <p className="font-nums text-sm font-bold">{formatRsFromRupees(preview.required_deposit)}</p>
                       </div>
                       <div className="rounded-md border bg-background p-2 text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("Late Fine")}</p>
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{t("Late Deposit Fine")}</p>
                         <p className="font-nums text-sm font-bold">{formatRsFromRupees(preview.fine_amount)}</p>
                       </div>
                       <div className="rounded-md border bg-background p-2 text-center">
@@ -1211,7 +1211,7 @@ export function DepositTab() {
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="deposit">{t("Regular Deposit")}</SelectItem>
-                                <SelectItem value="fine">{t("Late Fine")}</SelectItem>
+                                <SelectItem value="fine">{t("Late Deposit Fine")}</SelectItem>
                                 <SelectItem value="advance">{t("Advance Deposit")}</SelectItem>
                                 <SelectItem value="loan_principal">{t("Loan Principal")}</SelectItem>
                                 <SelectItem value="loan_interest">{t("Loan Interest")}</SelectItem>
