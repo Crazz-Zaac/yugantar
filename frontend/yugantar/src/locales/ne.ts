@@ -272,6 +272,7 @@ const ne: Record<string, string> = {
   "Estimate · final terms are set when the loan is approved": "अनुमान · अन्तिम सर्त ऋण स्वीकृत हुँदा तय हुन्छन्",
   "Expand sidebar": "साइडबार फैलाउनुहोस्",
   "Expired": "समाप्त",
+  "Active {0} – {1}": "सक्रिय {0} – {1}",
   "Extreme cases only. Consult the member first (e.g. by phone). The signature is recorded only after the President, Treasurer and Secretary each authorise it, and the member is notified.": "अति आवश्यक अवस्थामा मात्र। पहिले सदस्यसँग परामर्श गर्नुहोस् (जस्तै फोनमा)। अध्यक्ष, कोषाध्यक्ष र सचिव प्रत्येकले अनुमति दिएपछि मात्र हस्ताक्षर रेकर्ड हुन्छ, र सदस्यलाई सूचना दिइन्छ।",
   "Failed to approve loan.": "ऋण स्वीकृत गर्न सकिएन।",
   "Failed to approve the registration": "दर्ता स्वीकृत गर्न सकिएन",

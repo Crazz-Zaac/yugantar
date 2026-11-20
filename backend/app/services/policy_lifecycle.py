@@ -54,9 +54,37 @@ def expire_ended_policies(session: Session) -> int:
     return expired
 
 
+def expire_superseded_deposit_policies(session: Session) -> int:
+    """When several deposit policies are active at once, only the one with the
+    latest start is current; the earlier ones are superseded. Mark each
+    superseded policy EXPIRED, ending it the moment the next policy started, so
+    it shows a proper active period instead of lingering as 'active forever'."""
+    now = datetime.now(timezone.utc)
+    started = [
+        p
+        for p in session.exec(
+            select(DepositPolicy).where(DepositPolicy.status == PolicyStatus.ACTIVE)
+        ).all()
+        if (start := _utc(p.effective_from)) is not None and start <= now
+    ]
+    started.sort(key=lambda p: (_utc(p.effective_from), _utc(p.created_at) or now))
+    changed = 0
+    # Every policy except the latest-started is superseded by the next one.
+    for earlier, later in zip(started, started[1:]):
+        earlier.effective_to = later.effective_from
+        earlier.status = PolicyStatus.EXPIRED
+        earlier.updated_at = now
+        session.add(earlier)
+        changed += 1
+    if changed:
+        session.commit()
+    return changed
+
+
 def current_deposit_policy(session: Session) -> Optional[DepositPolicy]:
     """The single deposit policy deposits must use (None if none in force)."""
     expire_ended_policies(session)
+    expire_superseded_deposit_policies(session)
     now = datetime.now(timezone.utc)
     in_force = [
         p for p in session.exec(select(DepositPolicy).where(DepositPolicy.status == PolicyStatus.ACTIVE)).all()

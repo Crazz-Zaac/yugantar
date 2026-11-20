@@ -434,9 +434,14 @@ export function PolicyBoard({ deposit, loan, canManage, reloadKey, busy, onOpenS
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{title(i)}</p>
                     <p className="text-xs text-muted-foreground">{facts(i).join(" · ")}</p>
+                    {i.policy.status === "expired" && (
+                      <p className="text-xs text-muted-foreground">
+                        {t("Active {0} – {1}", formatDate(i.policy.effective_from), i.policy.effective_to ? formatDate(i.policy.effective_to) : t("now"))}
+                      </p>
+                    )}
                   </div>
                   <Badge variant="outline" className="text-[11px] text-muted-foreground">
-                    {i.policy.status === "void" ? t("Not adopted") : t("Ended")}
+                    {i.policy.status === "void" ? t("Not adopted") : t("Expired")}
                   </Badge>
                   {i.policy.status === "expired" && <RecordButton item={i} />}
                   {canManage && i.policy.status === "void" && (

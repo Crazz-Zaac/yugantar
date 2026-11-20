@@ -161,6 +161,28 @@ class SmartDepositService:
 
         policy = require_current_deposit_policy(session, req.policy_id)
 
+        # Reject deposits below the policy's required amount (+ late fine). The
+        # preview flags these as "insufficient"; the server now enforces it so a
+        # short deposit can't be submitted for approval at all.
+        due_for_fine = calculate_due_date(policy=policy, reference_date=now)
+        required = policy.amount_rupees
+        fine_due = Decimal(0)
+        if is_deposit_late(now, due_for_fine):
+            fine_due = calculate_late_fine(
+                deposited_date=now,
+                due_deposit_date=due_for_fine,
+                late_deposit_fine_percentage=policy.late_deposit_fine,
+                amount_to_be_deposited=required,
+            )
+        mandatory = required + fine_due
+        if net_amount + Decimal("1") < mandatory:
+            fine_note = f" + late fine Rs. {fine_due:,.0f}" if fine_due > 0 else ""
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Deposit must be at least Rs. {mandatory:,.0f} "
+                f"(policy Rs. {required:,.0f}{fine_note}). You entered Rs. {net_amount:,.0f}.",
+            )
+
         receipt_id = None
         if req.receipt_id is not None:
             receipt_id = ReceiptService().claim_for_deposit(
