@@ -227,14 +227,16 @@ export function DepositTab() {
   const isTreasurer = normalizedRoles.includes("treasurer")
 
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const ocrResultRef = useRef<HTMLDivElement>(null)
-  // Bumped when OCR finishes, so the effect below scrolls the read values into
-  // view. We deliberately don't scroll on every manual edit of those fields.
-  const [ocrScrollTick, setOcrScrollTick] = useState(0)
+  const summaryRef = useRef<HTMLDivElement>(null)
+  // Set when OCR finishes reading; the next preview load (which renders the
+  // Summary) scrolls it into view. We don't scroll on later manual edits that
+  // re-run the preview.
+  const scrollToSummaryRef = useRef(false)
+  const [summaryScrollTick, setSummaryScrollTick] = useState(0)
   useEffect(() => {
-    if (ocrScrollTick === 0) return
-    ocrResultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
-  }, [ocrScrollTick])
+    if (summaryScrollTick === 0) return
+    summaryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+  }, [summaryScrollTick])
 
   const [activeTab, setActiveTab] = useState("make")
 
@@ -381,8 +383,8 @@ export function DepositTab() {
       setOcrDetected(null)
     } finally {
       setOcrLoading(false)
-      // Reveal the read values without the member having to scroll down.
-      setOcrScrollTick((n) => n + 1)
+      // Scroll to the Summary once the preview that follows has rendered.
+      scrollToSummaryRef.current = true
     }
   }
 
@@ -422,6 +424,10 @@ export function DepositTab() {
         })),
       }
       setPreview(normalized)
+      if (scrollToSummaryRef.current) {
+        scrollToSummaryRef.current = false
+        setSummaryScrollTick((n) => n + 1)
+      }
       if (preserveAllocationsRef.current) {
         // Keep the split we loaded for editing instead of re-defaulting it.
         preserveAllocationsRef.current = false
@@ -1072,7 +1078,7 @@ export function DepositTab() {
                     ) : null
 
                   return (
-                    <div ref={ocrResultRef} className="rounded-lg border p-4">
+                    <div className="rounded-lg border p-4">
                       <div className="mb-1 flex items-center gap-2">
                         <ScanLine className="h-4 w-4 text-primary" />
                         <p className="text-xs font-semibold uppercase tracking-wider text-primary">{t("Voucher Details")}</p>
@@ -1158,7 +1164,7 @@ export function DepositTab() {
                 )}
 
                 {preview && (
-                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                  <div ref={summaryRef} className="rounded-lg border border-primary/20 bg-primary/5 p-4">
                     <div className="mb-3 flex items-center gap-2">
                       <Banknote className="h-4 w-4 text-primary" />
                       <p className="text-xs font-semibold uppercase tracking-wider text-primary">{t("Summary")}</p>
