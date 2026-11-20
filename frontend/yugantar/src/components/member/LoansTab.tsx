@@ -904,7 +904,6 @@ export function LoansTab() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="text-xs">{t("Member")}</TableHead>
-                        <TableHead className="text-xs">{t("Purpose")}</TableHead>
                         <TableHead className="text-right text-xs">{t("Amount")}</TableHead>
                         <TableHead className="text-xs">{t("Maturity")}</TableHead>
                         <TableHead className="text-xs">{t("Status")}</TableHead>
@@ -916,7 +915,6 @@ export function LoansTab() {
                       {communityLoans.map((loan) => (
                         <TableRow key={loan.id}>
                           <TableCell className="text-sm font-medium">{loan.applicant_name ?? "—"}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{loan.purpose ?? "—"}</TableCell>
                           <TableCell className="font-nums text-right text-sm font-medium">
                             {formatRs(loan.principal_rupees)}
                           </TableCell>
