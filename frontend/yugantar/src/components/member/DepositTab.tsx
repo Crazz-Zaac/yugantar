@@ -620,8 +620,9 @@ export function DepositTab() {
       setTimeout(() => {
         clearFile()
       }, 2500)
-    } catch (err: unknown) {
-      setSubmitError(err instanceof Error ? err.message : t("Failed to submit deposit"))
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setSubmitError(detail ?? (err instanceof Error ? err.message : t("Failed to submit deposit")))
     } finally {
       setSubmitting(false)
     }
@@ -704,6 +705,7 @@ export function DepositTab() {
 
   const canSubmit =
     !!preview &&
+    !preview.is_insufficient &&
     !submitting &&
     allocations.length > 0 &&
     Math.abs(allocationDiff) < 1
@@ -1168,7 +1170,7 @@ export function DepositTab() {
                       <div className="mb-4 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/5 p-3">
                         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
                         <p className="text-xs text-destructive/90">
-                          {t("Net amount is lower than policy amount + fine. You can still allocate categories manually, but ensure your allocation total matches net amount.")}</p>
+                          {t("This is below the required deposit — you must deposit at least {0} to submit.", formatRsFromRupees(preview.required_deposit + preview.fine_amount))}</p>
                       </div>
                     )}
 

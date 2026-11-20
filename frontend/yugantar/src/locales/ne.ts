@@ -443,6 +443,7 @@ const ne: Record<string, string> = {
   "Nepal Time (NPT)": "नेपाली समय (NPT)",
   "Nepali Rupee (Rs.)": "नेपाली रुपैयाँ (रु.)",
   "Net Amount": "खुद रकम",
+  "This is below the required deposit — you must deposit at least {0} to submit.": "यो आवश्यक जम्माभन्दा कम छ — पेस गर्न कम्तीमा {0} जम्मा गर्नुपर्छ।",
   "Net amount is lower than policy amount + fine. You can still allocate categories manually, but ensure your allocation total matches net amount.": "खुद रकम नीतिको रकम + जरिवानाभन्दा कम छ। तपाईं वर्ग आफैं बाँडफाँड गर्न सक्नुहुन्छ, तर कुल बाँडफाँड खुद रकमसँग मिलाउनुहोस्।",
   "Net:": "खुद:",
   "New Password": "नयाँ पासवर्ड",
