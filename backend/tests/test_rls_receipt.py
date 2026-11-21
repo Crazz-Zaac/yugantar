@@ -32,6 +32,9 @@ pytestmark = pytest.mark.skipif(not _db_available(), reason="no database reachab
 _POLICY_SQL = [
     "ALTER TABLE receipt ENABLE ROW LEVEL SECURITY",
     "ALTER TABLE receipt FORCE ROW LEVEL SECURITY",
+    # Idempotent: drop first so the test works whether or not the migration
+    # already created this policy (all inside the rolled-back transaction).
+    "DROP POLICY IF EXISTS receipt_owner_or_privileged ON receipt",
     "CREATE POLICY receipt_owner_or_privileged ON receipt "
     "USING (user_id = NULLIF(current_setting('app.user_id', true), '')::uuid "
     "OR COALESCE(NULLIF(current_setting('app.is_privileged', true), '')::boolean, false)) "
@@ -42,8 +45,9 @@ _POLICY_SQL = [
 _INS_USER = text(
     'INSERT INTO "user" (id, first_name, last_name, gender, hashed_password, '
     "phone, address, is_verified, is_approved, disabled, preferred_language, "
-    "joined_at, created_at, updated_at) VALUES (:id,'T','T',CAST(:g AS genderenum),"
-    "'x','1','x',true,true,false,'en',now(),now(),now())"
+    "mfa_enabled, mfa_exempt, joined_at, created_at, updated_at) VALUES "
+    "(:id,'T','T',CAST(:g AS genderenum),'x','1','x',true,true,false,'en',"
+    "false,false,now(),now(),now())"
 )
 _INS_RECEIPT = text(
     "INSERT INTO receipt (id, date, user_id, content_hash, size_bytes, expires_at, "
@@ -57,8 +61,13 @@ _VISIBLE = text("SELECT id FROM receipt WHERE id IN (:ra, :rb)")
 
 
 def test_receipt_rls_isolates_members():
-    from app.core.db import engine
+    # Connect as the OWNER (superuser) so the setup inserts bypass RLS; the
+    # policy is then exercised by SET ROLE to a non-superuser below. (The app
+    # engine may itself be the RLS-subject role once POSTGRES_APP_USER is set.)
+    from sqlalchemy import create_engine
+    from app.core.config import settings
 
+    engine = create_engine(str(settings.SQLALCHEMY_DATABASE_URI))
     a, b = uuid.uuid4(), uuid.uuid4()
     ra, rb = uuid.uuid4(), uuid.uuid4()
 
