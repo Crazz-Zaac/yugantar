@@ -132,6 +132,10 @@ class UserResponse(UserBase):
     approved_at: Optional[datetime] = None
     preferred_language: str = "en"
 
+    # Two-factor authentication status (shown to the user themselves and admins)
+    mfa_enabled: bool = False
+    mfa_exempt: bool = False
+
     created_at: datetime
     updated_at: datetime
 
@@ -151,6 +155,13 @@ class AdminAssignUserRoles(SQLModel):
 
     access_roles: Optional[List[AccessRole]] = None
     cooperative_roles: Optional[List[CooperativeRole]] = None
+
+
+class AdminMfaUpdate(SQLModel):
+    """Admin toggles whether 2FA is required for a user.
+    required=False exempts them (and clears any enrolment)."""
+
+    required: bool
 
 
 # Schema for admin to list users

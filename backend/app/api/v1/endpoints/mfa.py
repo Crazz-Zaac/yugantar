@@ -53,17 +53,30 @@ def setup_mfa(
     user: User = Depends(get_mfa_pending_user),
     session: Session = Depends(get_session),
 ):
-    """Begin enrolment: generate a new TOTP secret and return it plus the
-    otpauth URI to show as a QR code. Not yet active until confirmed."""
+    """Begin enrolment: return the TOTP secret plus the otpauth URI to show as
+    a QR code. Not active until confirmed.
+
+    The pending secret is REUSED across calls: if setup is requested again
+    before confirmation (e.g. React StrictMode double-invokes the effect, or
+    the user reopens the page), the same secret is returned, so the QR the user
+    scanned always matches what gets stored. A regenerate would otherwise leave
+    the authenticator on an old secret and every code would be rejected."""
     if user.mfa_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Two-factor authentication is already set up.",
         )
-    secret = mfa.generate_secret()
-    user.mfa_secret = mfa.encrypt_secret(secret)
-    session.add(user)
-    session.commit()
+    secret = None
+    if user.mfa_secret:
+        try:
+            secret = mfa.decrypt_secret(user.mfa_secret)
+        except Exception:
+            secret = None  # unreadable (e.g. key rotation): start fresh
+    if not secret:
+        secret = mfa.generate_secret()
+        user.mfa_secret = mfa.encrypt_secret(secret)
+        session.add(user)
+        session.commit()
     return MfaSetupResponse(
         secret=secret,
         otpauth_uri=mfa.provisioning_uri(user.email, secret),
