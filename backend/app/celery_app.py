@@ -28,3 +28,20 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(minute="*/5"),
     },
 }
+
+
+# Background tasks run as a trusted system principal so Row-Level Security
+# does not block them (they operate on behalf of the whole cooperative, not
+# one member). The principal is cleared when each task finishes.
+from celery.signals import task_prerun, task_postrun  # noqa: E402
+from app.core import rls  # noqa: E402
+
+
+@task_prerun.connect
+def _rls_set_system_principal(*args, **kwargs):
+    rls.set_system_principal()
+
+
+@task_postrun.connect
+def _rls_clear_principal(*args, **kwargs):
+    rls.clear_principal()
