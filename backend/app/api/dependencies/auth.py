@@ -7,6 +7,7 @@ import jwt
 
 from app.core.db import get_session
 from app.core.config import settings
+from app.core.security import MFA_PENDING_SCOPE, decode_mfa_pending_token
 from app.models.user_model import User
 from app.services.user_service import UserService
 
@@ -14,6 +15,10 @@ from app.services.user_service import UserService
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/v1/auth/login"
 )  # or "api/v1/login/token" depending on your setup
+
+# Pending MFA token: the short-lived token returned by /auth/login, carried as
+# a Bearer token on the /auth/mfa/* endpoints while the second factor is pending.
+mfa_pending_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 async def get_current_user(
@@ -33,6 +38,9 @@ async def get_current_user(
             algorithms=[settings.ALGORITHM],
             options={"verify_exp": True},
         )
+        # A pending MFA token must never be accepted as a full access token.
+        if payload.get("scope") == MFA_PENDING_SCOPE:
+            raise credentials_exception
         user_id: str = payload.get("sub")
         if user_id is None:
             raise credentials_exception
@@ -72,3 +80,30 @@ async def get_current_active_user(
 ) -> User:
     """Kept for compatibility; get_current_user already rejects disabled users."""
     return current_user
+
+
+async def get_mfa_pending_user(
+    token: str = Depends(mfa_pending_scheme),
+    session: Session = Depends(get_session),
+) -> User:
+    """Resolve the user from a short-lived MFA pending token (issued by
+    /auth/login after the password check). Used only by the /auth/mfa/*
+    enrolment and challenge endpoints."""
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired sign-in session. Please sign in again.",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        user_id = decode_mfa_pending_token(token)
+        token_data = UUID(user_id)
+    except Exception:
+        raise credentials_exception
+
+    user = session.exec(select(User).where(User.id == token_data)).first()
+    if user is None or user.disabled:
+        raise credentials_exception
+    # Block unverified/unapproved accounts here too (defence in depth).
+    if UserService.account_block_reason(user):
+        raise credentials_exception
+    return user

@@ -6,8 +6,13 @@ from datetime import timedelta
 
 from app.models.user_model import User
 from app.services.user_service import UserService
-from app.core.security import create_access_token, decode_url_safe_token
+from app.core.security import (
+    create_access_token,
+    create_mfa_pending_token,
+    decode_url_safe_token,
+)
 from app.schemas.user_schema import TokenResponse
+from app.schemas.mfa_schema import LoginResponse
 from app.core.config import settings
 from app.core.db import get_session
 from app.core import rate_limit
@@ -37,15 +42,20 @@ def authenticate_with_rate_limit(request: Request, session: Session, email: str,
     return user
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=LoginResponse)
 async def login_for_access_token(
     request: Request,
-    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: Session = Depends(get_session),
 ):
     """
-    Authenticate user and return access token.
+    Step 1 of sign-in: verify the password and start the MFA step.
+
+    MFA is required for every user, so no access token is issued here. The
+    response carries a short-lived `mfa_token`; the client then calls:
+      - POST /auth/mfa/challenge          if `mfa_required`     (enrolled user)
+      - POST /auth/mfa/setup + /confirm   if `mfa_setup_required` (first sign-in)
+    to receive the access token.
 
     **Note:** Enter your EMAIL address in the 'username' field below.
     """
@@ -58,21 +68,13 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token_expiry = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = await create_access_token(
-        subject=str(
-            user.id
-        ),  # Fixed: was User.id (class) instead of user.id (instance)
-        expires_delta=access_token_expiry,
-    )
-
-    # refresh token: opaque, stored in Redis, sent as httpOnly cookie only
-    set_refresh_cookie(response, issue_refresh_token(user.id))
-
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token="",  # Don't leak refresh token in response body
-        token_type="bearer",
+    # Password is correct; hand off to the second factor. The access token and
+    # refresh cookie are only issued once MFA succeeds (see app/.../mfa.py).
+    mfa_token = create_mfa_pending_token(user.id)
+    return LoginResponse(
+        mfa_required=user.mfa_enabled,
+        mfa_setup_required=not user.mfa_enabled,
+        mfa_token=mfa_token,
     )
 
 

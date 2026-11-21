@@ -20,6 +20,7 @@ from app.api.v1.endpoints import (
     minutes,
     organization,
     policy_change,
+    mfa,
 )
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -59,6 +60,7 @@ async def translated_http_exception_handler(request: Request, exc: StarletteHTTP
 
 
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(mfa.router, prefix="/api/v1")
 app.include_router(admin.router, prefix="/api/v1")
 app.include_router(user_route.router, prefix="/api/v1")
 app.include_router(deposit_policy.router, prefix="/api/v1")

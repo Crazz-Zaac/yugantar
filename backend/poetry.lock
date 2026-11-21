@@ -3763,6 +3763,21 @@ pyyaml = "*"
 extra = ["pygments (>=2.19.1)"]
 
 [[package]]
+name = "pyotp"
+version = "2.12.1"
+description = "Python One Time Password Library"
+optional = false
+python-versions = ">=3.10"
+groups = ["main"]
+files = [
+    {file = "pyotp-2.12.1-py3-none-any.whl", hash = "sha256:2f65978d0a0afe5588ec960c810cbb974ba1957ffbf29775d8d4e1b2d4b8984c"},
+    {file = "pyotp-2.12.1.tar.gz", hash = "sha256:8d0c4192f3c5d1b1a8792df23b9d8acbb7e70abd2b160962af55c5700edbd236"},
+]
+
+[package.extras]
+test = ["coverage", "mypy", "ruff", "wheel"]
+
+[[package]]
 name = "pyparsing"
 version = "3.3.1"
 description = "pyparsing - Classes and methods to define and execute parsing grammars"
@@ -5111,4 +5126,4 @@ dev = ["black (>=19.3b0) ; python_version >= \"3.6\"", "pytest (>=4.6.2)"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4.0"
-content-hash = "965975baad72708a4a958fec7e460555bac0e4683765a3d469e3481982d2fc74"
+content-hash = "021b08b146ffd4ca61141a8bc455355b6574cab8b63e6b2d726d4f08703af193"
