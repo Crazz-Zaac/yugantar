@@ -3,15 +3,21 @@ from typing import Generator
 
 from .config import settings
 from . import utc_datetimes
+from . import rls
 from app.models.user_model import User
 from app.schemas.user_schema import UserCreate
 from app.services.user_service import UserService
 
 
-engine = create_engine(str(settings.SQLALCHEMY_DATABASE_URI))
+# The running API connects via APP_DATABASE_URI, which is the dedicated
+# RLS-subject role when configured and the owner URI otherwise (default).
+engine = create_engine(str(settings.APP_DATABASE_URI))
 
 # Every datetime loaded from the DB is UTC-aware (API sends "...Z")
 utc_datetimes.register()
+
+# Stamp each transaction with the request principal (RLS Phase 0 plumbing).
+rls.register()
 
 
 # ------------------
