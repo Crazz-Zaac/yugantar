@@ -12,7 +12,6 @@ from app.models.user_model import User
 from app.schemas.user_schema import (
     UserResponse,
     AdminAssignUserRoles,
-    AdminMfaUpdate,
     UserListResponse,
     PaginatedUserListResponse,
 )
@@ -162,48 +161,6 @@ async def toggle_user_disabled_status(
     session.refresh(user)
     if user.disabled:
         revoke_all_refresh_tokens(user.id)
-    return user
-
-
-@router.post("/users/{user_id}/mfa", response_model=UserResponse)
-async def set_user_mfa_requirement(
-    user_id: UUID,
-    body: AdminMfaUpdate,
-    session: Session = Depends(get_session),
-    current_admin: User = Depends(get_current_admin),
-):
-    """Enable (require) or disable (exempt) two-factor authentication for a
-    user. Admin access required.
-
-    - required=True  : the user must use 2FA (enrols at next sign-in if not
-      already enrolled).
-    - required=False : the user is exempt and signs in without 2FA; any
-      existing enrolment is cleared.
-
-    Either way the user's sessions are ended so the change takes effect.
-    """
-    user = user_service.get_user_by_id(session=session, user_id=user_id)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        )
-
-    if body.required:
-        user.mfa_exempt = False
-    else:
-        user.mfa_exempt = True
-        user.mfa_enabled = False
-        user.mfa_secret = None
-        user.mfa_recovery_codes = None
-        user.mfa_enrolled_at = None
-
-    from datetime import datetime, timezone
-
-    user.updated_at = datetime.now(timezone.utc)
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-    revoke_all_refresh_tokens(user.id)
     return user
 
 

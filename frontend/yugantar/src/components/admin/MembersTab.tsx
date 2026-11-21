@@ -69,7 +69,6 @@ interface MemberUser {
   is_approved: boolean;
   disabled: boolean;
   mfa_enabled: boolean;
-  mfa_exempt: boolean;
   joined_at: string;
 }
 
@@ -135,6 +134,24 @@ function MemberStatusBadge({ status }: { status: MemberStatus }) {
   );
 }
 
+// 2FA is mandatory for every member; this shows who has finished enrolling.
+function TwoFactorBadge({ enabled }: { enabled: boolean }) {
+  return (
+    <Badge
+      variant="outline"
+      className={`gap-1 text-[10px] ${
+        enabled
+          ? "border-success/30 text-success"
+          : "border-amber-500/40 text-amber-600"
+      }`}
+      title={enabled ? t("Two-factor authentication is set up") : t("Hasn't set up two-factor authentication yet")}
+    >
+      <Shield className="h-3 w-3" />
+      {enabled ? t("2FA on") : t("2FA pending")}
+    </Badge>
+  );
+}
+
 export function MembersTab() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -187,36 +204,6 @@ export function MembersTab() {
       fetchMembers(); // Refresh the list
     } catch (err) {
       console.error("Failed to toggle member status:", err);
-    }
-  };
-
-  // Admin enable/disable of two-factor authentication for a member.
-  const handleToggleMfa = async (member: MemberUser) => {
-    const required = member.mfa_exempt; // exempt now -> this re-requires it
-    const answer = await confirm({
-      title: required
-        ? t("Require 2FA for {0}?", getFullName(member))
-        : t("Disable 2FA for {0}?", getFullName(member)),
-      description: required
-        ? t("They'll set up an authenticator app the next time they sign in.")
-        : t(
-            "They'll sign in without two-factor authentication, and any existing authenticator is removed."
-          ),
-      confirmLabel: required ? t("Require 2FA") : t("Disable 2FA"),
-      destructive: !required,
-    });
-    if (!answer.confirmed) return;
-    try {
-      await apiClient.post(`/admin/users/${member.id}/mfa`, { required });
-      toast.success(
-        required
-          ? t("2FA now required for {0}", getFullName(member))
-          : t("2FA disabled for {0}", getFullName(member))
-      );
-      fetchMembers();
-    } catch (err) {
-      console.error("Failed to update 2FA:", err);
-      toast.error(t("Couldn't update 2FA for this member."));
     }
   };
 
@@ -330,14 +317,6 @@ export function MembersTab() {
             {t("Suspend")}
           </DropdownMenuItem>
         )}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => handleToggleMfa(member)}>
-          <Shield className="mr-2 h-3.5 w-3.5" />
-          {member.mfa_exempt ? t("Require 2FA") : t("Disable 2FA")}
-          {member.mfa_enabled && !member.mfa_exempt ? (
-            <span className="ml-auto text-xs text-muted-foreground">{t("on")}</span>
-          ) : null}
-        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="text-destructive"
@@ -533,6 +512,7 @@ export function MembersTab() {
                         </p>
                         <div className="mt-1.5 flex flex-wrap items-center gap-1">
                           <MemberStatusBadge status={status} />
+                          <TwoFactorBadge enabled={member.mfa_enabled} />
                           {member.cooperative_roles
                             .filter(r => r !== "member")
                             .map(role => (
@@ -631,6 +611,7 @@ export function MembersTab() {
                           </TableCell>
                           <TableCell>
                             <MemberStatusBadge status={status} />
+                          <TwoFactorBadge enabled={member.mfa_enabled} />
                           </TableCell>
                           <TableCell>{renderActions(member, status)}</TableCell>
                         </TableRow>

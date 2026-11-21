@@ -45,9 +45,9 @@ _POLICY_SQL = [
 _INS_USER = text(
     'INSERT INTO "user" (id, first_name, last_name, gender, hashed_password, '
     "phone, address, is_verified, is_approved, disabled, preferred_language, "
-    "mfa_enabled, mfa_exempt, joined_at, created_at, updated_at) VALUES "
+    "mfa_enabled, joined_at, created_at, updated_at) VALUES "
     "(:id,'T','T',CAST(:g AS genderenum),'x','1','x',true,true,false,'en',"
-    "false,false,now(),now(),now())"
+    "false,now(),now(),now())"
 )
 _INS_RECEIPT = text(
     "INSERT INTO receipt (id, date, user_id, content_hash, size_bytes, expires_at, "

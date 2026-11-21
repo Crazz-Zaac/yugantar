@@ -87,9 +87,6 @@ class User(BaseModel, table=True):
         default=None, sa_column=Column(JSON, nullable=True)
     )
     mfa_enrolled_at: Optional[datetime] = Field(default=None, nullable=True)
-    # An admin can exempt a user from the MFA requirement (e.g. a member who
-    # can't use an authenticator app). Exempt users sign in without 2FA.
-    mfa_exempt: bool = Field(default=False, nullable=False)
 
     # Relationships
     deposits: List["Deposit"] = Relationship(back_populates="user")

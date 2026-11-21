@@ -97,36 +97,26 @@ async def register_user(
 @router.post("/login", response_model=LoginResponse)
 async def login_user(
     request: Request,
-    response: Response,
     login_data: LoginRequest,
     session: Session = Depends(get_session),
 ):
     """
     Step 1 of sign-in: verify the password, then hand off to MFA.
 
-    MFA is required for every user unless an admin has exempted them. The
+    MFA is required for every user, so no access token is issued here. The
     response carries a short-lived ``mfa_token``; the client then completes the
     second factor on the ``/auth/mfa/*`` endpoints to receive the access token:
       - ``mfa_required``       -> POST /auth/mfa/challenge   (enrolled user)
       - ``mfa_setup_required`` -> POST /auth/mfa/setup + /setup/confirm (first time)
-    An exempt user instead receives an access token directly here.
     """
     # Password check (rate limited), then email verified + account approved
     user = authenticate_with_rate_limit(request, session, login_data.email, login_data.password)
 
-    if user.mfa_enabled:
-        return LoginResponse(mfa_required=True, mfa_token=create_mfa_pending_token(user.id))
-    if user.mfa_exempt:
-        # Admin has disabled 2FA for this user: issue a full session now.
-        access_token = await create_access_token(
-            subject=str(user.id),
-            expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-        )
-        set_refresh_cookie(response, issue_refresh_token(user.id))
-        return LoginResponse(access_token=access_token)
     # The access token and refresh cookie are issued only once MFA succeeds.
     return LoginResponse(
-        mfa_setup_required=True, mfa_token=create_mfa_pending_token(user.id)
+        mfa_required=user.mfa_enabled,
+        mfa_setup_required=not user.mfa_enabled,
+        mfa_token=create_mfa_pending_token(user.id),
     )
 
 

@@ -1703,19 +1703,12 @@ const ne: Record<string, string> = {
   "Account password": "खाताको पासवर्ड",
   "Reset authenticator": "अथेन्टिकेटर रिसेट गर्नुहोस्",
 
-  // Admin control of 2FA per member
-  "Require 2FA": "2FA अनिवार्य गर्नुहोस्",
-  "Disable 2FA": "2FA निष्क्रिय गर्नुहोस्",
-  "Require 2FA for {0}?": "{0} का लागि 2FA अनिवार्य गर्ने?",
-  "Disable 2FA for {0}?": "{0} का लागि 2FA निष्क्रिय गर्ने?",
-  "They'll set up an authenticator app the next time they sign in.":
-    "अर्को पटक साइन इन गर्दा उनले अथेन्टिकेटर एप सेटअप गर्नुपर्नेछ।",
-  "They'll sign in without two-factor authentication, and any existing authenticator is removed.":
-    "उनले दुई-चरण प्रमाणीकरण बिना साइन इन गर्नेछन्, र भएको अथेन्टिकेटर हटाइनेछ।",
-  "2FA now required for {0}": "{0} का लागि अब 2FA अनिवार्य छ",
-  "2FA disabled for {0}": "{0} का लागि 2FA निष्क्रिय गरियो",
-  "Couldn't update 2FA for this member.": "यस सदस्यको 2FA अद्यावधिक गर्न सकिएन।",
-  "on": "सक्रिय",
+  // Admin view of each member's 2FA status
+  "2FA on": "2FA सक्रिय",
+  "2FA pending": "2FA बाँकी",
+  "Two-factor authentication is set up": "दुई-चरण प्रमाणीकरण सेटअप भएको छ",
+  "Hasn't set up two-factor authentication yet":
+    "अझै दुई-चरण प्रमाणीकरण सेटअप गरेको छैन",
 };
 
 export default ne;
