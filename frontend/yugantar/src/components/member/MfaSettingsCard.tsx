@@ -343,10 +343,9 @@ export function MfaSettingsCard() {
                     onChange={e => setResetPassword(e.target.value)}
                   />
                   <Input
-                    inputMode="numeric"
-                    placeholder={t("Current 6-digit code")}
+                    placeholder={t("Authenticator code or recovery code")}
                     value={resetCode}
-                    onChange={e => setResetCode(digits(e.target.value))}
+                    onChange={e => setResetCode(e.target.value.trim())}
                   />
                   <div className="flex gap-2 self-end">
                     <Button

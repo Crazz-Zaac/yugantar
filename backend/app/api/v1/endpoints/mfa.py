@@ -204,12 +204,17 @@ def reset_mfa(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Remove the current authenticator (e.g. lost device). Requires the account
-    password and a current code. The user is signed out everywhere and must
-    enrol again on next sign-in."""
+    """Turn off the current authenticator (e.g. lost device). Requires the
+    account password and either a current authenticator code OR one of the
+    recovery codes (so a lost device can still be removed). The user is signed
+    out everywhere and can enrol again from Settings."""
     rate_limit.check_mfa_allowed(str(user.id))
     password_ok = verify_password(body.password, user.hashed_password)
-    code_ok = mfa.verify_encrypted_totp(user.mfa_secret, body.code)
+    # A recovery code works here too — otherwise a lost device could never be
+    # removed. (Enrolment is cleared below regardless, so consuming one is fine.)
+    code_ok = mfa.verify_encrypted_totp(user.mfa_secret, body.code) or (
+        mfa.consume_recovery_code(user.mfa_recovery_codes, body.code) is not None
+    )
     if not (password_ok and code_ok):
         rate_limit.record_mfa_failure(str(user.id))
         raise HTTPException(
@@ -223,6 +228,6 @@ def reset_mfa(
     user.mfa_enrolled_at = None
     session.add(user)
     session.commit()
-    # Invalidate every session; the next sign-in forces re-enrolment.
+    # Invalidate every session; 2FA is now off and can be re-enabled in Settings.
     revoke_all_refresh_tokens(user.id)
-    return {"msg": "Two-factor authentication has been reset. You'll set it up again next time you sign in."}
+    return {"msg": "Two-factor authentication has been turned off. You can set it up again from Settings."}

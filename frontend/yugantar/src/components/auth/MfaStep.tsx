@@ -1,19 +1,19 @@
-import { useState } from "react"
-import { Loader2, ArrowRight, ArrowLeft, ShieldCheck } from "lucide-react"
-import { t } from "@/lib/i18n"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { useAuth } from "@/contexts/AuthContext"
-import type { UserForUI } from "@/utils/normalizeUser"
-import { mfaChallenge } from "@/api/api"
+import { useState } from "react";
+import { Loader2, ArrowRight, ArrowLeft, ShieldCheck } from "lucide-react";
+import { t } from "@/lib/i18n";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/contexts/AuthContext";
+import type { UserForUI } from "@/utils/normalizeUser";
+import { mfaChallenge } from "@/api/api";
 
 function errorMessage(err: any): string {
   return (
     err?.response?.data?.detail ||
     err?.message ||
     t("Something went wrong. Please try again.")
-  )
+  );
 }
 
 /** Login step for a user who already has 2FA: enter the one-time code. */
@@ -22,28 +22,28 @@ export function MfaStep({
   onComplete,
   onBack,
 }: {
-  mfaToken: string
-  onComplete: (user: UserForUI) => void
-  onBack: () => void
+  mfaToken: string;
+  onComplete: (user: UserForUI) => void;
+  onBack: () => void;
 }) {
-  const { finishLogin } = useAuth()
-  const [code, setCode] = useState("")
-  const [error, setError] = useState("")
-  const [busy, setBusy] = useState(false)
+  const { finishLogin } = useAuth();
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setBusy(true)
+    e.preventDefault();
+    setError("");
+    setBusy(true);
     try {
-      const { access_token } = await mfaChallenge(mfaToken, code.trim())
-      const user = await finishLogin(access_token)
-      onComplete(user)
+      const { access_token } = await mfaChallenge(mfaToken, code.trim());
+      const user = await finishLogin(access_token);
+      onComplete(user);
     } catch (err) {
-      setError(errorMessage(err))
-      setBusy(false)
+      setError(errorMessage(err));
+      setBusy(false);
     }
-  }
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,7 +70,10 @@ export function MfaStep({
 
       <form onSubmit={submit} className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="mfa-code" className="text-sm font-medium text-foreground">
+          <Label
+            htmlFor="mfa-code"
+            className="text-sm font-medium text-foreground"
+          >
             {t("Authentication code")}
           </Label>
           <Input
@@ -80,7 +83,7 @@ export function MfaStep({
             autoFocus
             placeholder="123456"
             value={code}
-            onChange={(e) => setCode(e.target.value.trim())}
+            onChange={e => setCode(e.target.value.trim())}
             className="h-11 bg-background text-center text-lg tracking-[0.3em]"
             disabled={busy}
           />
@@ -118,5 +121,5 @@ export function MfaStep({
         {t("Back to sign in")}
       </button>
     </div>
-  )
+  );
 }
