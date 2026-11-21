@@ -41,6 +41,13 @@ def set_principal(user_id: "UUID | str", is_privileged: bool) -> contextvars.Tok
     return _principal.set(Principal(str(user_id), bool(is_privileged)))
 
 
+# A trusted, non-user context (Celery tasks, maintenance scripts): no specific
+# user, but allowed past member-level RLS restrictions. app.user_id stays empty
+# so owner-only predicates still match nothing; app.is_privileged is true.
+def set_system_principal() -> contextvars.Token:
+    return _principal.set(Principal("", True))
+
+
 def clear_principal(token: Optional[contextvars.Token] = None) -> None:
     if token is not None:
         try:
