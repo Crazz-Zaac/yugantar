@@ -33,14 +33,16 @@ app = FastAPI(
     openapi_url="/openapi.json" if _docs_enabled else None,
 )
 
-origins = ["http://localhost:3000", "http://localhost:3001"]
-
+# Allowed browser origins come from settings (FRONTEND_HOST + BACKEND_CORS_ORIGINS),
+# so production uses the real frontend origin instead of a hardcoded localhost list.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.all_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Only the methods and headers the frontend actually sends; credentialed
+    # requests should not use wildcards.
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Language"],
 )
 
 # API error messages in the reader's language (X-Language header; app/i18n.py)
