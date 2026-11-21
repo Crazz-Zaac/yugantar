@@ -25,12 +25,14 @@ from app.services.user_service import UserService
 from app.api.dependencies.auth import get_current_user
 from app.core.security import (
     create_access_token,
+    create_mfa_pending_token,
     verify_password,
     create_url_safe_token,
     create_password_reset_token,
     read_password_reset_token,
     password_fingerprint_matches,
 )
+from app.schemas.mfa_schema import LoginResponse
 from app.services.email_notify import (
     send_password_reset_email,
     send_registration_notification,
@@ -92,40 +94,31 @@ async def register_user(
     return new_user
 
 
-@router.post("/login", response_model=LoginSuccess)
+@router.post("/login", response_model=LoginResponse)
 async def login_user(
     request: Request,
-    reponse: Response,
     login_data: LoginRequest,
     session: Session = Depends(get_session),
 ):
     """
-    Authenticate user and return user details.
+    Step 1 of sign-in: verify the password, then hand off to MFA.
+
+    MFA is required for every user, so no access token is issued here. The
+    response carries a short-lived ``mfa_token``; the client then completes the
+    second factor on the ``/auth/mfa/*`` endpoints to receive the access token:
+      - ``mfa_required``       -> POST /auth/mfa/challenge   (enrolled user)
+      - ``mfa_setup_required`` -> POST /auth/mfa/setup + /setup/confirm (first time)
     """
     # Password check (rate limited), then email verified + account approved
     user = authenticate_with_rate_limit(request, session, login_data.email, login_data.password)
 
-    # Generate access tokens
-    access_token = await create_access_token(
-        subject=str(user.id),
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    # The access token and refresh cookie are issued only once MFA succeeds.
+    mfa_token = create_mfa_pending_token(user.id)
+    return LoginResponse(
+        mfa_required=user.mfa_enabled,
+        mfa_setup_required=not user.mfa_enabled,
+        mfa_token=mfa_token,
     )
-
-    # refresh token: opaque, stored in Redis, sent as httpOnly cookie only
-    set_refresh_cookie(reponse, issue_refresh_token(user.id))
-
-    login_token = TokenResponse(
-        access_token=access_token,
-        refresh_token="",  # Don't leak refresh token in response body
-        token_type="bearer",
-    )
-
-    user_response = LoginSuccess(
-        token=login_token,
-        user=UserResponse.model_validate(user),
-    )
-
-    return user_response
 
 
 @router.get("/me", response_model=UserResponse)
