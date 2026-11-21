@@ -7,8 +7,10 @@ import jwt
 
 from app.core.db import get_session
 from app.core.config import settings
+from app.core import rls
 from app.models.user_model import User
 from app.services.user_service import UserService
+from app.services.duties import is_office_bearer, is_system_admin
 
 # tokenUrl should match the actual login endpoint
 oauth2_scheme = OAuth2PasswordBearer(
@@ -64,6 +66,8 @@ async def get_current_user(
     reason = UserService.account_block_reason(user)
     if reason:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=reason)
+    # Expose the caller to RLS policies for the rest of this request's DB work.
+    rls.set_principal(user.id, is_office_bearer(user) or is_system_admin(user))
     return user
 
 

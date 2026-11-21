@@ -48,6 +48,7 @@ from fastapi import Request  # noqa: E402
 from fastapi.exception_handlers import http_exception_handler  # noqa: E402
 from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
 from app import i18n  # noqa: E402
+from app.core import rls  # noqa: E402
 
 
 @app.exception_handler(StarletteHTTPException)
@@ -56,6 +57,15 @@ async def translated_http_exception_handler(request: Request, exc: StarletteHTTP
     if lang != "en" and isinstance(exc.detail, str):
         exc = StarletteHTTPException(exc.status_code, i18n.translate_text(exc.detail, lang), exc.headers)
     return await http_exception_handler(request, exc)
+
+
+@app.middleware("http")
+async def clear_rls_principal(request: Request, call_next):
+    """Defence-in-depth: never let a request's RLS principal outlive it."""
+    try:
+        return await call_next(request)
+    finally:
+        rls.clear_principal()
 
 
 app.include_router(auth.router, prefix="/api/v1")

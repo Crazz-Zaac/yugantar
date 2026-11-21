@@ -58,6 +58,11 @@ dev = [
     "types-passlib (>=1.7.7.20250602,<2.0.0.0)"
 ]
 
+[tool.pytest.ini_options]
+# Make the `app` package importable when running `pytest` from backend/.
+pythonpath = ["."]
+testpaths = ["tests"]
+
 [tool.ruff]
 line-length = 88
 select = ["E", "F", "I"]
