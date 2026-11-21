@@ -53,6 +53,36 @@ async def create_refresh_token(subject: str | Any, expires_delta: timedelta) -> 
     return encoded_jwt
 
 
+# ---------------------------------------------------------------------------
+# MFA login challenge token
+# ---------------------------------------------------------------------------
+# Short-lived token issued after the password check but before the second
+# factor. It carries scope="mfa_pending" so it can be used ONLY on the
+# /auth/mfa/* endpoints, never as a full access token.
+MFA_PENDING_SCOPE = "mfa_pending"
+MFA_PENDING_EXPIRE_MINUTES = 5
+
+
+def create_mfa_pending_token(subject: str | Any) -> str:
+    """A short-lived token that only authorises completing/enrolling MFA."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=MFA_PENDING_EXPIRE_MINUTES)
+    to_encode = {"exp": expire, "sub": str(subject), "scope": MFA_PENDING_SCOPE}
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
+def decode_mfa_pending_token(token: str) -> str:
+    """Return the subject (user id) of a valid pending token, or raise ValueError."""
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+    except jwt.PyJWTError:
+        raise ValueError("Invalid or expired token")
+    if payload.get("scope") != MFA_PENDING_SCOPE or not payload.get("sub"):
+        raise ValueError("Invalid token scope")
+    return str(payload["sub"])
+
+
 def decode_access_token(token: str) -> dict[str, Any]:
     """
     Decode a JWT access token.

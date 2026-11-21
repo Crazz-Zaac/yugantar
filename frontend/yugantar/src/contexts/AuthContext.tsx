@@ -1,9 +1,16 @@
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import { getLang, t } from "@/lib/i18n";
 import {
   apiClient,
   SESSION_EXPIRED_EVENT,
   broadcastAuth,
+  loginStep1,
   onAuthBroadcast,
   refreshAccessToken,
   setAccessToken,
@@ -15,11 +22,19 @@ import {
   denormalizeUser,
 } from "@/utils/normalizeUser";
 
+// Sign-in is two steps: after the password check the user must complete MFA
+// (every account has it). `login` returns which MFA step to show; `finishLogin`
+// turns the access token from that step into an active session.
+export type LoginOutcome =
+  | { kind: "authenticated"; user: UserForUI }
+  | { kind: "mfa"; mode: "challenge" | "setup"; mfaToken: string };
+
 interface AuthContextType {
   user: UserForUI | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<UserForUI>;
+  login: (email: string, password: string) => Promise<LoginOutcome>;
+  finishLogin: (accessToken: string) => Promise<UserForUI>;
   signup: (...args: any) => Promise<void>;
   logout: () => void;
   updateProfile: (data: Partial<UserForUI>) => Promise<void>;
@@ -73,7 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // logging in picks up the new session in the others.
   useEffect(
     () =>
-      onAuthBroadcast((message) => {
+      onAuthBroadcast(message => {
         if (message.type === "logout") {
           setAccessToken(null);
           setUser(null);
@@ -96,10 +111,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         preferred_language: getLang(),
       });
 
-
       const res = await fetch(`${API_BASE}/users/register`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-Language": getLang() },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Language": getLang(),
+        },
         body,
       });
 
@@ -110,9 +127,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (Array.isArray(errorData.detail)) {
             // e.g. {loc: ["body", "phone"], msg: "Value error, ..."} -> "phone: ..."
             const firstError = errorData.detail[0];
-            const field = String(firstError.loc?.[firstError.loc.length - 1] ?? "").replace(/_/g, " ");
-            const msg = String(firstError.msg || t("Validation failed")).replace(/^Value error, /, "");
-            throw new Error(field && field !== "body" ? `${field}: ${msg}` : msg);
+            const field = String(
+              firstError.loc?.[firstError.loc.length - 1] ?? ""
+            ).replace(/_/g, " ");
+            const msg = String(
+              firstError.msg || t("Validation failed")
+            ).replace(/^Value error, /, "");
+            throw new Error(
+              field && field !== "body" ? `${field}: ${msg}` : msg
+            );
           }
           throw new Error(errorData.detail);
         }
@@ -129,28 +152,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string): Promise<UserForUI> => {
+  // Step 1: verify the password. MFA is required for everyone, so this returns
+  // which second-factor step to show; no session starts until finishLogin().
+  const login = async (
+    email: string,
+    password: string
+  ): Promise<LoginOutcome> => {
     setIsLoading(true);
     try {
-      const res = await apiClient.post("/users/login", {
-        email,
-        password,
-      });
-
-      // Access token in memory only; the refresh token is an httpOnly cookie
-      setAccessToken(res.data.token.access_token);
-
-      const me = await apiClient.get("/users/me");
-      const normalized_user = normalizeUser(me.data);
-      setUser(normalized_user);
-      broadcastAuth({ type: "login" });
-      return normalized_user;
+      const data = await loginStep1(email, password);
+      if (data.mfa_setup_required) {
+        return { kind: "mfa", mode: "setup", mfaToken: data.mfa_token };
+      }
+      if (data.mfa_required) {
+        return { kind: "mfa", mode: "challenge", mfaToken: data.mfa_token };
+      }
+      // Fallback (MFA disabled server-side): a direct access token.
+      const user = await finishLogin(data.access_token);
+      return { kind: "authenticated", user };
     } catch (err) {
       console.error("Login error:", err);
       throw err;
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Step 2: turn the access token from the completed MFA step into a session.
+  const finishLogin = async (accessToken: string): Promise<UserForUI> => {
+    // Access token in memory only; the refresh token is an httpOnly cookie
+    setAccessToken(accessToken);
+    const me = await apiClient.get("/users/me");
+    const normalized_user = normalizeUser(me.data);
+    setUser(normalized_user);
+    broadcastAuth({ type: "login" });
+    return normalized_user;
   };
 
   const logout = async () => {
@@ -199,6 +235,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAuthenticated: !!user,
         isLoading,
         login,
+        finishLogin,
         signup,
         logout,
         updateProfile,

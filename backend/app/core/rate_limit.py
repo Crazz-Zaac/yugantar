@@ -90,3 +90,30 @@ def record_login_failure(request: Request, email: str) -> None:
 
 def record_login_success(request: Request, email: str) -> None:
     clear(_login_keys(request, email)[0])
+
+
+# --- MFA second-factor: limit wrong codes per account (TOTP / recovery) ---
+
+MFA_FAILURES_PER_ACCOUNT = (5, 15 * 60)
+
+
+def _mfa_key(user_id: str) -> str:
+    return f"mfa:{user_id}"
+
+
+def check_mfa_allowed(user_id: str) -> None:
+    key = _mfa_key(user_id)
+    if count(key) >= MFA_FAILURES_PER_ACCOUNT[0]:
+        raise too_many(
+            key,
+            "Too many incorrect codes. Please wait 15 minutes, then try again "
+            "or use a recovery code.",
+        )
+
+
+def record_mfa_failure(user_id: str) -> None:
+    hit(_mfa_key(user_id), MFA_FAILURES_PER_ACCOUNT)
+
+
+def record_mfa_success(user_id: str) -> None:
+    clear(_mfa_key(user_id))

@@ -77,6 +77,17 @@ class User(BaseModel, table=True):
     preferred_language: str = Field(default="en", max_length=5, nullable=False)
     joined_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    # --- Multi-factor authentication (TOTP) ---
+    # MFA is required for every user; a new account enrolls on first login.
+    mfa_enabled: bool = Field(default=False, nullable=False)
+    # TOTP shared secret, Fernet-encrypted at rest (None until enrollment starts)
+    mfa_secret: Optional[str] = Field(default=None, max_length=255, nullable=True)
+    # One-time recovery codes, bcrypt-hashed: list of {"hash": str, "used": bool}
+    mfa_recovery_codes: Optional[list] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    mfa_enrolled_at: Optional[datetime] = Field(default=None, nullable=True)
+
     # Relationships
     deposits: List["Deposit"] = Relationship(back_populates="user")
     # transactions: List["Transaction"] = Relationship(back_populates="user")

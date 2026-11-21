@@ -1,6 +1,6 @@
-import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
+import axios, { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { getLang } from "@/lib/i18n";
-import { ENV } from '@/config/env';
+import { ENV } from "@/config/env";
 
 /*
  * Auth tokens (OWASP-recommended SPA pattern):
@@ -42,12 +42,12 @@ export function setAccessToken(token: string | null): void {
 
 // ─── Refresh (single-flight within a tab, serialised across tabs) ──────────
 
-const REFRESH_LOCK = 'yugantar-auth-refresh';
+const REFRESH_LOCK = "yugantar-auth-refresh";
 let inflightRefresh: Promise<string> | null = null;
 
 function withCrossTabLock<T>(fn: () => Promise<T>): Promise<T> {
   // Supported by all current browsers; fall back to no lock if missing
-  if (typeof navigator !== 'undefined' && navigator.locks?.request) {
+  if (typeof navigator !== "undefined" && navigator.locks?.request) {
     return navigator.locks.request(REFRESH_LOCK, fn) as Promise<T>;
   }
   return fn();
@@ -57,7 +57,7 @@ function withCrossTabLock<T>(fn: () => Promise<T>): Promise<T> {
 export function refreshAccessToken(): Promise<string> {
   if (!inflightRefresh) {
     inflightRefresh = withCrossTabLock(async () => {
-      const res = await refreshClient.post('/auth/refresh');
+      const res = await refreshClient.post("/auth/refresh");
       const token: string = res.data.access_token;
       setAccessToken(token);
       return token;
@@ -71,24 +71,28 @@ export function refreshAccessToken(): Promise<string> {
 // ─── Cross-tab logout ──────────────────────────────────────────────────────
 
 const authChannel: BroadcastChannel | null =
-  typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('yugantar-auth') : null;
+  typeof BroadcastChannel !== "undefined"
+    ? new BroadcastChannel("yugantar-auth")
+    : null;
 
-export type AuthBroadcast = { type: 'logout' } | { type: 'login' };
+export type AuthBroadcast = { type: "logout" } | { type: "login" };
 
 export function broadcastAuth(message: AuthBroadcast): void {
   authChannel?.postMessage(message);
 }
 
-export function onAuthBroadcast(handler: (message: AuthBroadcast) => void): () => void {
+export function onAuthBroadcast(
+  handler: (message: AuthBroadcast) => void
+): () => void {
   if (!authChannel) return () => {};
   const listener = (event: MessageEvent<AuthBroadcast>) => handler(event.data);
-  authChannel.addEventListener('message', listener);
-  return () => authChannel.removeEventListener('message', listener);
+  authChannel.addEventListener("message", listener);
+  return () => authChannel.removeEventListener("message", listener);
 }
 
 // ─── Interceptors ──────────────────────────────────────────────────────────
 
-apiClient.interceptors.request.use((config) => {
+apiClient.interceptors.request.use(config => {
   // Server texts (errors, notifications) in the interface language
   config.headers["X-Language"] = getLang();
   const token = getAccessToken();
@@ -99,23 +103,33 @@ apiClient.interceptors.request.use((config) => {
 });
 
 // Custom event dispatched when refresh fails — AuthContext listens to this
-export const SESSION_EXPIRED_EVENT = 'auth:session-expired';
+export const SESSION_EXPIRED_EVENT = "auth:session-expired";
 
-const AUTH_ENDPOINTS = ['/auth/login', '/auth/refresh', '/users/login', '/users/register'];
+const AUTH_ENDPOINTS = [
+  "/auth/login",
+  "/auth/refresh",
+  "/auth/mfa", // wrong-code 401s must not trigger a token refresh
+  "/users/login",
+  "/users/register",
+];
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  response => response,
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _retry?: boolean;
     };
 
     // Only attempt refresh for 401s that haven't already been retried
-    if (!originalRequest || error.response?.status !== 401 || originalRequest._retry) {
+    if (
+      !originalRequest ||
+      error.response?.status !== 401 ||
+      originalRequest._retry
+    ) {
       return Promise.reject(error);
     }
-    const url = originalRequest.url || '';
-    if (AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))) {
+    const url = originalRequest.url || "";
+    if (AUTH_ENDPOINTS.some(endpoint => url.includes(endpoint))) {
       return Promise.reject(error);
     }
 
@@ -132,3 +146,86 @@ apiClient.interceptors.response.use(
     }
   }
 );
+
+// ─── Multi-factor authentication ────────────────────────────────────────────
+//
+// Sign-in is two steps: POST /users/login verifies the password and returns a
+// short-lived mfa_token (no access token yet); the second factor is completed
+// on /auth/mfa/*, which returns the real access token. During the MFA step the
+// mfa_token is sent explicitly as a Bearer token (the in-memory access token is
+// still null, so the request interceptor leaves our header untouched).
+
+export interface LoginStep1Response {
+  access_token: string;
+  mfa_required: boolean;
+  mfa_setup_required: boolean;
+  mfa_token: string;
+}
+
+export async function loginStep1(
+  email: string,
+  password: string
+): Promise<LoginStep1Response> {
+  const res = await apiClient.post("/users/login", { email, password });
+  return res.data;
+}
+
+const mfaAuth = (mfaToken: string) => ({
+  headers: { Authorization: `Bearer ${mfaToken}` },
+});
+
+export async function mfaSetup(
+  mfaToken: string
+): Promise<{ secret: string; otpauth_uri: string }> {
+  const res = await apiClient.post("/auth/mfa/setup", {}, mfaAuth(mfaToken));
+  return res.data;
+}
+
+export async function mfaConfirmSetup(
+  mfaToken: string,
+  code: string
+): Promise<{ access_token: string; recovery_codes: string[] }> {
+  const res = await apiClient.post(
+    "/auth/mfa/setup/confirm",
+    { code },
+    mfaAuth(mfaToken)
+  );
+  return res.data;
+}
+
+export async function mfaChallenge(
+  mfaToken: string,
+  code: string
+): Promise<{ access_token: string }> {
+  const res = await apiClient.post(
+    "/auth/mfa/challenge",
+    { code },
+    mfaAuth(mfaToken)
+  );
+  return res.data;
+}
+
+// Management (signed-in, uses the real access token automatically)
+
+export interface MfaStatus {
+  enabled: boolean;
+  enrolled_at: string | null;
+  recovery_codes_remaining: number;
+}
+
+export async function mfaStatus(): Promise<MfaStatus> {
+  return (await apiClient.get("/auth/mfa/status")).data;
+}
+
+export async function mfaRegenerateRecoveryCodes(
+  code: string
+): Promise<{ recovery_codes: string[] }> {
+  return (await apiClient.post("/auth/mfa/recovery/regenerate", { code })).data;
+}
+
+export async function mfaReset(
+  password: string,
+  code: string
+): Promise<{ msg: string }> {
+  return (await apiClient.post("/auth/mfa/reset", { password, code })).data;
+}
