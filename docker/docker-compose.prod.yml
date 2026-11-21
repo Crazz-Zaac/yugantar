@@ -4,6 +4,10 @@
 # On the server, in a folder of your choosing:
 #   1. Put this file as docker-compose.yml
 #   2. Create .env from .env.prod.example and fill it in
+#   2b. (Row-Level Security) To run the app under RLS, set POSTGRES_APP_USER /
+#       POSTGRES_APP_PASSWORD in .env and copy docker/postgres/create-app-role.sh
+#       into ./db-init/ (it creates the non-superuser role on first DB boot).
+#       For an existing database, run docker/postgres/rls-roles.sql once by hand.
 #   3. Put the JaaS private key at ./secrets/jaas_private_key.pk (if using meetings)
 #   4. docker login ghcr.io       # only if the packages are private
 #   5. VERSION=v1.0.0 docker compose pull
@@ -23,6 +27,11 @@ services:
     env_file: [.env]
     volumes:
       - db_data:/var/lib/postgresql/data
+      # On first init only, creates the non-superuser RLS app role
+      # (POSTGRES_APP_USER) from .env. Copy docker/postgres/create-app-role.sh
+      # from the repo into ./db-init/ next to this file. For an EXISTING
+      # database, run docker/postgres/rls-roles.sql by hand instead.
+      - ./db-init:/docker-entrypoint-initdb.d:ro
     networks: [yugantar-network]
     restart: unless-stopped
     healthcheck:
