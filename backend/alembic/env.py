@@ -79,12 +79,14 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    connectable = engine
-    # connectable = engine_from_config(
-    #     config.get_section(config.config_ini_section, {}),
-    #     prefix="sqlalchemy.",
-    #     poolclass=pool.NullPool,
-    # )
+    # Migrations must run as the schema OWNER (which can ALTER tables and
+    # create RLS policies), never as the RLS-subject app role. So connect via
+    # the owner URI (SQLALCHEMY_DATABASE_URI) explicitly, not the app engine
+    # (app.core.db.engine, which uses APP_DATABASE_URI = yugantar_app once
+    # POSTGRES_APP_USER is set).
+    from sqlalchemy import create_engine
+
+    connectable = create_engine(str(settings.SQLALCHEMY_DATABASE_URI))
 
     with connectable.connect() as connection:
         context.configure(
