@@ -1734,18 +1734,15 @@ const ne: Record<string, string> = {
   "Enter your email and we'll send you a reset link.":
     "आफ्नो इमेल हाल्नुहोस्, हामी रिसेट लिंक पठाउनेछौं।",
   "Send reset link": "रिसेट लिंक पठाउनुहोस्",
-  "Check your email": "आफ्नो इमेल जाँच्नुहोस्",
   "If an account exists for that email, we've sent a reset link. It's valid for 30 minutes.":
     "यदि त्यस इमेलको खाता छ भने, हामीले रिसेट लिंक पठाएका छौं। यो ३० मिनेटसम्म मान्य हुन्छ।",
   "Set a new password": "नयाँ पासवर्ड राख्नुहोस्",
   "Choose a new password for your account.": "आफ्नो खाताका लागि नयाँ पासवर्ड छान्नुहोस्।",
   "New password": "नयाँ पासवर्ड",
-  "Confirm new password": "नयाँ पासवर्ड पुष्टि गर्नुहोस्",
   "Update password": "पासवर्ड अद्यावधिक गर्नुहोस्",
   "Password updated": "पासवर्ड अद्यावधिक भयो",
   "Your password has been changed. You can sign in now.":
     "तपाईंको पासवर्ड परिवर्तन भयो। तपाईं अब साइन इन गर्न सक्नुहुन्छ।",
-  "Passwords do not match.": "पासवर्डहरू मिलेनन्।",
 };
 
 export default ne;
