@@ -1737,12 +1737,15 @@ const ne: Record<string, string> = {
   "If an account exists for that email, we've sent a reset link. It's valid for 30 minutes.":
     "यदि त्यस इमेलको खाता छ भने, हामीले रिसेट लिंक पठाएका छौं। यो ३० मिनेटसम्म मान्य हुन्छ।",
   "Set a new password": "नयाँ पासवर्ड राख्नुहोस्",
-  "Choose a new password for your account.": "आफ्नो खाताका लागि नयाँ पासवर्ड छान्नुहोस्।",
+  "Choose a new password for your account.":
+    "आफ्नो खाताका लागि नयाँ पासवर्ड छान्नुहोस्।",
   "New password": "नयाँ पासवर्ड",
   "Update password": "पासवर्ड अद्यावधिक गर्नुहोस्",
   "Password updated": "पासवर्ड अद्यावधिक भयो",
   "Your password has been changed. You can sign in now.":
     "तपाईंको पासवर्ड परिवर्तन भयो। तपाईं अब साइन इन गर्न सक्नुहुन्छ।",
+  "Two-factor authentication is turned off in this environment.":
+    "यस वातावरणमा दुई-चरण प्रमाणीकरण निष्क्रिय छ।",
 };
 
 export default ne;

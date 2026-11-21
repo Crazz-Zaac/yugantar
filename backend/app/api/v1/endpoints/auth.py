@@ -66,7 +66,7 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    if user.mfa_enabled:
+    if settings.mfa_enabled and user.mfa_enabled:
         return LoginResponse(
             mfa_required=True, mfa_token=create_mfa_pending_token(user.id)
         )

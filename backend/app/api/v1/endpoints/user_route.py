@@ -111,7 +111,7 @@ async def login_user(
     # Password check (rate limited), then email verified + account approved
     user = authenticate_with_rate_limit(request, session, login_data.email, login_data.password)
 
-    if user.mfa_enabled:
+    if settings.mfa_enabled and user.mfa_enabled:
         return LoginResponse(
             mfa_required=True, mfa_token=create_mfa_pending_token(user.id)
         )

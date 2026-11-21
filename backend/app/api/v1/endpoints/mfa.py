@@ -61,6 +61,11 @@ def setup_mfa(
     the user reopens the page), the same secret is returned, so the QR the user
     scanned always matches what gets stored. A regenerate would otherwise leave
     the authenticator on an old secret and every code would be rejected."""
+    if not settings.mfa_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Two-factor authentication is turned off in this environment.",
+        )
     if user.mfa_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -164,6 +169,7 @@ async def challenge_mfa(
 @router.get("/status", response_model=MfaStatusResponse)
 def mfa_status(user: User = Depends(get_current_user)):
     return MfaStatusResponse(
+        feature_enabled=settings.mfa_enabled,
         enabled=user.mfa_enabled,
         enrolled_at=user.mfa_enrolled_at,
         recovery_codes_remaining=mfa.recovery_codes_remaining(user.mfa_recovery_codes),

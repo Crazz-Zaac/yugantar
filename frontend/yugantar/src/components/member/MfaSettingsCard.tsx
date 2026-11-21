@@ -177,6 +177,11 @@ export function MfaSettingsCard() {
           <div className="flex justify-center py-4">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
           </div>
+        ) : !status.feature_enabled ? (
+          <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+            <ShieldAlert className="h-4 w-4" />
+            {t("Two-factor authentication is turned off in this environment.")}
+          </div>
         ) : !enabled ? (
           // ── 2FA is OFF: enrolment ──────────────────────────────────────────
           enableCodes ? (

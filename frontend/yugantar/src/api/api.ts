@@ -203,6 +203,7 @@ export async function mfaChallenge(
 // Management (signed-in, uses the real access token automatically)
 
 export interface MfaStatus {
+  feature_enabled: boolean;
   enabled: boolean;
   enrolled_at: string | null;
   recovery_codes_remaining: number;

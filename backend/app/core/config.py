@@ -53,6 +53,28 @@ class Settings(BaseSettings):
     BACKEND_HOST: str = "http://localhost:8001"
     ENVIRONMENT: Literal["local", "production", "staging"] = "local"
 
+    # ---------------------------
+    # Feature toggles (two-factor auth, risk-based auth)
+    # ---------------------------
+    # Leave unset to default ON in production/staging and OFF in local dev.
+    # Set MFA_ENABLED / RBA_ENABLED explicitly (true/false) to override.
+    MFA_ENABLED: bool | None = None
+    RBA_ENABLED: bool | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def mfa_enabled(self) -> bool:
+        if self.MFA_ENABLED is not None:
+            return self.MFA_ENABLED
+        return self.ENVIRONMENT != "local"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def rba_enabled(self) -> bool:
+        if self.RBA_ENABLED is not None:
+            return self.RBA_ENABLED
+        return self.ENVIRONMENT != "local"
+
     BACKEND_CORS_ORIGINS: Annotated[List[AnyUrl] | str, BeforeValidator(parse_cors)] = (
         []
     )

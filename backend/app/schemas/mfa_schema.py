@@ -45,6 +45,8 @@ class MfaSessionResponse(SQLModel):
 
 
 class MfaStatusResponse(SQLModel):
+    # Whether the MFA feature is turned on in this environment (toggle)
+    feature_enabled: bool = True
     enabled: bool
     enrolled_at: Optional[datetime] = None
     recovery_codes_remaining: int = 0

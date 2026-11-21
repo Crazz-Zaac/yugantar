@@ -33,16 +33,11 @@ function AuthPage() {
   };
 
   if (mode === "signup") {
-    return (
-      <SignUp onGoToSignIn={() => setMode("signin")} />
-    );
+    return <SignUp onGoToSignIn={() => setMode("signin")} />;
   }
 
   return (
-    <SignIn
-      onSignIn={handleSignIn}
-      onGoToSignUp={() => setMode("signup")}
-    />
+    <SignIn onSignIn={handleSignIn} onGoToSignUp={() => setMode("signup")} />
   );
 }
 
