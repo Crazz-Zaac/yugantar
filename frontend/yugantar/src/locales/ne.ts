@@ -1719,6 +1719,33 @@ const ne: Record<string, string> = {
     "यी रिकभरी कोड सुरक्षित राख्नुहोस् — अथेन्टिकेटर हराएमा प्रत्येक एक पटक प्रयोग गर्न सकिन्छ। यी फेरि देखाइने छैनन्।",
   "This turns off two-factor authentication and signs you out everywhere. You can set it up again from Settings.":
     "यसले दुई-चरण प्रमाणीकरण निष्क्रिय गर्छ र सबै ठाउँबाट साइन आउट गर्छ। तपाईं सेटिङ्सबाट फेरि सेटअप गर्न सक्नुहुन्छ।",
+
+  // Admin reset of a member's 2FA
+  "Reset 2FA": "2FA रिसेट गर्नुहोस्",
+  "Reset 2FA for {0}?": "{0} को 2FA रिसेट गर्ने?",
+  "This turns off their two-factor authentication and signs them out. They can set it up again from their Settings.":
+    "यसले उनको दुई-चरण प्रमाणीकरण निष्क्रिय गर्छ र साइन आउट गर्छ। उनले सेटिङ्सबाट फेरि सेटअप गर्न सक्छन्।",
+  "2FA reset for {0}": "{0} को 2FA रिसेट भयो",
+  "Couldn't reset 2FA for this member.": "यस सदस्यको 2FA रिसेट गर्न सकिएन।",
+  "Authenticator code or recovery code": "अथेन्टिकेटर कोड वा रिकभरी कोड",
+
+  // Forgot / reset password
+  "Forgot your password?": "पासवर्ड बिर्सनुभयो?",
+  "Enter your email and we'll send you a reset link.":
+    "आफ्नो इमेल हाल्नुहोस्, हामी रिसेट लिंक पठाउनेछौं।",
+  "Send reset link": "रिसेट लिंक पठाउनुहोस्",
+  "Check your email": "आफ्नो इमेल जाँच्नुहोस्",
+  "If an account exists for that email, we've sent a reset link. It's valid for 30 minutes.":
+    "यदि त्यस इमेलको खाता छ भने, हामीले रिसेट लिंक पठाएका छौं। यो ३० मिनेटसम्म मान्य हुन्छ।",
+  "Set a new password": "नयाँ पासवर्ड राख्नुहोस्",
+  "Choose a new password for your account.": "आफ्नो खाताका लागि नयाँ पासवर्ड छान्नुहोस्।",
+  "New password": "नयाँ पासवर्ड",
+  "Confirm new password": "नयाँ पासवर्ड पुष्टि गर्नुहोस्",
+  "Update password": "पासवर्ड अद्यावधिक गर्नुहोस्",
+  "Password updated": "पासवर्ड अद्यावधिक भयो",
+  "Your password has been changed. You can sign in now.":
+    "तपाईंको पासवर्ड परिवर्तन भयो। तपाईं अब साइन इन गर्न सक्नुहुन्छ।",
+  "Passwords do not match.": "पासवर्डहरू मिलेनन्।",
 };
 
 export default ne;

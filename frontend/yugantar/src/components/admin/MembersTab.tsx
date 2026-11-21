@@ -211,6 +211,28 @@ export function MembersTab() {
     }
   };
 
+  // Clear a member's 2FA (lost device + recovery codes). They can re-enable it
+  // from Settings; 2FA stays opt-in.
+  const handleReset2fa = async (member: MemberUser) => {
+    const answer = await confirm({
+      title: t("Reset 2FA for {0}?", getFullName(member)),
+      description: t(
+        "This turns off their two-factor authentication and signs them out. They can set it up again from their Settings."
+      ),
+      confirmLabel: t("Reset 2FA"),
+      destructive: true,
+    });
+    if (!answer.confirmed) return;
+    try {
+      await apiClient.post(`/admin/users/${member.id}/reset-2fa`);
+      toast.success(t("2FA reset for {0}", getFullName(member)));
+      fetchMembers();
+    } catch (err) {
+      console.error("Failed to reset 2FA:", err);
+      toast.error(t("Couldn't reset 2FA for this member."));
+    }
+  };
+
   // Permanently delete a member. The server refuses (409) when the member has
   // financial records, so those stay intact and the admin suspends instead.
   const handleDelete = async (member: MemberUser) => {
@@ -320,6 +342,15 @@ export function MembersTab() {
           >
             {t("Suspend")}
           </DropdownMenuItem>
+        )}
+        {member.mfa_enabled && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => handleReset2fa(member)}>
+              <Shield className="mr-2 h-3.5 w-3.5" />
+              {t("Reset 2FA")}
+            </DropdownMenuItem>
+          </>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
