@@ -28,14 +28,22 @@ _LOAN_WRITE = f"user_id = {_UID} OR guarantor_user_id = {_UID} OR {_PRIV}"
 
 
 def _policy_sql(table: str, read: str, write: str) -> list[str]:
-    return [
+    # DROP IF EXISTS first so the test is idempotent whether or not the
+    # migration already created these policies on this database (all inside the
+    # test's rolled-back transaction).
+    stmts = [
         f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY",
         f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY",
+    ]
+    for cmd in ("select", "insert", "update", "delete"):
+        stmts.append(f"DROP POLICY IF EXISTS {table}_{cmd} ON {table}")
+    stmts += [
         f"CREATE POLICY {table}_select ON {table} FOR SELECT USING ({read})",
         f"CREATE POLICY {table}_insert ON {table} FOR INSERT WITH CHECK ({write})",
         f"CREATE POLICY {table}_update ON {table} FOR UPDATE USING ({write}) WITH CHECK ({write})",
         f"CREATE POLICY {table}_delete ON {table} FOR DELETE USING ({write})",
     ]
+    return stmts
 
 
 def _db_available() -> bool:
@@ -54,8 +62,9 @@ pytestmark = pytest.mark.skipif(not _db_available(), reason="no database reachab
 _INS_USER = text(
     'INSERT INTO "user" (id, first_name, last_name, gender, hashed_password, '
     "phone, address, is_verified, is_approved, disabled, preferred_language, "
-    "joined_at, created_at, updated_at) VALUES (:id,'T','T',CAST(:g AS genderenum),"
-    "'x','1','x',true,true,false,'en',now(),now(),now())"
+    "mfa_enabled, joined_at, created_at, updated_at) VALUES "
+    "(:id,'T','T',CAST(:g AS genderenum),'x','1','x',true,true,false,'en',"
+    "false,now(),now(),now())"
 )
 _INS_DEPOSIT = text(
     "INSERT INTO deposit (id, created_at, updated_at, user_id, deposited_date, "
@@ -102,8 +111,12 @@ def _visible(session: Session, table: str, ids: dict, user_id: str, priv: bool) 
 
 
 def test_deposit_rls_status_visibility():
-    from app.core.db import engine
+    # Owner (superuser) engine so setup inserts bypass RLS; the policy is
+    # exercised via SET ROLE to a non-superuser below.
+    from sqlalchemy import create_engine
+    from app.core.config import settings
 
+    engine = create_engine(str(settings.SQLALCHEMY_DATABASE_URI))
     a, b = uuid.uuid4(), uuid.uuid4()
     ids = {
         "a_pending": uuid.uuid4(),
@@ -141,8 +154,12 @@ def test_deposit_rls_status_visibility():
 
 
 def test_loan_rls_status_and_guarantor_visibility():
-    from app.core.db import engine
+    # Owner (superuser) engine so setup inserts bypass RLS; the policy is
+    # exercised via SET ROLE to a non-superuser below.
+    from sqlalchemy import create_engine
+    from app.core.config import settings
 
+    engine = create_engine(str(settings.SQLALCHEMY_DATABASE_URI))
     a, b = uuid.uuid4(), uuid.uuid4()
     ids = {
         "a_pending": uuid.uuid4(),

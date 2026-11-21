@@ -132,6 +132,9 @@ class UserResponse(UserBase):
     approved_at: Optional[datetime] = None
     preferred_language: str = "en"
 
+    # Two-factor authentication status (shown to the user themselves and admins)
+    mfa_enabled: bool = False
+
     created_at: datetime
     updated_at: datetime
 
@@ -174,6 +177,8 @@ class UserListResponse(SQLModel):
     is_verified: bool
     is_approved: bool = False
     disabled: bool
+    # Whether the member has finished enrolling in 2FA (mandatory for all)
+    mfa_enabled: bool = False
     joined_at: Optional[datetime] = None
     created_at: datetime
 

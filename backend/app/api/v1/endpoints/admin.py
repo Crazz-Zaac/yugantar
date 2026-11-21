@@ -164,6 +164,34 @@ async def toggle_user_disabled_status(
     return user
 
 
+@router.post("/users/{user_id}/reset-2fa", response_model=UserResponse)
+async def reset_user_mfa(
+    user_id: UUID,
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin),
+):
+    """Clear a member's two-factor authentication (e.g. they lost their device
+    and recovery codes). 2FA stays opt-in — the member can set it up again from
+    Settings. Their sessions are ended. Admin access required."""
+    user = user_service.get_user_by_id(session=session, user_id=user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
+    user.mfa_enabled = False
+    user.mfa_secret = None
+    user.mfa_recovery_codes = None
+    user.mfa_enrolled_at = None
+    from datetime import datetime, timezone
+
+    user.updated_at = datetime.now(timezone.utc)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    revoke_all_refresh_tokens(user.id)
+    return user
+
+
 @router.post("/users/{user_id}/approve", response_model=UserResponse)
 async def approve_user(
     user_id: UUID,

@@ -1702,6 +1702,50 @@ const ne: Record<string, string> = {
     "यसले तपाईंको हालको अथेन्टिकेटर हटाउँछ र सबै ठाउँबाट साइन आउट गर्छ। अर्को साइन इनमा नयाँ सेटअप गर्नुपर्नेछ।",
   "Account password": "खाताको पासवर्ड",
   "Reset authenticator": "अथेन्टिकेटर रिसेट गर्नुहोस्",
+
+  // 2FA status + self-service enrolment in Settings
+  "2FA on": "2FA सक्रिय",
+  "2FA off": "2FA निष्क्रिय",
+  "Two-factor authentication is on": "दुई-चरण प्रमाणीकरण सक्रिय छ",
+  "Two-factor authentication is off": "दुई-चरण प्रमाणीकरण निष्क्रिय छ",
+  "Two-factor authentication is on.": "दुई-चरण प्रमाणीकरण सक्रिय छ।",
+  "Two-factor authentication is off.": "दुई-चरण प्रमाणीकरण निष्क्रिय छ।",
+  "Add an authenticator app for a one-time code at every sign-in.":
+    "हरेक साइन इनमा एक-पटके कोडका लागि अथेन्टिकेटर एप जोड्नुहोस्।",
+  Enable: "सक्रिय गर्नुहोस्",
+  Done: "भयो",
+  "Recovery codes left: {0}": "बाँकी रिकभरी कोड: {0}",
+  "Save these recovery codes — each can be used once if you lose your authenticator. They won't be shown again.":
+    "यी रिकभरी कोड सुरक्षित राख्नुहोस् — अथेन्टिकेटर हराएमा प्रत्येक एक पटक प्रयोग गर्न सकिन्छ। यी फेरि देखाइने छैनन्।",
+  "This turns off two-factor authentication and signs you out everywhere. You can set it up again from Settings.":
+    "यसले दुई-चरण प्रमाणीकरण निष्क्रिय गर्छ र सबै ठाउँबाट साइन आउट गर्छ। तपाईं सेटिङ्सबाट फेरि सेटअप गर्न सक्नुहुन्छ।",
+
+  // Admin reset of a member's 2FA
+  "Reset 2FA": "2FA रिसेट गर्नुहोस्",
+  "Reset 2FA for {0}?": "{0} को 2FA रिसेट गर्ने?",
+  "This turns off their two-factor authentication and signs them out. They can set it up again from their Settings.":
+    "यसले उनको दुई-चरण प्रमाणीकरण निष्क्रिय गर्छ र साइन आउट गर्छ। उनले सेटिङ्सबाट फेरि सेटअप गर्न सक्छन्।",
+  "2FA reset for {0}": "{0} को 2FA रिसेट भयो",
+  "Couldn't reset 2FA for this member.": "यस सदस्यको 2FA रिसेट गर्न सकिएन।",
+  "Authenticator code or recovery code": "अथेन्टिकेटर कोड वा रिकभरी कोड",
+
+  // Forgot / reset password
+  "Forgot your password?": "पासवर्ड बिर्सनुभयो?",
+  "Enter your email and we'll send you a reset link.":
+    "आफ्नो इमेल हाल्नुहोस्, हामी रिसेट लिंक पठाउनेछौं।",
+  "Send reset link": "रिसेट लिंक पठाउनुहोस्",
+  "If an account exists for that email, we've sent a reset link. It's valid for 30 minutes.":
+    "यदि त्यस इमेलको खाता छ भने, हामीले रिसेट लिंक पठाएका छौं। यो ३० मिनेटसम्म मान्य हुन्छ।",
+  "Set a new password": "नयाँ पासवर्ड राख्नुहोस्",
+  "Choose a new password for your account.":
+    "आफ्नो खाताका लागि नयाँ पासवर्ड छान्नुहोस्।",
+  "New password": "नयाँ पासवर्ड",
+  "Update password": "पासवर्ड अद्यावधिक गर्नुहोस्",
+  "Password updated": "पासवर्ड अद्यावधिक भयो",
+  "Your password has been changed. You can sign in now.":
+    "तपाईंको पासवर्ड परिवर्तन भयो। तपाईं अब साइन इन गर्न सक्नुहुन्छ।",
+  "Two-factor authentication is turned off in this environment.":
+    "यस वातावरणमा दुई-चरण प्रमाणीकरण निष्क्रिय छ।",
 };
 
 export default ne;

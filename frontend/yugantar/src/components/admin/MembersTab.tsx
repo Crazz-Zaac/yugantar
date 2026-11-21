@@ -68,6 +68,7 @@ interface MemberUser {
   is_verified: boolean;
   is_approved: boolean;
   disabled: boolean;
+  mfa_enabled: boolean;
   joined_at: string;
 }
 
@@ -133,6 +134,28 @@ function MemberStatusBadge({ status }: { status: MemberStatus }) {
   );
 }
 
+// 2FA is opt-in; this shows which members have turned it on.
+function TwoFactorBadge({ enabled }: { enabled: boolean }) {
+  return (
+    <Badge
+      variant="outline"
+      className={`gap-1 text-[10px] ${
+        enabled
+          ? "border-success/30 text-success"
+          : "border-muted-foreground/30 text-muted-foreground"
+      }`}
+      title={
+        enabled
+          ? t("Two-factor authentication is on")
+          : t("Two-factor authentication is off")
+      }
+    >
+      <Shield className="h-3 w-3" />
+      {enabled ? t("2FA on") : t("2FA off")}
+    </Badge>
+  );
+}
+
 export function MembersTab() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -185,6 +208,28 @@ export function MembersTab() {
       fetchMembers(); // Refresh the list
     } catch (err) {
       console.error("Failed to toggle member status:", err);
+    }
+  };
+
+  // Clear a member's 2FA (lost device + recovery codes). They can re-enable it
+  // from Settings; 2FA stays opt-in.
+  const handleReset2fa = async (member: MemberUser) => {
+    const answer = await confirm({
+      title: t("Reset 2FA for {0}?", getFullName(member)),
+      description: t(
+        "This turns off their two-factor authentication and signs them out. They can set it up again from their Settings."
+      ),
+      confirmLabel: t("Reset 2FA"),
+      destructive: true,
+    });
+    if (!answer.confirmed) return;
+    try {
+      await apiClient.post(`/admin/users/${member.id}/reset-2fa`);
+      toast.success(t("2FA reset for {0}", getFullName(member)));
+      fetchMembers();
+    } catch (err) {
+      console.error("Failed to reset 2FA:", err);
+      toast.error(t("Couldn't reset 2FA for this member."));
     }
   };
 
@@ -297,6 +342,15 @@ export function MembersTab() {
           >
             {t("Suspend")}
           </DropdownMenuItem>
+        )}
+        {member.mfa_enabled && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => handleReset2fa(member)}>
+              <Shield className="mr-2 h-3.5 w-3.5" />
+              {t("Reset 2FA")}
+            </DropdownMenuItem>
+          </>
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -493,6 +547,7 @@ export function MembersTab() {
                         </p>
                         <div className="mt-1.5 flex flex-wrap items-center gap-1">
                           <MemberStatusBadge status={status} />
+                          <TwoFactorBadge enabled={member.mfa_enabled} />
                           {member.cooperative_roles
                             .filter(r => r !== "member")
                             .map(role => (
@@ -591,6 +646,7 @@ export function MembersTab() {
                           </TableCell>
                           <TableCell>
                             <MemberStatusBadge status={status} />
+                            <TwoFactorBadge enabled={member.mfa_enabled} />
                           </TableCell>
                           <TableCell>{renderActions(member, status)}</TableCell>
                         </TableRow>

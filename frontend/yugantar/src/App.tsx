@@ -13,6 +13,7 @@ import { SignUp } from "./components/auth/SignUp";
 import { AdminDashboard } from "./components/admin/AdminDashboard";
 import { MemberDashboard } from "./components/member/MemberDashboard";
 import VerifyEmail from "./pages/VerifyEmail";
+import ResetPassword from "./pages/ResetPassword";
 
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 
@@ -32,16 +33,11 @@ function AuthPage() {
   };
 
   if (mode === "signup") {
-    return (
-      <SignUp onGoToSignIn={() => setMode("signin")} />
-    );
+    return <SignUp onGoToSignIn={() => setMode("signin")} />;
   }
 
   return (
-    <SignIn
-      onSignIn={handleSignIn}
-      onGoToSignUp={() => setMode("signup")}
-    />
+    <SignIn onSignIn={handleSignIn} onGoToSignUp={() => setMode("signup")} />
   );
 }
 
@@ -85,6 +81,7 @@ function Router() {
       <Route path={"/"} component={AuthPage} />
       <Route path={"/login"} component={AuthPage} />
       <Route path={"/verify-email"} component={VerifyEmail} />
+      <Route path={"/reset-password"} component={ResetPassword} />
       <Route path={"/dashboard/:rest*"} component={ProtectedMemberDashboard} />
       <Route path={"/dashboard"} component={ProtectedMemberDashboard} />
       <Route path={"/admin/:rest*"} component={ProtectedAdminDashboard} />

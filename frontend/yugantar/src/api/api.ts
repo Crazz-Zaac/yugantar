@@ -174,23 +174,18 @@ const mfaAuth = (mfaToken: string) => ({
   headers: { Authorization: `Bearer ${mfaToken}` },
 });
 
-export async function mfaSetup(
-  mfaToken: string
-): Promise<{ secret: string; otpauth_uri: string }> {
-  const res = await apiClient.post("/auth/mfa/setup", {}, mfaAuth(mfaToken));
-  return res.data;
+// Enrolment is done from Settings by the signed-in user (normal access token).
+export async function mfaSetup(): Promise<{
+  secret: string;
+  otpauth_uri: string;
+}> {
+  return (await apiClient.post("/auth/mfa/setup")).data;
 }
 
 export async function mfaConfirmSetup(
-  mfaToken: string,
   code: string
-): Promise<{ access_token: string; recovery_codes: string[] }> {
-  const res = await apiClient.post(
-    "/auth/mfa/setup/confirm",
-    { code },
-    mfaAuth(mfaToken)
-  );
-  return res.data;
+): Promise<{ recovery_codes: string[] }> {
+  return (await apiClient.post("/auth/mfa/setup/confirm", { code })).data;
 }
 
 export async function mfaChallenge(
@@ -208,6 +203,7 @@ export async function mfaChallenge(
 // Management (signed-in, uses the real access token automatically)
 
 export interface MfaStatus {
+  feature_enabled: boolean;
   enabled: boolean;
   enrolled_at: string | null;
   recovery_codes_remaining: number;

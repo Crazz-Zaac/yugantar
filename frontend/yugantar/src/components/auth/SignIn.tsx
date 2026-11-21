@@ -1,5 +1,6 @@
 import { t } from "@/lib/i18n";
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { apiClient } from "@/api/api";
 import { Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,10 +27,8 @@ export function SignIn({
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [mfa, setMfa] = useState<{
-    mode: "setup" | "challenge";
-    mfaToken: string;
-  } | null>(null);
+  const [mfa, setMfa] = useState<{ mfaToken: string } | null>(null);
+  const [, navigate] = useLocation();
   const { login } = useAuth();
 
   const completeSignIn = (user: UserForUI) => {
@@ -50,7 +49,7 @@ export function SignIn({
     try {
       const outcome = await login(email, password);
       if (outcome.kind === "mfa") {
-        setMfa({ mode: outcome.mode, mfaToken: outcome.mfaToken });
+        setMfa({ mfaToken: outcome.mfaToken });
       } else {
         completeSignIn(outcome.user);
       }
@@ -156,7 +155,6 @@ export function SignIn({
           <div className="w-full max-w-sm">
             {mfa ? (
               <MfaStep
-                mode={mfa.mode}
                 mfaToken={mfa.mfaToken}
                 onComplete={completeSignIn}
                 onBack={() => {
@@ -242,6 +240,7 @@ export function SignIn({
                       </Label>
                       <button
                         type="button"
+                        onClick={() => navigate("/reset-password")}
                         className="text-xs font-medium text-primary hover:text-primary/80"
                       >
                         {t("Forgot password?")}

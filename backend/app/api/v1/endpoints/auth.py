@@ -45,17 +45,15 @@ def authenticate_with_rate_limit(request: Request, session: Session, email: str,
 @router.post("/login", response_model=LoginResponse)
 async def login_for_access_token(
     request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     session: Session = Depends(get_session),
 ):
     """
-    Step 1 of sign-in: verify the password and start the MFA step.
-
-    MFA is required for every user, so no access token is issued here. The
-    response carries a short-lived `mfa_token`; the client then calls:
-      - POST /auth/mfa/challenge          if `mfa_required`     (enrolled user)
-      - POST /auth/mfa/setup + /confirm   if `mfa_setup_required` (first sign-in)
-    to receive the access token.
+    Sign in. 2FA is opt-in (set up later from Settings):
+      - If the user has 2FA enabled, this returns `mfa_required` + a short-lived
+        `mfa_token`; complete the one-time code at POST /auth/mfa/challenge.
+      - Otherwise an access token is issued directly.
 
     **Note:** Enter your EMAIL address in the 'username' field below.
     """
@@ -68,14 +66,17 @@ async def login_for_access_token(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    # Password is correct; hand off to the second factor. The access token and
-    # refresh cookie are only issued once MFA succeeds (see app/.../mfa.py).
-    mfa_token = create_mfa_pending_token(user.id)
-    return LoginResponse(
-        mfa_required=user.mfa_enabled,
-        mfa_setup_required=not user.mfa_enabled,
-        mfa_token=mfa_token,
+    if settings.mfa_enabled and user.mfa_enabled:
+        return LoginResponse(
+            mfa_required=True, mfa_token=create_mfa_pending_token(user.id)
+        )
+
+    access_token = await create_access_token(
+        subject=str(user.id),
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
+    set_refresh_cookie(response, issue_refresh_token(user.id))
+    return LoginResponse(access_token=access_token)
 
 
 @router.post("/refresh", response_model=TokenResponse)

@@ -50,36 +50,53 @@ async def _issue_session(response: Response, user: User) -> str:
 # ---------------------------------------------------------------------------
 @router.post("/setup", response_model=MfaSetupResponse)
 def setup_mfa(
-    user: User = Depends(get_mfa_pending_user),
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Begin enrolment: generate a new TOTP secret and return it plus the
-    otpauth URI to show as a QR code. Not yet active until confirmed."""
+    """Begin enrolment for the signed-in user (from Settings): return the TOTP
+    secret plus the otpauth URI to show as a QR code. Not active until confirmed.
+
+    The pending secret is REUSED across calls: if setup is requested again
+    before confirmation (e.g. React StrictMode double-invokes the effect, or
+    the user reopens the page), the same secret is returned, so the QR the user
+    scanned always matches what gets stored. A regenerate would otherwise leave
+    the authenticator on an old secret and every code would be rejected."""
+    if not settings.mfa_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Two-factor authentication is turned off in this environment.",
+        )
     if user.mfa_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Two-factor authentication is already set up.",
         )
-    secret = mfa.generate_secret()
-    user.mfa_secret = mfa.encrypt_secret(secret)
-    session.add(user)
-    session.commit()
+    secret = None
+    if user.mfa_secret:
+        try:
+            secret = mfa.decrypt_secret(user.mfa_secret)
+        except Exception:
+            secret = None  # unreadable (e.g. key rotation): start fresh
+    if not secret:
+        secret = mfa.generate_secret()
+        user.mfa_secret = mfa.encrypt_secret(secret)
+        session.add(user)
+        session.commit()
     return MfaSetupResponse(
         secret=secret,
         otpauth_uri=mfa.provisioning_uri(user.email, secret),
     )
 
 
-@router.post("/setup/confirm", response_model=MfaSessionResponse)
-async def confirm_mfa(
+@router.post("/setup/confirm", response_model=RecoveryCodesResponse)
+def confirm_mfa(
     body: MfaCodeRequest,
-    response: Response,
-    user: User = Depends(get_mfa_pending_user),
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Confirm enrolment with the first code from the authenticator. On success
-    MFA is enabled, recovery codes are generated (returned once), and a full
-    session is started."""
+    """Confirm enrolment with the first code from the authenticator. Turns 2FA
+    on for the signed-in user and returns the one-time recovery codes. The
+    current session stays valid; the OTP is required from the next sign-in on."""
     if user.mfa_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -105,9 +122,7 @@ async def confirm_mfa(
     session.add(user)
     session.commit()
     rate_limit.record_mfa_success(str(user.id))
-
-    access_token = await _issue_session(response, user)
-    return MfaSessionResponse(access_token=access_token, recovery_codes=plaintext)
+    return RecoveryCodesResponse(recovery_codes=plaintext)
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +169,7 @@ async def challenge_mfa(
 @router.get("/status", response_model=MfaStatusResponse)
 def mfa_status(user: User = Depends(get_current_user)):
     return MfaStatusResponse(
+        feature_enabled=settings.mfa_enabled,
         enabled=user.mfa_enabled,
         enrolled_at=user.mfa_enrolled_at,
         recovery_codes_remaining=mfa.recovery_codes_remaining(user.mfa_recovery_codes),
@@ -194,12 +210,17 @@ def reset_mfa(
     user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Remove the current authenticator (e.g. lost device). Requires the account
-    password and a current code. The user is signed out everywhere and must
-    enrol again on next sign-in."""
+    """Turn off the current authenticator (e.g. lost device). Requires the
+    account password and either a current authenticator code OR one of the
+    recovery codes (so a lost device can still be removed). The user is signed
+    out everywhere and can enrol again from Settings."""
     rate_limit.check_mfa_allowed(str(user.id))
     password_ok = verify_password(body.password, user.hashed_password)
-    code_ok = mfa.verify_encrypted_totp(user.mfa_secret, body.code)
+    # A recovery code works here too — otherwise a lost device could never be
+    # removed. (Enrolment is cleared below regardless, so consuming one is fine.)
+    code_ok = mfa.verify_encrypted_totp(user.mfa_secret, body.code) or (
+        mfa.consume_recovery_code(user.mfa_recovery_codes, body.code) is not None
+    )
     if not (password_ok and code_ok):
         rate_limit.record_mfa_failure(str(user.id))
         raise HTTPException(
@@ -213,6 +234,6 @@ def reset_mfa(
     user.mfa_enrolled_at = None
     session.add(user)
     session.commit()
-    # Invalidate every session; the next sign-in forces re-enrolment.
+    # Invalidate every session; 2FA is now off and can be re-enabled in Settings.
     revoke_all_refresh_tokens(user.id)
-    return {"msg": "Two-factor authentication has been reset. You'll set it up again next time you sign in."}
+    return {"msg": "Two-factor authentication has been turned off. You can set it up again from Settings."}
