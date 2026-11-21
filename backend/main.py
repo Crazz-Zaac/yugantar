@@ -33,14 +33,16 @@ app = FastAPI(
     openapi_url="/openapi.json" if _docs_enabled else None,
 )
 
-origins = ["http://localhost:3000", "http://localhost:3001"]
-
+# Allowed browser origins come from settings (FRONTEND_HOST + BACKEND_CORS_ORIGINS),
+# so production uses the real frontend origin instead of a hardcoded localhost list.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=settings.all_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    # Only the methods and headers the frontend actually sends; credentialed
+    # requests should not use wildcards.
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Language"],
 )
 
 # API error messages in the reader's language (X-Language header; app/i18n.py)
@@ -56,6 +58,40 @@ async def translated_http_exception_handler(request: Request, exc: StarletteHTTP
     if lang != "en" and isinstance(exc.detail, str):
         exc = StarletteHTTPException(exc.status_code, i18n.translate_text(exc.detail, lang), exc.headers)
     return await http_exception_handler(request, exc)
+
+
+# ---------------------------------------------------------------------------
+# Security response headers (defence-in-depth)
+# ---------------------------------------------------------------------------
+# This backend is a JSON/image API; the browser app is a separate SPA, so API
+# responses never need to run scripts. Lock everything down with CSP and the
+# usual hardening headers. setdefault() leaves per-endpoint headers intact.
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=(), payment=()",
+    "Cross-Origin-Opener-Policy": "same-origin",
+}
+# No app HTML is served from here, so deny every content source.
+_API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+# Swagger/ReDoc (non-production only) load their own JS/CSS and can't run under
+# the strict API CSP, so they are exempted.
+_DOCS_PATHS = ("/docs", "/redoc", "/openapi.json")
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for header, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(header, value)
+    if not request.url.path.startswith(_DOCS_PATHS):
+        response.headers.setdefault("Content-Security-Policy", _API_CSP)
+    if settings.ENVIRONMENT == "production":
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=63072000; includeSubDomains"
+        )
+    return response
 
 
 app.include_router(auth.router, prefix="/api/v1")
