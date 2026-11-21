@@ -81,6 +81,18 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str = ""
     POSTGRES_DB: str = "yugantar_db"
 
+    # ---------------------------
+    # Row-Level Security (RLS) — Phase 0 scaffolding
+    # ---------------------------
+    # Optional dedicated runtime DB role that is SUBJECT to RLS (non-owner).
+    # When unset, the app connects as POSTGRES_USER (no behaviour change).
+    POSTGRES_APP_USER: str = ""
+    POSTGRES_APP_PASSWORD: str = ""
+    # When true, every DB transaction receives the request's principal as the
+    # transaction-local GUCs app.user_id / app.is_privileged. Harmless until
+    # RLS policies are added (Phase 1); can be turned off to disable the plumbing.
+    RLS_CONTEXT_ENABLED: bool = True
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def is_running_in_docker(self) -> bool:
@@ -101,6 +113,27 @@ class Settings(BaseSettings):
             scheme="postgresql+psycopg",
             username=self.POSTGRES_USER,
             password=self.POSTGRES_PASSWORD,
+            host=host,
+            port=self.POSTGRES_PORT,
+            path=self.POSTGRES_DB,
+        )
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def APP_DATABASE_URI(self) -> PostgresDsn:
+        """Connection used by the running API. Falls back to the main
+        (owner) URI when no dedicated app role is configured, so the default
+        setup is unchanged. Set POSTGRES_APP_USER to route the app through a
+        role that is subject to RLS once policies are added (Phase 1)."""
+        if not self.POSTGRES_APP_USER:
+            return self.SQLALCHEMY_DATABASE_URI
+        host = self.POSTGRES_SERVER
+        if not self.is_running_in_docker and host == "db":
+            host = "localhost"
+        return PostgresDsn.build(
+            scheme="postgresql+psycopg",
+            username=self.POSTGRES_APP_USER,
+            password=self.POSTGRES_APP_PASSWORD,
             host=host,
             port=self.POSTGRES_PORT,
             path=self.POSTGRES_DB,
