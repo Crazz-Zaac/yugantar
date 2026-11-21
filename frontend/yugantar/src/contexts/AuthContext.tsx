@@ -27,7 +27,7 @@ import {
 // turns the access token from that step into an active session.
 export type LoginOutcome =
   | { kind: "authenticated"; user: UserForUI }
-  | { kind: "mfa"; mode: "challenge" | "setup"; mfaToken: string };
+  | { kind: "mfa"; mfaToken: string };
 
 interface AuthContextType {
   user: UserForUI | null;
@@ -161,13 +161,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsLoading(true);
     try {
       const data = await loginStep1(email, password);
-      if (data.mfa_setup_required) {
-        return { kind: "mfa", mode: "setup", mfaToken: data.mfa_token };
-      }
+      // Enrolled users do the one-time code; everyone else signs in directly
+      // (2FA is opt-in, set up later from Settings).
       if (data.mfa_required) {
-        return { kind: "mfa", mode: "challenge", mfaToken: data.mfa_token };
+        return { kind: "mfa", mfaToken: data.mfa_token };
       }
-      // Fallback (MFA disabled server-side): a direct access token.
       const user = await finishLogin(data.access_token);
       return { kind: "authenticated", user };
     } catch (err) {

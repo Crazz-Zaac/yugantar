@@ -50,11 +50,11 @@ async def _issue_session(response: Response, user: User) -> str:
 # ---------------------------------------------------------------------------
 @router.post("/setup", response_model=MfaSetupResponse)
 def setup_mfa(
-    user: User = Depends(get_mfa_pending_user),
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Begin enrolment: return the TOTP secret plus the otpauth URI to show as
-    a QR code. Not active until confirmed.
+    """Begin enrolment for the signed-in user (from Settings): return the TOTP
+    secret plus the otpauth URI to show as a QR code. Not active until confirmed.
 
     The pending secret is REUSED across calls: if setup is requested again
     before confirmation (e.g. React StrictMode double-invokes the effect, or
@@ -83,16 +83,15 @@ def setup_mfa(
     )
 
 
-@router.post("/setup/confirm", response_model=MfaSessionResponse)
-async def confirm_mfa(
+@router.post("/setup/confirm", response_model=RecoveryCodesResponse)
+def confirm_mfa(
     body: MfaCodeRequest,
-    response: Response,
-    user: User = Depends(get_mfa_pending_user),
+    user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    """Confirm enrolment with the first code from the authenticator. On success
-    MFA is enabled, recovery codes are generated (returned once), and a full
-    session is started."""
+    """Confirm enrolment with the first code from the authenticator. Turns 2FA
+    on for the signed-in user and returns the one-time recovery codes. The
+    current session stays valid; the OTP is required from the next sign-in on."""
     if user.mfa_enabled:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -118,9 +117,7 @@ async def confirm_mfa(
     session.add(user)
     session.commit()
     rate_limit.record_mfa_success(str(user.id))
-
-    access_token = await _issue_session(response, user)
-    return MfaSessionResponse(access_token=access_token, recovery_codes=plaintext)
+    return RecoveryCodesResponse(recovery_codes=plaintext)
 
 
 # ---------------------------------------------------------------------------

@@ -97,27 +97,31 @@ async def register_user(
 @router.post("/login", response_model=LoginResponse)
 async def login_user(
     request: Request,
+    response: Response,
     login_data: LoginRequest,
     session: Session = Depends(get_session),
 ):
     """
-    Step 1 of sign-in: verify the password, then hand off to MFA.
-
-    MFA is required for every user, so no access token is issued here. The
-    response carries a short-lived ``mfa_token``; the client then completes the
-    second factor on the ``/auth/mfa/*`` endpoints to receive the access token:
-      - ``mfa_required``       -> POST /auth/mfa/challenge   (enrolled user)
-      - ``mfa_setup_required`` -> POST /auth/mfa/setup + /setup/confirm (first time)
+    Sign in. 2FA is opt-in (set up later from Settings):
+      - If the user has 2FA enabled, this returns ``mfa_required`` + a
+        short-lived ``mfa_token``; the client completes the one-time code at
+        POST /auth/mfa/challenge to receive the access token.
+      - Otherwise an access token is issued directly here.
     """
     # Password check (rate limited), then email verified + account approved
     user = authenticate_with_rate_limit(request, session, login_data.email, login_data.password)
 
-    # The access token and refresh cookie are issued only once MFA succeeds.
-    return LoginResponse(
-        mfa_required=user.mfa_enabled,
-        mfa_setup_required=not user.mfa_enabled,
-        mfa_token=create_mfa_pending_token(user.id),
+    if user.mfa_enabled:
+        return LoginResponse(
+            mfa_required=True, mfa_token=create_mfa_pending_token(user.id)
+        )
+
+    access_token = await create_access_token(
+        subject=str(user.id),
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
+    set_refresh_cookie(response, issue_refresh_token(user.id))
+    return LoginResponse(access_token=access_token)
 
 
 @router.get("/me", response_model=UserResponse)

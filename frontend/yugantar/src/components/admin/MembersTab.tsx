@@ -134,7 +134,7 @@ function MemberStatusBadge({ status }: { status: MemberStatus }) {
   );
 }
 
-// 2FA is mandatory for every member; this shows who has finished enrolling.
+// 2FA is opt-in; this shows which members have turned it on.
 function TwoFactorBadge({ enabled }: { enabled: boolean }) {
   return (
     <Badge
@@ -142,12 +142,16 @@ function TwoFactorBadge({ enabled }: { enabled: boolean }) {
       className={`gap-1 text-[10px] ${
         enabled
           ? "border-success/30 text-success"
-          : "border-amber-500/40 text-amber-600"
+          : "border-muted-foreground/30 text-muted-foreground"
       }`}
-      title={enabled ? t("Two-factor authentication is set up") : t("Hasn't set up two-factor authentication yet")}
+      title={
+        enabled
+          ? t("Two-factor authentication is on")
+          : t("Two-factor authentication is off")
+      }
     >
       <Shield className="h-3 w-3" />
-      {enabled ? t("2FA on") : t("2FA pending")}
+      {enabled ? t("2FA on") : t("2FA off")}
     </Badge>
   );
 }
@@ -611,7 +615,7 @@ export function MembersTab() {
                           </TableCell>
                           <TableCell>
                             <MemberStatusBadge status={status} />
-                          <TwoFactorBadge enabled={member.mfa_enabled} />
+                            <TwoFactorBadge enabled={member.mfa_enabled} />
                           </TableCell>
                           <TableCell>{renderActions(member, status)}</TableCell>
                         </TableRow>

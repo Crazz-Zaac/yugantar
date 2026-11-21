@@ -26,10 +26,7 @@ export function SignIn({
   const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const [mfa, setMfa] = useState<{
-    mode: "setup" | "challenge";
-    mfaToken: string;
-  } | null>(null);
+  const [mfa, setMfa] = useState<{ mfaToken: string } | null>(null);
   const { login } = useAuth();
 
   const completeSignIn = (user: UserForUI) => {
@@ -50,7 +47,7 @@ export function SignIn({
     try {
       const outcome = await login(email, password);
       if (outcome.kind === "mfa") {
-        setMfa({ mode: outcome.mode, mfaToken: outcome.mfaToken });
+        setMfa({ mfaToken: outcome.mfaToken });
       } else {
         completeSignIn(outcome.user);
       }
@@ -156,7 +153,6 @@ export function SignIn({
           <div className="w-full max-w-sm">
             {mfa ? (
               <MfaStep
-                mode={mfa.mode}
                 mfaToken={mfa.mfaToken}
                 onComplete={completeSignIn}
                 onBack={() => {

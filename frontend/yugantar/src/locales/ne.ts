@@ -1703,12 +1703,22 @@ const ne: Record<string, string> = {
   "Account password": "खाताको पासवर्ड",
   "Reset authenticator": "अथेन्टिकेटर रिसेट गर्नुहोस्",
 
-  // Admin view of each member's 2FA status
+  // 2FA status + self-service enrolment in Settings
   "2FA on": "2FA सक्रिय",
-  "2FA pending": "2FA बाँकी",
-  "Two-factor authentication is set up": "दुई-चरण प्रमाणीकरण सेटअप भएको छ",
-  "Hasn't set up two-factor authentication yet":
-    "अझै दुई-चरण प्रमाणीकरण सेटअप गरेको छैन",
+  "2FA off": "2FA निष्क्रिय",
+  "Two-factor authentication is on": "दुई-चरण प्रमाणीकरण सक्रिय छ",
+  "Two-factor authentication is off": "दुई-चरण प्रमाणीकरण निष्क्रिय छ",
+  "Two-factor authentication is on.": "दुई-चरण प्रमाणीकरण सक्रिय छ।",
+  "Two-factor authentication is off.": "दुई-चरण प्रमाणीकरण निष्क्रिय छ।",
+  "Add an authenticator app for a one-time code at every sign-in.":
+    "हरेक साइन इनमा एक-पटके कोडका लागि अथेन्टिकेटर एप जोड्नुहोस्।",
+  Enable: "सक्रिय गर्नुहोस्",
+  Done: "भयो",
+  "Recovery codes left: {0}": "बाँकी रिकभरी कोड: {0}",
+  "Save these recovery codes — each can be used once if you lose your authenticator. They won't be shown again.":
+    "यी रिकभरी कोड सुरक्षित राख्नुहोस् — अथेन्टिकेटर हराएमा प्रत्येक एक पटक प्रयोग गर्न सकिन्छ। यी फेरि देखाइने छैनन्।",
+  "This turns off two-factor authentication and signs you out everywhere. You can set it up again from Settings.":
+    "यसले दुई-चरण प्रमाणीकरण निष्क्रिय गर्छ र सबै ठाउँबाट साइन आउट गर्छ। तपाईं सेटिङ्सबाट फेरि सेटअप गर्न सक्नुहुन्छ।",
 };
 
 export default ne;
