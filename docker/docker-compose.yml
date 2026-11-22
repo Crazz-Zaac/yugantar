@@ -56,16 +56,18 @@ services:
       # dockerfile: docker/Dockerfile.frontend   # for production
       dockerfile: docker/Dockerfile.frontend.dev
     container_name: yugantar-frontend
-    environment:  # TODO: move to .env file in future
-      CHOKIDAR_USEPOLLING: "true"       # ensures hot reload works on Docker
-      WATCHPACK_POLLING: "true"
-      REACT_APP_API_URL: http://backend:8000  # This should point to the backend service
+    environment:
+      # Vite's file watcher needs polling to see host changes inside Docker.
+      CHOKIDAR_USEPOLLING: "true"
+      # App config (VITE_API_BASE, VITE_APP_TITLE) is read by Vite from the
+      # mounted frontend/yugantar/.env (see frontend/yugantar/.env.example).
     command: npm run dev
     ports:
       - "3000:3000"  # Vite default dev server port
     depends_on:
       - backend
-    #TODO: remove this volume in production
+    # Dev only: bind-mounts host source for live reload. Production uses
+    # docker-compose.prod.yml (prebuilt image, no bind mount).
     volumes:
       - ../frontend/yugantar:/app       # live code changes reflect instantly
       - /app/node_modules
