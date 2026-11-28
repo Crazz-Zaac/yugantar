@@ -26,26 +26,25 @@
     "allowJs": true,
     "target": "ES6",
     "isolatedModules": false,
-    "baseUrl": "src",
     "types": [
       "node",
       "vite/client"
     ],
     "paths": {
       "@/*": [
-        "*"
+        "./src/*"
       ],
       "@components/*": [
-        "components/*"
+        "./src/components/*"
       ],
       "@pages/*": [
-        "pages/*"
+        "./src/pages/*"
       ],
       "@lib/*": [
-        "lib/*"
+        "./src/lib/*"
       ],
       "@shared/*": [
-        "../shared/*"
+        "./shared/*"
       ],
     }
   }
