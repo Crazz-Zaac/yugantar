@@ -116,7 +116,10 @@ export default function ResetPassword() {
                       )}
                 </p>
               </div>
-              <Button className="mt-1 gap-2" onClick={() => navigate("/login")}>
+              <Button
+                className="mt-1 gap-2"
+                onClick={() => navigate("/yeta-bata-signin")}
+              >
                 {t("Go to Sign In")}
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -220,7 +223,7 @@ export default function ResetPassword() {
 
           <button
             type="button"
-            onClick={() => navigate("/login")}
+            onClick={() => navigate("/yeta-bata-signin")}
             className="text-center text-sm font-medium text-muted-foreground hover:text-foreground"
           >
             {t("Back to sign in")}

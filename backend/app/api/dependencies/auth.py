@@ -13,14 +13,13 @@ from app.models.user_model import User
 from app.services.user_service import UserService
 from app.services.duties import is_office_bearer, is_system_admin
 
-# tokenUrl should match the actual login endpoint
-oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/api/v1/auth/login"
-)  # or "api/v1/login/token" depending on your setup
+# tokenUrl should match the actual sign-in endpoint
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/users/yeta-bata-signin")
 
-# Pending MFA token: the short-lived token returned by /auth/login, carried as
-# a Bearer token on the /auth/mfa/* endpoints while the second factor is pending.
-mfa_pending_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+# Pending MFA token: the short-lived token returned by /users/yeta-bata-signin,
+# carried as a Bearer token on the /auth/mfa/* endpoints while the second
+# factor is pending.
+mfa_pending_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/users/yeta-bata-signin")
 
 
 async def get_current_user(
@@ -91,7 +90,7 @@ async def get_mfa_pending_user(
     session: Session = Depends(get_session),
 ) -> User:
     """Resolve the user from a short-lived MFA pending token (issued by
-    /auth/login after the password check). Used only by the /auth/mfa/*
+    /users/yeta-bata-signin after the password check). Used only by the /auth/mfa/*
     enrolment and challenge endpoints."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

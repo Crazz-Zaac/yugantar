@@ -7,7 +7,7 @@ from sqlmodel import SQLModel
 
 
 class LoginResponse(SQLModel):
-    """Returned by /auth/login.
+    """Returned by /users/yeta-bata-signin.
 
     When MFA is pending, `access_token` is empty and `mfa_token` carries the
     short-lived pending token used on the /auth/mfa/* endpoints. Exactly one of

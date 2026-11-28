@@ -1,7 +1,7 @@
 """Multi-factor authentication (TOTP) endpoints.
 
 Login is two steps when MFA is involved:
-  1. POST /auth/login       -> password check, returns a short-lived mfa_token
+  1. POST /users/yeta-bata-signin -> password check, returns a short-lived mfa_token
   2. POST /auth/mfa/...      -> second factor, returns the real access token
 
 MFA is required for every user, so a user who has not enrolled yet is routed

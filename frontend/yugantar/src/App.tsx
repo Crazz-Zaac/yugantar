@@ -8,6 +8,7 @@ import { Route, Switch, useLocation, Redirect } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./components/ThemeProvider";
 
+import { LandingPage } from "./components/LandingPage";
 import { SignIn } from "./components/auth/SignIn";
 import { SignUp } from "./components/auth/SignUp";
 import { AdminDashboard } from "./components/admin/AdminDashboard";
@@ -46,13 +47,13 @@ function ProtectedAdminDashboard() {
   const { isAuthenticated, user, logout, isLoading } = useAuth();
 
   if (isLoading) return null;
-  if (!isAuthenticated || !user) return <Redirect to="/login" />;
+  if (!isAuthenticated || !user) return <Redirect to="/yeta-bata-signin" />;
 
   return (
     <AdminDashboard
       onLogout={() => {
         logout();
-        navigate("/login");
+        navigate("/yeta-bata-signin");
       }}
     />
   );
@@ -63,13 +64,13 @@ function ProtectedMemberDashboard() {
   const { isAuthenticated, user, logout, isLoading } = useAuth();
 
   if (isLoading) return null;
-  if (!isAuthenticated || !user) return <Redirect to="/login" />;
+  if (!isAuthenticated || !user) return <Redirect to="/yeta-bata-signin" />;
 
   return (
     <MemberDashboard
       onLogout={() => {
         logout();
-        navigate("/login");
+        navigate("/yeta-bata-signin");
       }}
     />
   );
@@ -78,8 +79,8 @@ function ProtectedMemberDashboard() {
 function Router() {
   return (
     <Switch>
-      <Route path={"/"} component={AuthPage} />
-      <Route path={"/login"} component={AuthPage} />
+      <Route path={"/"} component={LandingPage} />
+      <Route path={"/yeta-bata-signin"} component={AuthPage} />
       <Route path={"/verify-email"} component={VerifyEmail} />
       <Route path={"/reset-password"} component={ResetPassword} />
       <Route path={"/dashboard/:rest*"} component={ProtectedMemberDashboard} />

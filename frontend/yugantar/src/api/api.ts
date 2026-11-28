@@ -106,10 +106,9 @@ apiClient.interceptors.request.use(config => {
 export const SESSION_EXPIRED_EVENT = "auth:session-expired";
 
 const AUTH_ENDPOINTS = [
-  "/auth/login",
   "/auth/refresh",
   "/auth/mfa", // wrong-code 401s must not trigger a token refresh
-  "/users/login",
+  "/users/yeta-bata-signin",
   "/users/register",
 ];
 
@@ -149,7 +148,7 @@ apiClient.interceptors.response.use(
 
 // ─── Multi-factor authentication ────────────────────────────────────────────
 //
-// Sign-in is two steps: POST /users/login verifies the password and returns a
+// Sign-in is two steps: POST /users/yeta-bata-signin verifies the password and returns a
 // short-lived mfa_token (no access token yet); the second factor is completed
 // on /auth/mfa/*, which returns the real access token. During the MFA step the
 // mfa_token is sent explicitly as a Bearer token (the in-memory access token is
@@ -166,7 +165,10 @@ export async function loginStep1(
   email: string,
   password: string
 ): Promise<LoginStep1Response> {
-  const res = await apiClient.post("/users/login", { email, password });
+  const res = await apiClient.post("/users/yeta-bata-signin", {
+    email,
+    password,
+  });
   return res.data;
 }
 

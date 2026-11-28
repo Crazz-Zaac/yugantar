@@ -94,7 +94,7 @@ async def register_user(
     return new_user
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/yeta-bata-signin", response_model=LoginResponse)
 async def login_user(
     request: Request,
     response: Response,
@@ -102,7 +102,9 @@ async def login_user(
     session: Session = Depends(get_session),
 ):
     """
-    Sign in. 2FA is opt-in (set up later from Settings):
+    Member & admin sign-in ("yeta bata" — sign in from here).
+
+    2FA is opt-in (set up later from Settings):
       - If the user has 2FA enabled, this returns ``mfa_required`` + a
         short-lived ``mfa_token``; the client completes the one-time code at
         POST /auth/mfa/challenge to receive the access token.
