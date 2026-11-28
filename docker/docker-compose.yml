@@ -121,12 +121,6 @@ services:
     networks:
       - yugantar-network
     restart: unless-stopped 
-  
-# secrets:
-#   db_password:
-#     file: ./secrets/db_password.txt  # password for PostgreSQL
-#   pgadmin_password:
-#     file: ./secrets/pgadmin_password.txt  # password for PgAdmin login
 
 volumes:
   db_data:
