@@ -99,9 +99,9 @@ export function SignIn({
 
           <div className="flex gap-8">
             <div>
-              <p className="text-2xl font-bold text-primary">2,400+</p>
+              <p className="text-2xl font-bold text-primary">8</p>
               <p className="text-xs text-sidebar-foreground/60">
-                {t("Active Members")}
+                {t("Members / Investors")}
               </p>
             </div>
             <div>

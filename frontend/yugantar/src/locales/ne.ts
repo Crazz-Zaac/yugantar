@@ -65,6 +65,7 @@ const ne: Record<string, string> = {
   "Actions for {0}": "{0} का लागि कार्यहरू",
   Active: "सक्रिय",
   "Active Members": "सक्रिय सदस्य",
+  "Members / Investors": "सदस्य / लगानीकर्ता",
   "Active Policy Details": "सक्रिय नीतिको विवरण",
   "Active members over the last 12 months": "पछिल्ला १२ महिनाका सक्रिय सदस्य",
   Activity: "गतिविधि",

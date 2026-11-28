@@ -1,6 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, Response, Request
 from fastapi.responses import RedirectResponse
-from fastapi.security import OAuth2PasswordRequestForm
 from sqlmodel import Session
 from datetime import timedelta
 
@@ -8,11 +7,9 @@ from app.models.user_model import User
 from app.services.user_service import UserService
 from app.core.security import (
     create_access_token,
-    create_mfa_pending_token,
     decode_url_safe_token,
 )
 from app.schemas.user_schema import TokenResponse
-from app.schemas.mfa_schema import LoginResponse
 from app.core.config import settings
 from app.core.db import get_session
 from app.core import rate_limit
@@ -40,43 +37,6 @@ def authenticate_with_rate_limit(request: Request, session: Session, email: str,
         raise
     rate_limit.record_login_success(request, email)
     return user
-
-
-@router.post("/login", response_model=LoginResponse)
-async def login_for_access_token(
-    request: Request,
-    response: Response,
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    session: Session = Depends(get_session),
-):
-    """
-    Sign in. 2FA is opt-in (set up later from Settings):
-      - If the user has 2FA enabled, this returns `mfa_required` + a short-lived
-        `mfa_token`; complete the one-time code at POST /auth/mfa/challenge.
-      - Otherwise an access token is issued directly.
-
-    **Note:** Enter your EMAIL address in the 'username' field below.
-    """
-    user = authenticate_with_rate_limit(request, session, form_data.username, form_data.password)
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if settings.mfa_enabled and user.mfa_enabled:
-        return LoginResponse(
-            mfa_required=True, mfa_token=create_mfa_pending_token(user.id)
-        )
-
-    access_token = await create_access_token(
-        subject=str(user.id),
-        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-    )
-    set_refresh_cookie(response, issue_refresh_token(user.id))
-    return LoginResponse(access_token=access_token)
 
 
 @router.post("/refresh", response_model=TokenResponse)

@@ -199,7 +199,7 @@ export default function VerifyEmail() {
               <Button
                 variant="outline"
                 className="mt-1 gap-2"
-                onClick={() => navigate("/login")}
+                onClick={() => navigate("/yeta-bata-signin")}
               >
                 {t("Back to sign in")}
               </Button>
@@ -228,7 +228,10 @@ export default function VerifyEmail() {
                   { icon: LogIn, label: t("Sign in"), status: "current" },
                 ]}
               />
-              <Button className="mt-1 gap-2" onClick={() => navigate("/login")}>
+              <Button
+                className="mt-1 gap-2"
+                onClick={() => navigate("/yeta-bata-signin")}
+              >
                 {t("Go to Sign In")}
                 <ArrowRight className="h-4 w-4" />
               </Button>
@@ -251,7 +254,7 @@ export default function VerifyEmail() {
               <Button
                 variant="outline"
                 className="mt-1 gap-2"
-                onClick={() => navigate("/login")}
+                onClick={() => navigate("/yeta-bata-signin")}
               >
                 {t("Back to sign in")}
               </Button>
